@@ -150,6 +150,26 @@ export default defineConfig(
 			]
 		},
 	},
+	// Code this fork owns carries Kingu's header. Scoped to `kingu/` directories so
+	// every file inherited from upstream still has to carry Microsoft's, which is
+	// what keeps the two provenances legible in a tree where they sit side by side.
+	{
+		files: [
+			'src/vs/**/kingu/**/*.ts',
+		],
+		rules: {
+			'header/header': [
+				2,
+				'block',
+				[
+					'---------------------------------------------------------------------------------------------',
+					' *  Kingu Intelligence',
+					' *  Licensed under the MIT License.',
+					' *--------------------------------------------------------------------------------------------'
+				]
+			]
+		},
+	},
 	// Disallow bracket notation for property names that can use dot notation.
 	{
 		files: [
