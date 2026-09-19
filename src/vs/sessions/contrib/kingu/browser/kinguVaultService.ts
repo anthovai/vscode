@@ -21,7 +21,14 @@ import {
 	readWorkingDirectory,
 	sessionTitle,
 } from '../common/kinguVault.js';
-import { IKinguVaultSourceDefinition, KINGU_VAULT_SOURCES, pathSegments } from '../common/kinguVaultSources.js';
+import { IKinguVaultSourceDefinition, isDiscoverable, KINGU_VAULT_SOURCES, pathSegments, vaultSource } from '../common/kinguVaultSources.js';
+import {
+	isSubagentTranscriptName,
+	readSubagentMeta,
+	subagentMetaPathFor,
+	subagentsDirectoryFor,
+	subagentTitle,
+} from '../common/kinguVaultSubagents.js';
 import { getKinguVaultEnvironmentSource, IKinguVaultEnvironment } from '../common/kinguVaultEnvironment.js';
 
 /**
@@ -250,7 +257,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		const fromPath = source.workingDirectoryFromPath?.(relativeSegments);
 		const head = await this._read(resource, DESCRIBE_PREFIX_BYTES);
 		if (head === undefined) {
-			return this._nameOnly(resource, source, contentResource, fromPath, modified);
+			return this._nameOnly(resource, source, contentResource, fromPath, modified, relativeSegments);
 		}
 
 		let title: string | undefined;
@@ -276,6 +283,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			id: `${source.id}:${resource.path}`,
 			source: source.id,
 			sourceLabel: source.label,
+			rootRelativeSegments: relativeSegments,
 			resource,
 			contentResource,
 			title: sessionTitle(title, basename(resource)),
@@ -284,17 +292,95 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		};
 	}
 
+	async getSubagents(session: IKinguVaultSession, token = CancellationToken.None): Promise<readonly IKinguVaultSession[]> {
+		const directory = subagentsDirectoryFor(session.resource.path);
+		if (!directory) {
+			return [];
+		}
+		const root = session.resource.with({ path: directory });
+		const entries = await this._children(root);
+		const subagents: IKinguVaultSession[] = [];
+		await forEachLimited(entries, SCAN_CONCURRENCY, async entry => {
+			if (token.isCancellationRequested || entry.type === FileType.Directory || !isSubagentTranscriptName(entry.name)) {
+				return;
+			}
+			const described = await this._describeSubagent(joinPath(root, entry.name), session);
+			if (described) {
+				subagents.push(described);
+			}
+		});
+		return subagents.sort((a, b) => b.modified - a.modified);
+	}
+
+	private async _describeSubagent(resource: URI, parent: IKinguVaultSession): Promise<IKinguVaultSession | undefined> {
+		let modified: number;
+		try {
+			modified = (await this._fileService.stat(resource)).mtime ?? 0;
+		} catch {
+			return undefined;
+		}
+		// The sidecar is what the parent wrote to say what it was delegating, which
+		// beats the opening line of the instructions it then handed over.
+		const metaPath = subagentMetaPathFor(resource.path);
+		const metaContent = metaPath ? await this._read(resource.with({ path: metaPath }), DESCRIBE_PREFIX_BYTES) : undefined;
+		const meta = readSubagentMeta(metaContent ?? '');
+		const head = await this._read(resource, DESCRIBE_PREFIX_BYTES);
+		return {
+			id: `${parent.source}:${resource.path}`,
+			source: parent.source,
+			sourceLabel: parent.sourceLabel,
+			// A worker's transcript is reached through its parent, never by a root
+			// scan, so it is not a delete target in its own right.
+			rootRelativeSegments: [],
+			resource,
+			contentResource: undefined,
+			title: subagentTitle(meta, head ? readFirstUserPrompt(head) : undefined, basename(resource)),
+			workingDirectory: parent.workingDirectory,
+			modified,
+		};
+	}
+
+	async deleteSession(session: IKinguVaultSession): Promise<void> {
+		// The same question discovery asked, asked again: a path no scan would list
+		// is a path this cannot delete, whatever handed it here.
+		const source = vaultSource(session.source);
+		if (session.rootRelativeSegments.length === 0 || !isDiscoverable(source, session.rootRelativeSegments)) {
+			throw new Error(`Refusing to delete ${session.resource.path}: no scan of ${session.source} would have surfaced it`);
+		}
+		// The turns file and the workers' transcripts belong to this session and
+		// have no meaning without it, so they go with it rather than being left as
+		// orphans the next scan cannot explain.
+		const alsoDelete: URI[] = [];
+		if (session.contentResource) {
+			alsoDelete.push(session.contentResource);
+		}
+		const subagents = subagentsDirectoryFor(session.resource.path);
+		if (subagents) {
+			alsoDelete.push(session.resource.with({ path: subagents }));
+		}
+		await this._fileService.del(session.resource, { useTrash: true });
+		for (const resource of alsoDelete) {
+			try {
+				await this._fileService.del(resource, { useTrash: true, recursive: true });
+			} catch {
+				// Absent for most sessions; the one that mattered is already gone.
+			}
+		}
+		this.invalidate();
+	}
+
 	private _contentResource(resource: URI, source: IKinguVaultSourceDefinition): URI | undefined {
 		const path = source.contentPath?.(resource.path);
 		return path ? resource.with({ path }) : undefined;
 	}
 
 	/** A session we could not read the body of still belongs in the list. */
-	private _nameOnly(resource: URI, source: IKinguVaultSourceDefinition, contentResource: URI | undefined, workingDirectory: string | undefined, modified: number): IKinguVaultSession {
+	private _nameOnly(resource: URI, source: IKinguVaultSourceDefinition, contentResource: URI | undefined, workingDirectory: string | undefined, modified: number, relativeSegments: readonly string[]): IKinguVaultSession {
 		return {
 			id: `${source.id}:${resource.path}`,
 			source: source.id,
 			sourceLabel: source.label,
+			rootRelativeSegments: relativeSegments,
 			resource,
 			contentResource,
 			title: basename(resource),

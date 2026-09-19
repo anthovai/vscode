@@ -171,6 +171,67 @@
 	text-decoration: underline;
 }
 
+/* The row's other actions share the Continue affordance's behaviour: revealed on
+   hover so nine hundred rows do not read as nine hundred toolbars. */
+.kingu-vault-row-workers,
+.kingu-vault-row-delete {
+	flex: 0 0 auto;
+	cursor: pointer;
+	visibility: hidden;
+	color: var(--vscode-textLink-foreground);
+}
+
+.kingu-vault-row-delete {
+	color: var(--vscode-errorForeground);
+}
+
+.kingu-vault-row:hover .kingu-vault-row-workers,
+.kingu-vault-row:hover .kingu-vault-row-delete,
+.kingu-vault-row-workers:focus-visible,
+.kingu-vault-row-delete:focus-visible {
+	visibility: visible;
+}
+
+.kingu-vault-row-workers:hover,
+.kingu-vault-row-delete:hover {
+	text-decoration: underline;
+}
+
+.kingu-vault-subagents {
+	display: flex;
+	flex-direction: column;
+	/* Indented to the row's text, so a worker reads as belonging to the session
+	   above it rather than as another session. */
+	padding: 0 32px 6px 48px;
+	border-left: 2px solid var(--vscode-widget-border, transparent);
+	margin-left: 32px;
+}
+
+.kingu-vault-subagent {
+	padding: 4px 0;
+	cursor: pointer;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-vault-subagent:hover {
+	color: var(--vscode-foreground);
+}
+
+.kingu-vault-subagent:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.kingu-vault-subagent-loading {
+	padding: 4px 0;
+	font-size: 12px;
+	color: var(--vscode-disabledForeground);
+}
+
 .kingu-vault-empty {
 	padding: 24px 32px;
 	font-size: 13px;

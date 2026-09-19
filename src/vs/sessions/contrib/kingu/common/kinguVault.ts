@@ -52,6 +52,14 @@ export interface IKinguVaultSession {
 	readonly title: string;
 	/** What to call the agent in a list row. */
 	readonly sourceLabel: string;
+	/**
+	 * Where the file sits below the root it was found under.
+	 *
+	 * Kept so deletion can re-ask the same question discovery asked: only a path
+	 * a scan would have surfaced may be deleted. Recomputing it from the absolute
+	 * path would mean a second idea of where the root was.
+	 */
+	readonly rootRelativeSegments: readonly string[];
 	/** The working directory the session ran in, when the transcript records one. */
 	readonly workingDirectory: string | undefined;
 	/** Last write time, in milliseconds since the epoch. */
@@ -84,6 +92,20 @@ export interface IKinguVaultService {
 
 	/** Sessions whose transcript contains `query`, newest first. */
 	search(query: string, token?: CancellationToken): Promise<readonly IKinguVaultSearchResult[]>;
+
+	/**
+	 * The workers this session handed tasks to, newest first, or an empty list
+	 * for an agent that does not write them or a session that spawned none.
+	 */
+	getSubagents(session: IKinguVaultSession, token?: CancellationToken): Promise<readonly IKinguVaultSession[]>;
+
+	/**
+	 * Removes a session's files from disk. Irreversible.
+	 *
+	 * Refuses anything a scan of its own source would not have surfaced, so a
+	 * path that could never appear in this list can never be deleted through it.
+	 */
+	deleteSession(session: IKinguVaultSession): Promise<void>;
 
 	/** Discards the index so the next read re-scans. */
 	invalidate(): void;

@@ -19,7 +19,8 @@ import { IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js'
 import { KinguVaultService } from './kinguVaultService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { IAgentHostImportConversationStore } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostImportConversationStore.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -237,6 +238,66 @@ class ContinueKinguVaultSessionAction extends Action2 {
 	}
 }
 
+/**
+ * Deletes a session's files from disk.
+ *
+ * Confirmed first and never undone by us: these are the user's own transcripts,
+ * and the vault is a view of their disk rather than a store we own. The dialog
+ * names the file so the confirmation is about a specific thing rather than a
+ * count.
+ */
+class DeleteKinguVaultSessionAction extends Action2 {
+
+	static readonly ID = 'kingu.vault.delete';
+
+	constructor() {
+		super({
+			id: DeleteKinguVaultSessionAction.ID,
+			title: localize2('kingu.vault.delete', "Kingu: Delete Vault Session"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, session?: IKinguVaultSession): Promise<void> {
+		const quickInputService = accessor.get(IQuickInputService);
+		const vaultService = accessor.get(IKinguVaultService);
+		const dialogService = accessor.get(IDialogService);
+		const notificationService = accessor.get(INotificationService);
+
+		const chosen = session ?? (await quickInputService.pick(
+			vaultService.getSessions().then(sessions => sessions.map(candidate => toPick(candidate))),
+			{
+				title: localize('kingu.vault.delete.pickTitle', "Delete a Session"),
+				placeHolder: localize('kingu.vault.delete.pickPlaceholder', "The transcript is moved to the recycle bin"),
+				matchOnDescription: true,
+			}))?.session;
+		if (!chosen) {
+			return;
+		}
+
+		const { confirmed } = await dialogService.confirm({
+			type: 'warning',
+			message: localize('kingu.vault.delete.confirm', "Delete this {0} session?", chosen.sourceLabel),
+			detail: localize('kingu.vault.delete.detail', "{0}\n\n{1}\n\nThe transcript and any worker transcripts go to the recycle bin. {2} keeps its own copy of nothing — this is the only one.", chosen.title, chosen.resource.fsPath, chosen.sourceLabel),
+			primaryButton: localize('kingu.vault.delete.confirmButton', "Delete"),
+		});
+		if (!confirmed) {
+			return;
+		}
+
+		try {
+			await vaultService.deleteSession(chosen);
+		} catch (error) {
+			notificationService.notify({
+				severity: Severity.Error,
+				message: localize('kingu.vault.delete.failed', "Could not delete this session: {0}", error instanceof Error ? error.message : String(error)),
+			});
+		}
+	}
+}
+
+registerAction2(DeleteKinguVaultSessionAction);
 registerAction2(ContinueKinguVaultSessionAction);
 registerAction2(OpenKinguVaultAction);
 registerAction2(BrowseKinguVaultAction);

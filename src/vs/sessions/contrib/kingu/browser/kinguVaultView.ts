@@ -40,6 +40,8 @@ export class KinguVaultView extends AbstractCustomView {
 	private readonly _hidden = new Set<string>();
 	private _listContainer: HTMLElement | undefined;
 	private _generation = 0;
+	/** Sessions whose workers are showing, by id. */
+	private readonly _expanded = new Set<string>();
 
 	constructor(
 		@IKinguVaultService private readonly _vaultService: IKinguVaultService,
@@ -141,7 +143,48 @@ export class KinguVaultView extends AbstractCustomView {
 		}
 		for (const session of visible) {
 			container.appendChild(this._renderRow(session));
+			if (this._expanded.has(session.id)) {
+				container.appendChild(this._renderSubagents(session));
+			}
 		}
+	}
+
+	/**
+	 * The workers a session handed tasks to, under the row that spawned them.
+	 *
+	 * Loaded when the row is opened rather than during the scan: most sessions
+	 * spawn none, and reading every session's worker directory would add a
+	 * directory listing per row to a scan that already reads a file per row.
+	 */
+	private _renderSubagents(session: IKinguVaultSession): HTMLElement {
+		const container = $('.kingu-vault-subagents');
+		container.appendChild($('.kingu-vault-subagent-loading', undefined, localize('kingu.vault.view.loadingWorkers', "Loading workers…")));
+		const generation = this._generation;
+		this._vaultService.getSubagents(session).then(subagents => {
+			// The list may have been replaced while this was loading.
+			if (generation !== this._generation || !container.isConnected) {
+				return;
+			}
+			clearNode(container);
+			if (subagents.length === 0) {
+				container.appendChild($('.kingu-vault-subagent-loading', undefined, localize('kingu.vault.view.noWorkers', "This session delegated nothing.")));
+				return;
+			}
+			for (const subagent of subagents) {
+				const row = $('.kingu-vault-subagent', { role: 'button', tabIndex: 0, title: subagent.title });
+				row.appendChild($('.kingu-vault-subagent-title', undefined, subagent.title));
+				const openWorker = () => { void this._editorService.openEditor({ resource: subagent.resource, options: { pinned: true } }); };
+				this._rendered.add(addDisposableListener(row, EventType.CLICK, openWorker));
+				this._rendered.add(addDisposableListener(row, EventType.KEY_DOWN, event => {
+					if (event.key === 'Enter' || event.key === ' ') {
+						event.preventDefault();
+						openWorker();
+					}
+				}));
+				container.appendChild(row);
+			}
+		}, () => { /* a session whose workers cannot be read shows none */ });
+		return container;
 	}
 
 	private _matches(session: IKinguVaultSession): boolean {
@@ -161,6 +204,37 @@ export class KinguVaultView extends AbstractCustomView {
 
 		const meta = $('.kingu-vault-row-meta');
 		meta.appendChild($('.kingu-vault-row-source', undefined, session.sourceLabel));
+		// Offered on every row rather than only where workers exist: knowing there
+		// are none is an answer, and finding out costs a directory listing that the
+		// scan deliberately does not pay for every row.
+		const expanded = this._expanded.has(session.id);
+		const workers = $('a.kingu-vault-row-workers', {
+			role: 'button',
+			tabIndex: 0,
+			title: localize('kingu.vault.view.workersTooltip', "Show the workers this session delegated to"),
+		}, expanded
+			? localize('kingu.vault.view.hideWorkers', "Hide workers")
+			: localize('kingu.vault.view.showWorkers', "Workers"));
+		const toggleWorkers = () => {
+			if (this._expanded.has(session.id)) {
+				this._expanded.delete(session.id);
+			} else {
+				this._expanded.add(session.id);
+			}
+			this._renderList();
+		};
+		this._rendered.add(addDisposableListener(workers, EventType.CLICK, event => {
+			event.stopPropagation();
+			toggleWorkers();
+		}));
+		this._rendered.add(addDisposableListener(workers, EventType.KEY_DOWN, event => {
+			if (event.key === 'Enter' || event.key === ' ') {
+				event.preventDefault();
+				event.stopPropagation();
+				toggleWorkers();
+			}
+		}));
+		meta.appendChild(workers);
 		if (session.workingDirectory) {
 			meta.appendChild($('.kingu-vault-row-directory', { title: session.workingDirectory }, session.workingDirectory));
 		}
@@ -190,6 +264,25 @@ export class KinguVaultView extends AbstractCustomView {
 			}
 		}));
 		meta.appendChild(continueButton);
+
+		const remove = () => { void this._commandService.executeCommand('kingu.vault.delete', session); };
+		const deleteButton = $('a.kingu-vault-row-delete', {
+			role: 'button',
+			tabIndex: 0,
+			title: localize('kingu.vault.view.deleteTooltip', "Delete this session's transcript from disk"),
+		}, localize('kingu.vault.view.delete', "Delete"));
+		this._rendered.add(addDisposableListener(deleteButton, EventType.CLICK, event => {
+			event.stopPropagation();
+			remove();
+		}));
+		this._rendered.add(addDisposableListener(deleteButton, EventType.KEY_DOWN, event => {
+			if (event.key === 'Enter' || event.key === ' ') {
+				event.preventDefault();
+				event.stopPropagation();
+				remove();
+			}
+		}));
+		meta.appendChild(deleteButton);
 
 		const open = () => { void this._editorService.openEditor({ resource: session.resource, options: { pinned: true } }); };
 		this._rendered.add(addDisposableListener(row, EventType.CLICK, open));
