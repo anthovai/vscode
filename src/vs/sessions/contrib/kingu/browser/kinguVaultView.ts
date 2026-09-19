@@ -9,6 +9,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { constObservable, IObservable } from '../../../../base/common/observable.js';
 import { fromNow } from '../../../../base/common/date.js';
 import { localize } from '../../../../nls.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { AbstractCustomView } from '../../../services/customView/browser/customView.js';
 import { IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js';
@@ -43,6 +44,7 @@ export class KinguVaultView extends AbstractCustomView {
 	constructor(
 		@IKinguVaultService private readonly _vaultService: IKinguVaultService,
 		@IEditorService private readonly _editorService: IEditorService,
+		@ICommandService private readonly _commandService: ICommandService,
 	) {
 		super();
 		this._register(this._vaultService.onDidChangeSessions(() => this._load()));
@@ -166,6 +168,28 @@ export class KinguVaultView extends AbstractCustomView {
 			meta.appendChild($('.kingu-vault-row-modified', undefined, fromNow(session.modified, true)));
 		}
 		row.appendChild(meta);
+
+		// Continuing is the reason to keep a past session, so it is the action on the
+		// row; reading the raw transcript stays a click away on the title.
+		const continueSession = () => { void this._commandService.executeCommand('kingu.vault.continue', session); };
+		const continueButton = $('a.kingu-vault-row-continue', {
+			role: 'button',
+			tabIndex: 0,
+			title: localize('kingu.vault.view.continueTooltip', "Continue this session here, with its history imported"),
+		}, localize('kingu.vault.view.continue', "Continue"));
+		this._rendered.add(addDisposableListener(continueButton, EventType.CLICK, event => {
+			// The row opens the transcript; this button must not do both.
+			event.stopPropagation();
+			continueSession();
+		}));
+		this._rendered.add(addDisposableListener(continueButton, EventType.KEY_DOWN, event => {
+			if (event.key === 'Enter' || event.key === ' ') {
+				event.preventDefault();
+				event.stopPropagation();
+				continueSession();
+			}
+		}));
+		meta.appendChild(continueButton);
 
 		const open = () => { void this._editorService.openEditor({ resource: session.resource, options: { pinned: true } }); };
 		this._rendered.add(addDisposableListener(row, EventType.CLICK, open));

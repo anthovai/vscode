@@ -152,6 +152,25 @@
 	flex: 0 0 auto;
 }
 
+/* Only offered on hover or focus: every row carries one, and nine hundred
+   standing buttons would read as the list's content rather than its actions. */
+.kingu-vault-row-continue {
+	flex: 0 0 auto;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	visibility: hidden;
+}
+
+.kingu-vault-row:hover .kingu-vault-row-continue,
+.kingu-vault-row-continue:focus-visible {
+	visibility: visible;
+}
+
+.kingu-vault-row-continue:hover {
+	color: var(--vscode-textLink-activeForeground);
+	text-decoration: underline;
+}
+
 .kingu-vault-empty {
 	padding: 24px 32px;
 	font-size: 13px;

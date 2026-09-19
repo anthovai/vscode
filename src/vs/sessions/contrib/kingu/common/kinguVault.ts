@@ -189,6 +189,80 @@ export function readWorkingDirectory(transcript: string): string | undefined {
 	return undefined;
 }
 
+/** One question and the answer it got, as a transcript records them. */
+export interface IKinguTranscriptExchange {
+	readonly prompt: string;
+	/** Empty when the turn was never answered — the session was abandoned mid-question. */
+	readonly response: string;
+	/** ISO 8601, when the transcript timestamps its records. */
+	readonly startedAt: string | undefined;
+}
+
+/**
+ * The conversation a transcript holds, as question-and-answer pairs.
+ *
+ * Every agent writes its turns differently and several write more than one shape
+ * in the same file, so this reuses the same role reader the titles do rather
+ * than adding a second idea of what a turn looks like.
+ *
+ * Assistant text between two user turns is joined into one answer: the wire
+ * splits a reply across many records, and which records those were is a detail
+ * of how it streamed, not of what was said. A user turn that is only injected
+ * context is skipped for the same reason it is skipped when titling — it is not
+ * something the user asked.
+ */
+export function readTranscriptExchanges(transcript: string): IKinguTranscriptExchange[] {
+	const exchanges: IKinguTranscriptExchange[] = [];
+	let prompt: string | undefined;
+	let startedAt: string | undefined;
+	let response: string[] = [];
+
+	const flush = () => {
+		if (prompt !== undefined) {
+			exchanges.push({ prompt, response: response.join('\n\n'), startedAt });
+		}
+		prompt = undefined;
+		startedAt = undefined;
+		response = [];
+	};
+
+	for (const line of transcript.split('\n')) {
+		const record = parseRecord(line);
+		if (!record) {
+			continue;
+		}
+		const userText = userTextOf(record);
+		if (userText) {
+			const unwrapped = unwrapPrompt(userText);
+			// Injected context is not a question, so it neither opens an exchange nor
+			// interrupts the answer to the one before it.
+			if (!unwrapped.typed) {
+				continue;
+			}
+			flush();
+			prompt = unwrapped.text;
+			startedAt = readTimestamp(record);
+			continue;
+		}
+		if (prompt === undefined) {
+			// An answer with no question before it belongs to nothing importable.
+			continue;
+		}
+		const assistantText = assistantTextOf(record);
+		if (assistantText) {
+			response.push(collapseWhitespace(assistantText));
+		}
+	}
+	flush();
+	return exchanges;
+}
+
+/** The ISO timestamp a record carries, wherever this family of formats puts it. */
+function readTimestamp(record: ITranscriptRecord): string | undefined {
+	const value = record.timestamp;
+	return typeof value === 'string' && value ? value : undefined;
+}
+
 /**
  * The first line of a transcript containing `query`, trimmed for display, or
  * `undefined` when it contains none.
@@ -217,6 +291,7 @@ interface ITranscriptRecord {
 	readonly type?: unknown;
 	readonly role?: unknown;
 	readonly cwd?: unknown;
+	readonly timestamp?: unknown;
 	readonly workspace_root?: unknown;
 	readonly directory?: unknown;
 	readonly message?: { readonly role?: unknown; readonly content?: unknown };

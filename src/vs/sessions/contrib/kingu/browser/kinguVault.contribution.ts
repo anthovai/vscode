@@ -17,6 +17,13 @@ import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../work
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js';
 import { KinguVaultService } from './kinguVaultService.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IAgentHostImportConversationStore } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostImportConversationStore.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { continueVaultSession } from './kinguVaultContinue.js';
 import { KINGU_VAULT_VIEW_ID, KinguVaultView } from './kinguVaultView.js';
 
 registerSingleton(IKinguVaultService, KinguVaultService, InstantiationType.Delayed);
@@ -182,6 +189,55 @@ class RefreshKinguVaultAction extends Action2 {
 	}
 }
 
+/**
+ * Continues a past session from another agent here.
+ *
+ * Separate from browsing because the two answer different questions: browsing
+ * opens the file to read, this opens a live session that carries its history.
+ */
+class ContinueKinguVaultSessionAction extends Action2 {
+
+	static readonly ID = 'kingu.vault.continue';
+
+	constructor() {
+		super({
+			id: ContinueKinguVaultSessionAction.ID,
+			title: localize2('kingu.vault.continue', "Kingu: Continue Vault Session"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, session?: IKinguVaultSession): Promise<void> {
+		const quickInputService = accessor.get(IQuickInputService);
+		const vaultService = accessor.get(IKinguVaultService);
+
+		// Invoked from a row, the session is already chosen; from the palette it
+		// is not, so the same picker as Browse selects one.
+		const chosen = session ?? (await quickInputService.pick(
+			vaultService.getSessions().then(sessions => sessions.map(candidate => toPick(candidate))),
+			{
+				title: localize('kingu.vault.continue.pickTitle', "Continue a Session"),
+				placeHolder: localize('kingu.vault.continue.pickPlaceholder', "Sessions from every agent on this machine"),
+				matchOnDescription: true,
+			}))?.session;
+		if (!chosen) {
+			return;
+		}
+
+		await continueVaultSession(chosen, {
+			fileService: accessor.get(IFileService),
+			quickInputService,
+			notificationService: accessor.get(INotificationService),
+			logService: accessor.get(ILogService),
+			sessionsService: accessor.get(ISessionsService),
+			sessionsManagementService: accessor.get(ISessionsManagementService),
+			importConversationStore: accessor.get(IAgentHostImportConversationStore),
+		});
+	}
+}
+
+registerAction2(ContinueKinguVaultSessionAction);
 registerAction2(OpenKinguVaultAction);
 registerAction2(BrowseKinguVaultAction);
 registerAction2(SearchKinguVaultAction);
