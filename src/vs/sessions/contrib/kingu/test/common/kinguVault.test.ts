@@ -6,14 +6,24 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import {
-	decodeClaudeProjectDirName,
 	encodeClaudeProjectPath,
 	findExcerpt,
 	readFirstUserPrompt,
+	readJsonDocumentDescriptor,
 	readRecordedTitle,
 	readWorkingDirectory,
+	KinguVaultSource,
 	sessionTitle,
 } from '../../common/kinguVault.js';
+import {
+	clineMessagesPath,
+	decodeClaudeProjectDirName,
+	isAntigravityTranscript,
+	isClineSessionManifest,
+	isDiscoverable,
+	KINGU_VAULT_SOURCES,
+	vaultSource,
+} from '../../common/kinguVaultSources.js';
 
 const lines = (...records: object[]) => records.map(r => JSON.stringify(r)).join('\n');
 
@@ -60,6 +70,114 @@ suite('Kingu vault', () => {
 		});
 	});
 
+	suite('source table', () => {
+
+		const relative = (path: string) => path.split('/').filter(Boolean);
+
+		test('every source the vault claims has a definition and a label', () => {
+			const ids = KINGU_VAULT_SOURCES.map(source => source.id);
+			assert.strictEqual(new Set(ids).size, ids.length, 'source ids must be unique');
+			for (const source of KINGU_VAULT_SOURCES) {
+				assert.ok(source.label.trim(), `${source.id} needs a label`);
+				assert.ok(source.roots.length > 0, `${source.id} needs a root`);
+				assert.ok(source.extensions.length > 0, `${source.id} needs an extension`);
+			}
+		});
+
+		test('Claude surfaces a transcript but not a subagent one', () => {
+			const claude = vaultSource(KinguVaultSource.Claude);
+			assert.strictEqual(isDiscoverable(claude, relative('-home-me-repo/abc.jsonl')), true);
+			// Subagent transcripts share their parent's id, so as rows they duplicate it.
+			assert.strictEqual(isDiscoverable(claude, relative('-home-me-repo/subagents/abc.jsonl')), false);
+			assert.strictEqual(isDiscoverable(claude, relative('-home-me-repo/notes.md')), false);
+		});
+
+		test('Claude recovers the working directory from the project directory name', () => {
+			const claude = vaultSource(KinguVaultSource.Claude);
+			assert.strictEqual(claude.workingDirectoryFromPath?.(relative('c--Users-me-repo/abc.jsonl')), 'C:/Users/me/repo');
+		});
+
+		test('Cursor takes only agent transcripts out of a project directory', () => {
+			const cursor = vaultSource(KinguVaultSource.Cursor);
+			assert.strictEqual(isDiscoverable(cursor, relative('proj/agent-transcripts/abc.jsonl')), true);
+			assert.strictEqual(isDiscoverable(cursor, relative('proj/other/abc.jsonl')), false);
+		});
+
+		test('Cline takes the manifest named after its own directory', () => {
+			const cline = vaultSource(KinguVaultSource.Cline);
+			assert.strictEqual(isDiscoverable(cline, relative('abc/abc.json')), true);
+			// The turns file sits beside it and is read through the manifest, not as a row.
+			assert.strictEqual(isDiscoverable(cline, relative('abc/abc.messages.json')), false);
+			assert.strictEqual(isDiscoverable(cline, relative('abc/other.json')), false);
+		});
+
+		test('Antigravity takes only the fixed transcript chain out of a brain directory', () => {
+			const antigravity = vaultSource(KinguVaultSource.Antigravity);
+			assert.strictEqual(isDiscoverable(antigravity, relative('conv1/.system_generated/logs/transcript.jsonl')), true);
+			// Brain directories hold large artifact trees that are not the conversation.
+			assert.strictEqual(isDiscoverable(antigravity, relative('conv1/artifacts/transcript.jsonl')), false);
+			assert.strictEqual(isDiscoverable(antigravity, relative('conv1/.system_generated/logs/other.jsonl')), false);
+		});
+
+		test('Gemini accepts both spellings it has used', () => {
+			const gemini = vaultSource(KinguVaultSource.Gemini);
+			assert.strictEqual(isDiscoverable(gemini, relative('proj/chat.json')), true);
+			assert.strictEqual(isDiscoverable(gemini, relative('proj/chat.jsonl')), true);
+		});
+
+		test('a file below a source depth is not surfaced', () => {
+			const cline = vaultSource(KinguVaultSource.Cline);
+			assert.strictEqual(isDiscoverable(cline, relative('a/b/b.json')), false);
+		});
+
+		test('an unknown source id is a programming error, not an empty result', () => {
+			assert.throws(() => vaultSource('nope' as KinguVaultSource));
+		});
+	});
+
+	suite('path helpers', () => {
+
+		test('isClineSessionManifest matches only the self-named manifest', () => {
+			assert.strictEqual(isClineSessionManifest(['abc', 'abc.json']), true);
+			assert.strictEqual(isClineSessionManifest(['abc', 'def.json']), false);
+			assert.strictEqual(isClineSessionManifest(['abc.json']), false);
+		});
+
+		test('clineMessagesPath names the sibling holding the turns', () => {
+			assert.strictEqual(clineMessagesPath('/s/abc/abc.json'), '/s/abc/abc.messages.json');
+			assert.strictEqual(clineMessagesPath('/s/abc/abc.jsonl'), undefined);
+		});
+
+		test('isAntigravityTranscript needs the whole chain, not just the file name', () => {
+			assert.strictEqual(isAntigravityTranscript(['c1', '.system_generated', 'logs', 'transcript.jsonl']), true);
+			assert.strictEqual(isAntigravityTranscript(['.system_generated', 'logs', 'transcript.jsonl']), false);
+			assert.strictEqual(isAntigravityTranscript(['c1', 'logs', 'transcript.jsonl']), false);
+		});
+	});
+
+	suite('readJsonDocumentDescriptor', () => {
+
+		test('reads a whole document', () => {
+			const document = JSON.stringify({ title: 'Ship it', directory: '/repo', other: 1 });
+			assert.deepStrictEqual(readJsonDocumentDescriptor(document), { title: 'Ship it', workingDirectory: '/repo' });
+		});
+
+		test('reads the fields out of a document whose tail was cut off', () => {
+			// The prefix read is bounded, so a large manifest never parses.
+			const truncated = '{"id":"abc","title":"Ship it","cwd":"/repo","messages":[{"role":"user","text":"aaa';
+			assert.deepStrictEqual(readJsonDocumentDescriptor(truncated), { title: 'Ship it', workingDirectory: '/repo' });
+		});
+
+		test('honours the field names each agent uses', () => {
+			assert.strictEqual(readJsonDocumentDescriptor('{"workspace_root":"/w"').workingDirectory, '/w');
+			assert.strictEqual(readJsonDocumentDescriptor('{"customTitle":"T"').title, 'T');
+		});
+
+		test('reports nothing rather than guessing', () => {
+			assert.deepStrictEqual(readJsonDocumentDescriptor('not json at all'), { title: undefined, workingDirectory: undefined });
+		});
+	});
+
 	suite('readRecordedTitle', () => {
 
 		test('prefers the title the session recorded for itself', () => {
@@ -100,8 +218,64 @@ suite('Kingu vault', () => {
 			assert.strictEqual(readFirstUserPrompt(transcript), 'ship it');
 		});
 
+		test('reads the split shape Cursor writes, role above content', () => {
+			// Cursor keeps the role at the top level and the content under `message`,
+			// which matches neither of the other two layouts.
+			const transcript = lines({ role: 'user', message: { content: [{ type: 'text', text: 'count the shapes' }] } });
+			assert.strictEqual(readFirstUserPrompt(transcript), 'count the shapes');
+		});
+
+		test('unwraps the query out of a prompt the agent wrapped', () => {
+			// Titling from the raw text would name every session of a day after its date.
+			const wrapped = '<timestamp>Monday, Jul 13, 2026</timestamp>\n<user_query>\nmerge YOLO with SAM\n</user_query>';
+			const transcript = lines({ role: 'user', message: { content: [{ type: 'text', text: wrapped }] } });
+			assert.strictEqual(readFirstUserPrompt(transcript), 'merge YOLO with SAM');
+		});
+
+		test('drops a leading metadata tag when no query tag follows', () => {
+			const transcript = lines({ role: 'user', content: '<timestamp>today</timestamp>just do it' });
+			assert.strictEqual(readFirstUserPrompt(transcript), 'just do it');
+		});
+
+		test('reads the typed-item shape Codex writes, with no role field at all', () => {
+			const transcript = lines(
+				{ type: 'session_meta', payload: { cwd: '/repo' } },
+				{ type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage', content: [{ type: 'text', text: 'check the system' }] } } },
+			);
+			assert.strictEqual(readFirstUserPrompt(transcript), 'check the system');
+		});
+
+		test('does not mistake an assistant item for the opening prompt', () => {
+			const transcript = lines(
+				{ payload: { item: { type: 'AssistantMessage', content: [{ type: 'text', text: 'hello' }] } } },
+				{ payload: { item: { type: 'UserMessage', content: [{ type: 'text', text: 'the real one' }] } } },
+			);
+			assert.strictEqual(readFirstUserPrompt(transcript), 'the real one');
+		});
+
 		test('reads a flat record', () => {
 			assert.strictEqual(readFirstUserPrompt(lines({ role: 'user', content: 'hello' })), 'hello');
+		});
+
+		test('skips a turn that is nothing but injected context', () => {
+			// Codex opens a session with machine-written blocks; naming the session after
+			// them gives every session the same title.
+			const transcript = lines(
+				{ payload: { item: { type: 'UserMessage', content: [{ type: 'text', text: '<recommended_plugins>a list</recommended_plugins>' }] } } },
+				{ payload: { item: { type: 'UserMessage', content: [{ type: 'text', text: 'fix the parser' }] } } },
+			);
+			assert.strictEqual(readFirstUserPrompt(transcript), 'fix the parser');
+		});
+
+		test('keeps injected context when the user never typed anything', () => {
+			// Still a better name than the file's own.
+			const transcript = lines({ role: 'user', content: '<environment_context>cwd</environment_context>' });
+			assert.ok(readFirstUserPrompt(transcript)?.includes('environment_context'));
+		});
+
+		test('keeps the text that follows an injected block in the same turn', () => {
+			const transcript = lines({ role: 'user', content: '<environment_context>cwd</environment_context>now do it' });
+			assert.strictEqual(readFirstUserPrompt(transcript), 'now do it');
 		});
 
 		test('takes the first user turn, not a later one', () => {

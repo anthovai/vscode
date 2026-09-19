@@ -3,7 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -11,35 +11,33 @@ import { FileType, IFileService } from '../../../../platform/files/common/files.
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IPathService } from '../../../../workbench/services/path/common/pathService.js';
 import {
-	decodeClaudeProjectDirName,
 	findExcerpt,
 	IKinguVaultSearchResult,
 	IKinguVaultService,
 	IKinguVaultSession,
-	KinguVaultSource,
 	readFirstUserPrompt,
+	readJsonDocumentDescriptor,
 	readRecordedTitle,
 	readWorkingDirectory,
 	sessionTitle,
 } from '../common/kinguVault.js';
+import { IKinguVaultSourceDefinition, KINGU_VAULT_SOURCES, pathSegments } from '../common/kinguVaultSources.js';
 
 /**
- * How many transcripts are opened at once during a scan.
+ * How many transcripts are opened at once.
  *
  * A heavy user has thousands, and reading them all in parallel starves the file
- * service that the rest of the window shares. The scan is background work; it
- * may take a moment.
+ * service that the rest of the window shares.
  */
 const SCAN_CONCURRENCY = 8;
 
 /**
  * How much of a transcript is read to describe it.
  *
- * Everything that names a session sits at the top: Claude writes its title on the
- * first line, and the opening prompt follows within a few records. A long-running
- * session's transcript runs to tens of megabytes, so reading them whole to pull
- * one line out of the head made the scan cost scale with how much work the user
- * had done — which is exactly backwards.
+ * Everything that names a session sits at the top: the title records come first
+ * and the opening prompt follows within a few. A long-running session's
+ * transcript runs to tens of megabytes, so reading them whole to pull one line
+ * out of the head made the scan cost scale with how much work the user had done.
  */
 const DESCRIBE_PREFIX_BYTES = 128 * 1024;
 
@@ -60,6 +58,9 @@ const MAX_SEARCH_BYTES = 8 * 1024 * 1024;
  * service is what already knows how to reach disk from it — a second path would
  * mean a second permission model.
  *
+ * The walk is driven by {@link KINGU_VAULT_SOURCES} rather than by a scanner per
+ * agent, so a new agent is a table entry.
+ *
  * The index is held in memory and rebuilt on demand rather than persisted. These
  * files are the user's own working history, and a cache of their prompts on disk
  * is a copy of something private that they never asked us to make.
@@ -72,6 +73,14 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	readonly onDidChangeSessions = this._onDidChangeSessions.event;
 
 	private _sessions: Promise<readonly IKinguVaultSession[]> | undefined;
+	/**
+	 * The scan's own token, which only this service cancels.
+	 *
+	 * A caller's token must never reach the shared scan: two views mounting, or one
+	 * re-rendering, would otherwise abort the walk every other caller is waiting on
+	 * — and the short result it stopped at would be cached as the whole vault.
+	 */
+	private readonly _scanning = this._register(new CancellationTokenSource());
 
 	constructor(
 		@IFileService private readonly _fileService: IFileService,
@@ -82,9 +91,14 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	}
 
 	getSessions(token = CancellationToken.None): Promise<readonly IKinguVaultSession[]> {
+		if (token.isCancellationRequested) {
+			return Promise.resolve([]);
+		}
 		// Cached as the promise rather than its result so concurrent callers share
-		// one scan instead of each starting their own.
-		this._sessions ??= this._scan(token);
+		// one scan instead of each starting their own. The caller's token is not
+		// passed on: it says when that caller stopped caring, not when the scan
+		// should stop. See {@link _scanning}.
+		this._sessions ??= this._scan(this._scanning.token);
 		return this._sessions;
 	}
 
@@ -104,10 +118,15 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			if (token.isCancellationRequested) {
 				return;
 			}
-			const transcript = await this._readTranscript(session.resource, MAX_SEARCH_BYTES);
-			const excerpt = transcript && findExcerpt(transcript, trimmed);
-			if (excerpt) {
-				results.push({ session, excerpt });
+			// Both halves are searched for the agents that split a session in two,
+			// so a hit in the turns is found from the manifest that names them.
+			for (const resource of [session.resource, session.contentResource]) {
+				const text = resource && await this._read(resource, MAX_SEARCH_BYTES);
+				const excerpt = text && findExcerpt(text, trimmed);
+				if (excerpt) {
+					results.push({ session, excerpt });
+					return;
+				}
 			}
 		});
 		// Re-sorted because the bounded walk completes out of order.
@@ -117,37 +136,31 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	private async _scan(token: CancellationToken): Promise<readonly IKinguVaultSession[]> {
 		const home = await this._pathService.userHome();
 		const sessions: IKinguVaultSession[] = [];
-		try {
-			sessions.push(...await this._scanClaude(home, token));
-			sessions.push(...await this._scanCodex(home, token));
-		} catch (error) {
-			// A vault that cannot be read is an empty vault, not a broken window.
-			this._logService.warn('[Kingu] vault scan failed', error);
+		// Per source, so one agent whose layout has changed under us cannot empty
+		// the whole vault.
+		for (const source of KINGU_VAULT_SOURCES) {
+			if (token.isCancellationRequested) {
+				break;
+			}
+			try {
+				sessions.push(...await this._scanSource(home, source, token));
+			} catch (error) {
+				this._logService.warn(`[Kingu] vault scan failed for ${source.id}`, error);
+			}
 		}
 		return sessions.sort((a, b) => b.modified - a.modified);
 	}
 
-	/** `~/.claude/projects/<encoded working directory>/<session id>.jsonl` */
-	private async _scanClaude(home: URI, token: CancellationToken): Promise<IKinguVaultSession[]> {
-		const root = joinPath(home, '.claude', 'projects');
-		const projects = await this._children(root);
+	private async _scanSource(home: URI, source: IKinguVaultSourceDefinition, token: CancellationToken): Promise<IKinguVaultSession[]> {
 		const sessions: IKinguVaultSession[] = [];
-		for (const project of projects) {
-			if (token.isCancellationRequested) {
-				break;
-			}
-			if (project.type !== FileType.Directory) {
-				continue;
-			}
-			// The directory name is the only place the working directory survives:
-			// a transcript that never reached a record carrying `cwd` still has it.
-			const fromDirName = decodeClaudeProjectDirName(project.name);
-			const transcripts = await this._children(joinPath(root, project.name));
-			await forEachLimited(transcripts, SCAN_CONCURRENCY, async entry => {
-				if (token.isCancellationRequested || entry.type === FileType.Directory || !entry.name.endsWith('.jsonl')) {
+		for (const rootSegments of source.roots) {
+			const root = joinPath(home, ...rootSegments);
+			const files = await this._walk(root, source, [], token);
+			await forEachLimited(files, SCAN_CONCURRENCY, async file => {
+				if (token.isCancellationRequested) {
 					return;
 				}
-				const session = await this._describe(joinPath(root, project.name, entry.name), KinguVaultSource.Claude, fromDirName);
+				const session = await this._describe(file.resource, source, file.relativeSegments);
 				if (session) {
 					sessions.push(session);
 				}
@@ -156,84 +169,100 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		return sessions;
 	}
 
-	/** `~/.codex/sessions/**\/rollout-*.jsonl`, bucketed by date rather than by project. */
-	private async _scanCodex(home: URI, token: CancellationToken): Promise<IKinguVaultSession[]> {
-		const root = joinPath(home, '.codex', 'sessions');
-		const sessions: IKinguVaultSession[] = [];
-		const transcripts = await this._findTranscripts(root, 4, token);
-		await forEachLimited(transcripts, SCAN_CONCURRENCY, async resource => {
-			if (token.isCancellationRequested) {
-				return;
-			}
-			const session = await this._describe(resource, KinguVaultSource.Codex, undefined);
-			if (session) {
-				sessions.push(session);
-			}
-		});
-		return sessions;
-	}
-
-	/**
-	 * Every `.jsonl` under `root`, to a bounded depth.
-	 *
-	 * Bounded because the date buckets are the only nesting these layouts use, and
-	 * an unbounded walk of a directory the user controls is a way to spend the
-	 * whole scan inside one symlinked tree.
-	 */
-	private async _findTranscripts(root: URI, depth: number, token: CancellationToken): Promise<URI[]> {
-		if (depth < 0 || token.isCancellationRequested) {
+	/** Every file under `directory` that `source` would surface, to its bounded depth. */
+	private async _walk(
+		directory: URI,
+		source: IKinguVaultSourceDefinition,
+		relativeSegments: readonly string[],
+		token: CancellationToken,
+	): Promise<{ resource: URI; relativeSegments: string[] }[]> {
+		const depth = relativeSegments.length;
+		if (depth > source.maxDepth || token.isCancellationRequested) {
 			return [];
 		}
-		const found: URI[] = [];
-		for (const entry of await this._children(root)) {
-			const resource = joinPath(root, entry.name);
+		const found: { resource: URI; relativeSegments: string[] }[] = [];
+		for (const entry of await this._children(directory)) {
+			const segments = [...relativeSegments, entry.name];
+			const resource = joinPath(directory, entry.name);
 			if (entry.type === FileType.Directory) {
-				found.push(...await this._findTranscripts(resource, depth - 1, token));
-			} else if (entry.name.endsWith('.jsonl')) {
-				found.push(resource);
+				if (!source.directoryPredicate || source.directoryPredicate(entry.name, depth)) {
+					found.push(...await this._walk(resource, source, segments, token));
+				}
+				continue;
+			}
+			if (matchesFile(source, segments)) {
+				found.push({ resource, relativeSegments: segments });
 			}
 		}
 		return found;
 	}
 
-	private async _describe(resource: URI, source: KinguVaultSource, workingDirectoryHint: string | undefined): Promise<IKinguVaultSession | undefined> {
+	private async _describe(resource: URI, source: IKinguVaultSourceDefinition, relativeSegments: readonly string[]): Promise<IKinguVaultSession | undefined> {
 		let modified: number;
 		try {
 			modified = (await this._fileService.stat(resource)).mtime ?? 0;
 		} catch {
 			return undefined;
 		}
-		const head = await this._readTranscript(resource, DESCRIBE_PREFIX_BYTES);
+		const contentResource = this._contentResource(resource, source);
+		const fromPath = source.workingDirectoryFromPath?.(relativeSegments);
+		const head = await this._read(resource, DESCRIBE_PREFIX_BYTES);
 		if (head === undefined) {
-			return this._nameOnly(resource, source, workingDirectoryHint, modified);
+			return this._nameOnly(resource, source, contentResource, fromPath, modified);
 		}
-		// The recorded title wins: it is what the session was eventually about,
-		// whereas the opening prompt is only where it started.
-		const name = readRecordedTitle(head) ?? readFirstUserPrompt(head);
+
+		let title: string | undefined;
+		let workingDirectory: string | undefined;
+		if (source.isJsonDocument) {
+			const descriptor = readJsonDocumentDescriptor(head);
+			title = descriptor.title;
+			workingDirectory = descriptor.workingDirectory;
+		} else {
+			// The recorded title wins: it is what the session turned out to be about,
+			// whereas the opening prompt is only where it started.
+			title = readRecordedTitle(head) ?? readFirstUserPrompt(head);
+			workingDirectory = readWorkingDirectory(head);
+		}
+
+		// A manifest that names nothing still has its turns beside it.
+		if (!title && contentResource) {
+			const turns = await this._read(contentResource, DESCRIBE_PREFIX_BYTES);
+			title = turns ? readFirstUserPrompt(turns) : undefined;
+		}
+
 		return {
-			id: `${source}:${resource.path}`,
-			source,
+			id: `${source.id}:${resource.path}`,
+			source: source.id,
+			sourceLabel: source.label,
 			resource,
-			title: sessionTitle(name, basename(resource)),
-			workingDirectory: readWorkingDirectory(head) ?? workingDirectoryHint,
+			contentResource,
+			title: sessionTitle(title, basename(resource)),
+			workingDirectory: workingDirectory ?? fromPath,
 			modified,
 		};
 	}
 
+	private _contentResource(resource: URI, source: IKinguVaultSourceDefinition): URI | undefined {
+		const path = source.contentPath?.(resource.path);
+		return path ? resource.with({ path }) : undefined;
+	}
+
 	/** A session we could not read the body of still belongs in the list. */
-	private _nameOnly(resource: URI, source: KinguVaultSource, workingDirectory: string | undefined, modified: number): IKinguVaultSession {
+	private _nameOnly(resource: URI, source: IKinguVaultSourceDefinition, contentResource: URI | undefined, workingDirectory: string | undefined, modified: number): IKinguVaultSession {
 		return {
-			id: `${source}:${resource.path}`,
-			source,
+			id: `${source.id}:${resource.path}`,
+			source: source.id,
+			sourceLabel: source.label,
 			resource,
+			contentResource,
 			title: basename(resource),
 			workingDirectory,
 			modified,
 		};
 	}
 
-	/** At most `length` bytes from the start of a transcript, or `undefined` if unreadable. */
-	private async _readTranscript(resource: URI, length: number): Promise<string | undefined> {
+	/** At most `length` bytes from the start of a file, or `undefined` if unreadable. */
+	private async _read(resource: URI, length: number): Promise<string | undefined> {
 		try {
 			const content = await this._fileService.readFile(resource, { position: 0, length });
 			return content.value.toString();
@@ -253,6 +282,17 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	}
 }
 
+/** Whether a file at `segments` below a source's root is one of its sessions. */
+function matchesFile(source: IKinguVaultSourceDefinition, segments: readonly string[]): boolean {
+	const name = segments[segments.length - 1];
+	const dot = name.lastIndexOf('.');
+	const extension = dot === -1 ? '' : name.slice(dot).toLowerCase();
+	if (!source.extensions.includes(extension)) {
+		return false;
+	}
+	return !source.filePredicate || source.filePredicate(segments);
+}
+
 /** Runs `body` over `items` with at most `limit` in flight. */
 async function forEachLimited<T>(items: readonly T[], limit: number, body: (item: T) => Promise<void>): Promise<void> {
 	let next = 0;
@@ -269,6 +309,5 @@ function joinPath(base: URI, ...segments: string[]): URI {
 }
 
 function basename(resource: URI): string {
-	const path = resource.path;
-	return path.slice(path.lastIndexOf('/') + 1);
+	return pathSegments(resource.path).at(-1) ?? resource.path;
 }

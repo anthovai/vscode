@@ -7,23 +7,59 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { IKinguVaultService, IKinguVaultSession, KinguVaultSource } from '../common/kinguVault.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
+import { IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js';
 import { KinguVaultService } from './kinguVaultService.js';
+import { KINGU_VAULT_VIEW_ID, KinguVaultView } from './kinguVaultView.js';
 
 registerSingleton(IKinguVaultService, KinguVaultService, InstantiationType.Delayed);
 
-interface IVaultPick extends IQuickPickItem {
-	readonly session: IKinguVaultSession;
+/** Publishes the vault as a full-surface view of the Agents window. */
+class KinguVaultViewContribution extends Disposable {
+
+	static readonly ID = 'kingu.contrib.vaultView';
+
+	constructor(
+		@ICustomViewService customViewService: ICustomViewService,
+	) {
+		super();
+		this._register(customViewService.registerCustomView({
+			id: KINGU_VAULT_VIEW_ID,
+			ctor: new SyncDescriptor(KinguVaultView),
+		}));
+	}
 }
 
-function sourceLabel(source: KinguVaultSource): string {
-	return source === KinguVaultSource.Claude
-		? localize('kingu.vault.source.claude', "Claude")
-		: localize('kingu.vault.source.codex', "Codex");
+registerWorkbenchContribution2(KinguVaultViewContribution.ID, KinguVaultViewContribution, WorkbenchPhase.BlockRestore);
+
+/** Opens that view. Browsing by quick pick stays for when a name is already known. */
+class OpenKinguVaultAction extends Action2 {
+
+	static readonly ID = 'kingu.vault.open';
+
+	constructor() {
+		super({
+			id: OpenKinguVaultAction.ID,
+			title: localize2('kingu.vault.open', "Kingu: Open Vault"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		accessor.get(ICustomViewService).showCustomView(KINGU_VAULT_VIEW_ID);
+	}
+}
+
+interface IVaultPick extends IQuickPickItem {
+	readonly session: IKinguVaultSession;
 }
 
 function toPick(session: IKinguVaultSession, detail?: string): IVaultPick {
@@ -31,8 +67,8 @@ function toPick(session: IKinguVaultSession, detail?: string): IVaultPick {
 		session,
 		label: session.title,
 		description: session.workingDirectory
-			? localize('kingu.vault.pick.description', "{0} · {1}", sourceLabel(session.source), session.workingDirectory)
-			: sourceLabel(session.source),
+			? localize('kingu.vault.pick.description', "{0} · {1}", session.sourceLabel, session.workingDirectory)
+			: session.sourceLabel,
 		detail,
 	};
 }
@@ -146,6 +182,7 @@ class RefreshKinguVaultAction extends Action2 {
 	}
 }
 
+registerAction2(OpenKinguVaultAction);
 registerAction2(BrowseKinguVaultAction);
 registerAction2(SearchKinguVaultAction);
 registerAction2(RefreshKinguVaultAction);
