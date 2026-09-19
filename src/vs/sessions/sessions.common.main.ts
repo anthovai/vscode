@@ -238,7 +238,6 @@ import './contrib/chat/browser/voiceBridge.contribution.js';
 import '../workbench/contrib/interactive/browser/interactive.contribution.js';
 
 // repl
-import '../workbench/contrib/replNotebook/browser/repl.contribution.js';
 
 // Testing (service)
 import { NullTestProfileService, NullTestResultService, NullTestService } from '../workbench/contrib/testing/common/nullTestingService.js';
