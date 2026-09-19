@@ -16,6 +16,8 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js';
+import { formatTokens, IKinguUsage, totalTokens, uncachedTokens } from '../common/kinguVaultUsage.js';
+import { KINGU_VAULT_SOURCES } from '../common/kinguVaultSources.js';
 import { KinguVaultService } from './kinguVaultService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -24,6 +26,7 @@ import { INotificationService, Severity } from '../../../../platform/notificatio
 import { IAgentHostImportConversationStore } from '../../../../workbench/contrib/chat/browser/agentSessions/agentHost/agentHostImportConversationStore.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { IProgressService, ProgressLocation } from '../../../../platform/progress/common/progress.js';
 import { continueVaultSession } from './kinguVaultContinue.js';
 import { KINGU_VAULT_VIEW_ID, KinguVaultView } from './kinguVaultView.js';
 
@@ -68,6 +71,17 @@ class OpenKinguVaultAction extends Action2 {
 
 interface IVaultPick extends IQuickPickItem {
 	readonly session: IKinguVaultSession;
+}
+
+/** The split behind a total, which is where the surprise usually is. */
+function usageDetail(usage: IKinguUsage): string {
+	return localize('kingu.vault.usage.detail', "in {0} · out {1} · cache read {2} · cache write {3} · {5} all in{4}",
+		formatTokens(usage.inputTokens),
+		formatTokens(usage.outputTokens),
+		formatTokens(usage.cacheReadTokens),
+		formatTokens(usage.cacheWriteTokens),
+		usage.models.length > 0 ? ' · ' + usage.models.join(', ') : '',
+		formatTokens(totalTokens(usage)));
 }
 
 function toPick(session: IKinguVaultSession, detail?: string): IVaultPick {
@@ -297,6 +311,64 @@ class DeleteKinguVaultSessionAction extends Action2 {
 	}
 }
 
+/**
+ * Totals what every indexed session spent.
+ *
+ * A full pass over the vault — every transcript read whole — so it runs behind
+ * a cancellable progress notification rather than pretending to be instant.
+ */
+class KinguVaultUsageReportAction extends Action2 {
+
+	static readonly ID = 'kingu.vault.usage';
+
+	constructor() {
+		super({
+			id: KinguVaultUsageReportAction.ID,
+			title: localize2('kingu.vault.usage', "Kingu: Vault Usage Report"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const vaultService = accessor.get(IKinguVaultService);
+		const progressService = accessor.get(IProgressService);
+		const quickInputService = accessor.get(IQuickInputService);
+
+		const summary = await progressService.withProgress({
+			location: ProgressLocation.Notification,
+			title: localize('kingu.vault.usage.progressTitle', "Reading vault usage"),
+			cancellable: true,
+		}, progress => vaultService.getUsageSummary(undefined, (done, total) => {
+			progress.report({
+				message: localize('kingu.vault.usage.progress', "{0} of {1} sessions", done, total),
+				increment: total > 0 ? 100 / total : undefined,
+			});
+		}), () => { /* cancelled: the partial total is not worth showing */ });
+
+		if (!summary) {
+			return;
+		}
+		const rows: IQuickPickItem[] = [{
+			label: localize('kingu.vault.usage.total', "All agents"),
+			description: formatTokens(uncachedTokens(summary.total)),
+			detail: usageDetail(summary.total),
+		}];
+		for (const [source, usage] of summary.bySource) {
+			rows.push({
+				label: KINGU_VAULT_SOURCES.find(candidate => candidate.id === source)?.label ?? source,
+				description: formatTokens(uncachedTokens(usage)),
+				detail: usageDetail(usage),
+			});
+		}
+		await quickInputService.pick(rows, {
+			title: localize('kingu.vault.usage.title', "Vault usage — {0} of {1} sessions recorded tokens", summary.sessionsRead, summary.sessionsTotal),
+			placeHolder: localize('kingu.vault.usage.placeholder', "Input and output tokens; cache reads are listed separately because they dwarf both. Tokens, not cost."),
+		});
+	}
+}
+
+registerAction2(KinguVaultUsageReportAction);
 registerAction2(DeleteKinguVaultSessionAction);
 registerAction2(ContinueKinguVaultSessionAction);
 registerAction2(OpenKinguVaultAction);

@@ -7,6 +7,7 @@ import { createDecorator } from '../../../../platform/instantiation/common/insta
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Event } from '../../../../base/common/event.js';
+import { IKinguUsage } from './kinguVaultUsage.js';
 
 /**
  * The coding agents whose transcripts the vault can read.
@@ -72,6 +73,16 @@ export interface IKinguVaultSearchResult {
 	readonly excerpt: string;
 }
 
+/** Everything the vault spent, split the ways a person asks about it. */
+export interface IKinguUsageSummary {
+	readonly total: IKinguUsage;
+	/** By agent, so "which of these is costing me" has an answer. */
+	readonly bySource: ReadonlyMap<KinguVaultSource, IKinguUsage>;
+	/** Sessions whose usage could be read, out of those indexed. */
+	readonly sessionsRead: number;
+	readonly sessionsTotal: number;
+}
+
 export const IKinguVaultService = createDecorator<IKinguVaultService>('kinguVaultService');
 
 /**
@@ -98,6 +109,22 @@ export interface IKinguVaultService {
 	 * for an agent that does not write them or a session that spawned none.
 	 */
 	getSubagents(session: IKinguVaultSession, token?: CancellationToken): Promise<readonly IKinguVaultSession[]>;
+
+	/**
+	 * What one session spent, read from its own transcript.
+	 *
+	 * Reads the file whole rather than its head, so it costs what a search of one
+	 * session costs. Asked for a session at a time for that reason.
+	 */
+	getUsage(session: IKinguVaultSession, token?: CancellationToken): Promise<IKinguUsage>;
+
+	/**
+	 * What every indexed session spent, by agent.
+	 *
+	 * A full pass over the vault, so callers report progress and let it be
+	 * cancelled.
+	 */
+	getUsageSummary(token?: CancellationToken, onProgress?: (done: number, total: number) => void): Promise<IKinguUsageSummary>;
 
 	/**
 	 * Removes a session's files from disk. Irreversible.

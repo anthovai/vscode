@@ -12,9 +12,11 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IPathService } from '../../../../workbench/services/path/common/pathService.js';
 import {
 	findExcerpt,
+	IKinguUsageSummary,
 	IKinguVaultSearchResult,
 	IKinguVaultService,
 	IKinguVaultSession,
+	KinguVaultSource,
 	readFirstUserPrompt,
 	readJsonDocumentDescriptor,
 	readRecordedTitle,
@@ -22,6 +24,7 @@ import {
 	sessionTitle,
 } from '../common/kinguVault.js';
 import { IKinguVaultSourceDefinition, isDiscoverable, KINGU_VAULT_SOURCES, pathSegments, vaultSource } from '../common/kinguVaultSources.js';
+import { addUsage, EMPTY_USAGE, IKinguUsage, readTranscriptUsage } from '../common/kinguVaultUsage.js';
 import {
 	isSubagentTranscriptName,
 	readSubagentMeta,
@@ -338,6 +341,41 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			workingDirectory: parent.workingDirectory,
 			modified,
 		};
+	}
+
+	async getUsage(session: IKinguVaultSession, token = CancellationToken.None): Promise<IKinguUsage> {
+		if (token.isCancellationRequested) {
+			return EMPTY_USAGE;
+		}
+		// Bounded like search, and for the same reason: a pathological transcript
+		// must not decide how long this takes.
+		const transcript = await this._read(session.resource, MAX_SEARCH_BYTES);
+		return transcript ? readTranscriptUsage(transcript, session.source) : EMPTY_USAGE;
+	}
+
+	async getUsageSummary(token = CancellationToken.None, onProgress?: (done: number, total: number) => void): Promise<IKinguUsageSummary> {
+		const sessions = await this.getSessions(token);
+		const bySource = new Map<KinguVaultSource, IKinguUsage>();
+		let total = EMPTY_USAGE;
+		let sessionsRead = 0;
+		let done = 0;
+		await forEachLimited(sessions, SCAN_CONCURRENCY, async session => {
+			if (token.isCancellationRequested) {
+				return;
+			}
+			const usage = await this.getUsage(session, token);
+			done++;
+			onProgress?.(done, sessions.length);
+			// A session with no recorded tokens read fine and simply spent nothing
+			// worth reporting; it should not inflate the "read" count either way.
+			if (usage === EMPTY_USAGE) {
+				return;
+			}
+			sessionsRead++;
+			total = addUsage(total, usage);
+			bySource.set(session.source, addUsage(bySource.get(session.source) ?? EMPTY_USAGE, usage));
+		});
+		return { total, bySource, sessionsRead, sessionsTotal: sessions.length };
 	}
 
 	async deleteSession(session: IKinguVaultSession): Promise<void> {
