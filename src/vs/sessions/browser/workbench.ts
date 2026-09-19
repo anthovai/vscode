@@ -411,6 +411,7 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 
 	protected sessionsPartView!: ISerializableView;
 	protected customViewGridPartView!: ISerializableView;
+	private statusBarPartView!: ISerializableView;
 
 	/** The editor part container; the auxiliary bar is docked inside it. */
 	protected _editorPartContainer: HTMLElement | undefined;
@@ -936,6 +937,7 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 			{ id: Parts.SIDEBAR_PART, role: 'none', classes: ['sidebar', 'left'] },
 			{ id: Parts.AUXILIARYBAR_PART, role: 'none', classes: ['auxiliarybar', 'basepanel', 'right'] },
 			{ id: Parts.PANEL_PART, role: 'none', classes: ['panel', 'basepanel', positionToString(this.getPanelPosition())] },
+			{ id: Parts.STATUSBAR_PART, role: 'status', classes: ['statusbar'] },
 		]) {
 			const partContainer = this.createPartContainer(id, role, classes);
 
@@ -1534,9 +1536,11 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 		const sideBar = this.getPart(Parts.SIDEBAR_PART);
 		const sessionsPart = this.getPart(Parts.SESSIONS_PART);
 		const customViewGridPart = this.getPart(Parts.CUSTOM_VIEW_GRID_PART);
+		const statusBar = this.getPart(Parts.STATUSBAR_PART);
 
 		// View references for parts in the grid
 		this.titleBarPartView = titleBar;
+		this.statusBarPartView = statusBar;
 		this.sideBarPartView = sideBar;
 		this.panelPartView = panelPart;
 		this.auxiliaryBarPartView = auxiliaryBarPart;
@@ -1551,7 +1555,8 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 			[Parts.AUXILIARYBAR_PART]: this.auxiliaryBarPartView,
 			[Parts.SESSIONS_PART]: this.sessionsPartView,
 			[Parts.CUSTOM_VIEW_GRID_PART]: this.customViewGridPartView,
-			[Parts.EDITOR_PART]: this.editorPartView
+			[Parts.EDITOR_PART]: this.editorPartView,
+			[Parts.STATUSBAR_PART]: this.statusBarPartView
 		};
 
 		const fromJSON = ({ type }: { type: string }) => viewMap[type];
@@ -1684,6 +1689,7 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 		const savedEditorWidth = this._savedPartSizes.editor;
 		const editorSize = savedEditorWidth !== undefined && savedEditorWidth >= EDITOR_PART_MINIMUM_WIDTH ? savedEditorWidth : EDITOR_PART_DEFAULT_WIDTH;
 		const titleBarHeight = this.titleBarPartView?.minimumHeight ?? 30;
+		const statusBarHeight = this.statusBarPartView?.minimumHeight ?? 22;
 
 		// Calculate right section width — when sidebar is hidden it takes no space
 		const effectiveSideBarWidth = this.partVisibility.sidebar ? sideBarSize : 0;
@@ -1697,7 +1703,7 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 		const sessionsWidth = this._savedPartSizes.sessions
 			?? Math.max(0, rightSectionWidth - effectiveAuxBarWidth - effectiveEditorWidth);
 
-		const contentHeight = Math.max(0, height - titleBarHeight);
+		const contentHeight = Math.max(0, height - titleBarHeight - statusBarHeight);
 		const topRightHeight = Math.max(0, contentHeight - panelSize);
 
 		const isPhone = this.layoutPolicy.viewportClass.get() === 'phone';
@@ -1706,6 +1712,15 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 			type: 'leaf',
 			data: { type: Parts.TITLEBAR_PART },
 			size: titleBarHeight,
+			visible: !isPhone
+		};
+
+		const statusBarNode: ISerializedLeafNode = {
+			type: 'leaf',
+			data: { type: Parts.STATUSBAR_PART },
+			size: statusBarHeight,
+			// Hidden on a phone for the same reason as the titlebar: there is no room
+			// for a second fixed strip.
 			visible: !isPhone
 		};
 
@@ -1782,7 +1797,8 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 				size: width,
 				data: [
 					titleBarNode,
-					contentSection
+					contentSection,
+					statusBarNode
 				]
 			},
 			orientation: Orientation.VERTICAL,
@@ -1978,7 +1994,8 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 			!this.isEditorPaneVisible() ? LayoutClasses.EDITOR_PANE_HIDDEN : undefined,
 			!this._effectiveVisible(Parts.SESSIONS_PART) ? LayoutClasses.SESSIONS_HIDDEN : undefined,
 			!this.partVisibility.customViewGrid ? LayoutClasses.CUSTOM_VIEW_GRID_HIDDEN : undefined,
-			LayoutClasses.STATUSBAR_HIDDEN, // agents window never has a status bar
+			// The status bar is part of this window's layout now, so the class that
+			// hides it must not be applied.
 			this.mainWindowFullscreen ? LayoutClasses.FULLSCREEN : undefined,
 			this.layoutPolicy.viewportClass.get() === 'phone' ? LayoutClasses.PHONE_LAYOUT : undefined,
 		]);
@@ -2159,8 +2176,12 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 				return this._effectiveVisible(part);
 			case Parts.CUSTOM_VIEW_GRID_PART:
 				return this.partVisibility.customViewGrid;
-			case Parts.ACTIVITYBAR_PART:
 			case Parts.STATUSBAR_PART:
+				// The strip along the bottom: how much of each agent's rate-limit window
+				// is gone, and what this window is connected to. The Agents window ran
+				// without one because it had nothing to put there.
+				return true;
+			case Parts.ACTIVITYBAR_PART:
 			case Parts.BANNER_PART:
 			default:
 				return false;

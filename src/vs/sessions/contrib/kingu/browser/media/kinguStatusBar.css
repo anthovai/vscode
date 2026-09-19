@@ -1,0 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/* The Agents window's status bar carries few entries, so it is quieter than the
+   editor's: the same height, but it reads as a footer rather than a toolbar. */
+.kingu-sessions .part.statusbar {
+	font-size: 11px;
+}

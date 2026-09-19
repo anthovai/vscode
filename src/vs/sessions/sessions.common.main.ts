@@ -504,6 +504,7 @@ import './contrib/customViewTest/browser/customViewTest.contribution.js';
 // contrib/kingu/ so upstream files stay touchable only at this import.
 import './contrib/kingu/browser/kinguHome.contribution.js';
 import './contrib/kingu/browser/kinguVault.contribution.js';
+import './contrib/kingu/browser/kinguStatusBar.contribution.js';
 
 // Onboarding: the engine + spotlight presentation (from the workbench layer) and
 // the Agents window scenario data.
