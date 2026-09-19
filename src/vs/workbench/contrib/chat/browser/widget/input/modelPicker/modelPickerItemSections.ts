@@ -22,6 +22,7 @@ export const ModelPickerSection = {
 
 export const RESTRICTED_MODE_TRUST_ACTION_ID = 'restrictedModeTrust';
 export const SETUP_REQUIRED_SIGN_IN_ACTION_ID = 'setupRequiredSignIn';
+export const KINGU_SETUP_ACTION_ID = 'kinguSetup';
 
 function createSyntheticAutoItem(): IActionListItem<IActionWidgetDropdownAction> {
 	return createModelItem({
@@ -61,8 +62,30 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
 	}
 	if (setupRequired) {
 		const enabled = !!options.actions.onRequestSetup;
+		// The header names the state rather than one vendor's remedy: Copilot sign-in is
+		// one of the routes out of it, and on a signed-out Kingu install it is not the
+		// first one to offer.
 		const items: IActionListItem<IActionWidgetDropdownAction>[] = [
-			{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.setupRequired', "Sign in to use Copilot") },
+			{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.setupRequired', "No models set up yet") },
+		];
+		if (options.actions.onKinguSetup) {
+			items.push({
+				item: {
+					id: KINGU_SETUP_ACTION_ID,
+					enabled: true,
+					checked: false,
+					class: undefined,
+					tooltip: localize('chat.modelPicker.kinguSetupTooltip', "Add an endpoint with your own API key."),
+					label: localize('chat.modelPicker.kinguSetup', "Add a Kingu endpoint..."),
+					run: () => options.actions.onKinguSetup?.(),
+				},
+				kind: ActionListItemKind.Action,
+				label: localize('chat.modelPicker.kinguSetup', "Add a Kingu endpoint..."),
+				group: { title: '', icon: ThemeIcon.fromId(Codicon.add.id) },
+				hideIcon: false,
+			});
+		}
+		items.push(
 			{
 				item: {
 					id: SETUP_REQUIRED_SIGN_IN_ACTION_ID,
@@ -79,7 +102,7 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
 				disabled: !enabled,
 				hideIcon: false,
 			},
-		];
+		);
 		if (options.presentation.showManageModelsInSetupRequired && options.manageModelsAction) {
 			items.push(
 				{ kind: ActionListItemKind.Separator },

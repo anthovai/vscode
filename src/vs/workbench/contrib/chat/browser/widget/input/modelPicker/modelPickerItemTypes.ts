@@ -39,5 +39,11 @@ export interface IBuildModelPickerItemsOptions {
 		readonly onConfigure: ((model: ILanguageModelChatMetadataAndIdentifier, group: string) => void) | undefined;
 		readonly onRequestTrust: (() => void) | undefined;
 		readonly onRequestSetup: (() => void) | undefined;
+		/**
+		 * Adds a Kingu endpoint. Offered alongside Copilot sign-in when the picker has
+		 * nothing to show, so a signed-out install has a route to a model that does not
+		 * start with a GitHub account.
+		 */
+		readonly onKinguSetup: (() => void) | undefined;
 	};
 }

@@ -144,6 +144,7 @@ function callBuild(
 		setupRequired?: boolean;
 		showManageModelsInSetupRequired?: boolean;
 		onRequestSetup?: () => void;
+		onKinguSetup?: () => void;
 		onSelect?: (model: ILanguageModelChatMetadataAndIdentifier) => void;
 		entitlementService?: IChatEntitlementService;
 	} = {},
@@ -182,6 +183,7 @@ function callBuild(
 			onConfigure: undefined,
 			onRequestTrust: opts.onRequestTrust,
 			onRequestSetup: opts.onRequestSetup,
+			onKinguSetup: opts.onKinguSetup,
 		},
 	});
 }
@@ -396,12 +398,35 @@ suite('buildModelPickerItems', () => {
 	test('setupRequired shows an explanatory header and a Sign In action instead of auto', () => {
 		const items = callBuild([], { setupRequired: true, showManageModelsInSetupRequired: true, onRequestSetup: () => { } });
 		const actions = getActionItems(items);
-		assert.ok(items.some(i => i.kind === ActionListItemKind.Header && i.label === 'Sign in to use Copilot'));
+		assert.ok(items.some(i => i.kind === ActionListItemKind.Header && i.label === 'No models set up yet'));
 		assert.strictEqual(actions.length, 2);
 		assert.strictEqual(actions[0].item?.id, 'setupRequiredSignIn');
 		assert.strictEqual(actions[0].item?.enabled, true);
 		assert.strictEqual(actions.some(a => a.label === 'Auto'), false);
 		assert.strictEqual(actions[1].item?.id, 'manageModels');
+	});
+
+	test('setupRequired leads with the Kingu route when one is offered', () => {
+		const items = callBuild([], { setupRequired: true, showManageModelsInSetupRequired: true, onRequestSetup: () => { }, onKinguSetup: () => { } });
+		const actions = getActionItems(items);
+		// Order is the point: a signed-out Kingu install offers its own endpoint first
+		// and GitHub sign-in second, rather than the other way round.
+		assert.deepStrictEqual(actions.map(a => a.item?.id), ['kinguSetup', 'setupRequiredSignIn', 'manageModels']);
+		assert.strictEqual(actions[0].item?.enabled, true);
+	});
+
+	test('the Kingu route is absent when the host offers none', () => {
+		const actions = getActionItems(callBuild([], { setupRequired: true, onRequestSetup: () => { } }));
+		assert.strictEqual(actions.some(a => a.item?.id === 'kinguSetup'), false);
+	});
+
+	test('the Kingu route invokes its callback', () => {
+		let requested = 0;
+		const items = callBuild([], { setupRequired: true, onKinguSetup: () => { requested++; } });
+		const kingu = getActionItems(items).find(a => a.item?.id === 'kinguSetup');
+		assert.ok(kingu, 'expected a Kingu setup action');
+		kingu!.item!.run();
+		assert.strictEqual(requested, 1);
 	});
 
 	test('setupRequired Sign In action is disabled without a setup callback', () => {

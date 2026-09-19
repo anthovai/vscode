@@ -17,6 +17,12 @@ import { ChatMessageRole, IChatMessage, ILanguageModelConfigurationSchema } from
  */
 export const KINGU_VENDOR_ID = 'kingu';
 
+/**
+ * Adds a Kingu endpoint. Named here rather than in the browser layer so the chat
+ * model picker can offer Kingu's setup route without importing Kingu's UI.
+ */
+export const KINGU_SETUP_COMMAND_ID = 'kingu.action.configureModels';
+
 /** The wire dialect an endpoint speaks. Both are widely re-implemented by gateways and local runtimes. */
 export type KinguApiFormat = 'anthropic' | 'openai';
 

@@ -4,15 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize, localize2 } from '../../../../nls.js';
+import { localize2 } from '../../../../nls.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILanguageModelsService, IUserFriendlyLanguageModel } from '../../chat/common/languageModels.js';
-import { KINGU_VENDOR_ID, kinguVendorConfigurationSchema } from '../common/kinguLanguageModels.js';
+import { KINGU_SETUP_COMMAND_ID, KINGU_VENDOR_ID, kinguVendorConfigurationSchema } from '../common/kinguLanguageModels.js';
 import { KinguLanguageModelProvider } from './kinguLanguageModelProvider.js';
+import { runKinguSetupFlow } from './kinguSetupFlow.js';
 
 /**
  * Publishes Kingu's own model vendor.
@@ -57,25 +60,31 @@ class KinguLanguageModelContribution extends Disposable {
 registerWorkbenchContribution2(KinguLanguageModelContribution.ID, KinguLanguageModelContribution, WorkbenchPhase.BlockRestore);
 
 /**
- * Takes the user to the one place a Kingu endpoint is added. The form itself is
- * the workbench's own model management UI, driven by the vendor's configuration
- * schema, so the API key is handled by secret storage and never by this command.
+ * Adds a Kingu endpoint.
+ *
+ * A command rather than a settings link because the workbench's model management
+ * UI is contributed by the Copilot extension: on the fresh, signed-out profile
+ * this whole vendor exists to serve, there is nothing there to open.
  */
 class ConfigureKinguModelsAction extends Action2 {
 
-	static readonly ID = 'kingu.action.configureModels';
+	static readonly ID = KINGU_SETUP_COMMAND_ID;
 
 	constructor() {
 		super({
 			id: ConfigureKinguModelsAction.ID,
-			title: localize2('kingu.configureModels', "Kingu: Configure Models"),
+			title: localize2('kingu.configureModels', "Kingu: Add Model Endpoint"),
 			category: Categories.Preferences,
 			f1: true,
 		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IPreferencesService).openSettings({ query: localize('kingu.configureModels.query', "chat.languageModels") });
+		await runKinguSetupFlow(
+			accessor.get(IQuickInputService),
+			accessor.get(ILanguageModelsService),
+			accessor.get(INotificationService),
+			accessor.get(ILogService));
 	}
 }
 

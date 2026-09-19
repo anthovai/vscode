@@ -50,6 +50,7 @@ import { getModelConfigSummary } from './modelPickerModelConfig.js';
 import { logModelConfigurationChange } from './modelPickerTelemetry.js';
 import { IModelPickerProviderPlaceholder } from './modelPickerTabs.js';
 import { getModelPickerUnavailableReason, isAutoModel, ModelPickerUnavailableReason, modelPickerRequiresSetup, shouldShowCacheBreakHint as computeShouldShowCacheBreakHint } from './modelPickerPresentation.js';
+import { KINGU_SETUP_COMMAND_ID } from '../../../../../kingu/common/kinguLanguageModels.js';
 
 const CACHE_BREAK_HINT_DISMISSED_STORAGE_KEY = 'chat.cacheBreakHintDismissed';
 
@@ -618,6 +619,7 @@ export class ModelPickerWidget extends Disposable {
 				onConfigure,
 				onRequestTrust: () => { void this._requestWorkspaceTrust(); },
 				onRequestSetup: () => { this._requestSetup(); },
+				onKinguSetup: () => { void this._commandService.executeCommand(KINGU_SETUP_COMMAND_ID); },
 			},
 		});
 
@@ -781,7 +783,7 @@ export class ModelPickerWidget extends Disposable {
 		const ariaLabel = restrictedMode
 			? localize('chat.modelPicker.ariaLabelRestricted', "Models, unavailable while in Restricted mode")
 			: setupRequired
-				? localize('chat.modelPicker.ariaLabelSetupRequired', "Models, sign in to use Copilot")
+				? localize('chat.modelPicker.ariaLabelSetupRequired', "Models, none set up yet")
 				: configSummary
 					? localize('chat.modelPicker.ariaLabelConfigured', "Models, {0}, {1}", modelLabel, configSummary)
 					: localize('chat.modelPicker.ariaLabel', "Models, {0}", modelLabel);
