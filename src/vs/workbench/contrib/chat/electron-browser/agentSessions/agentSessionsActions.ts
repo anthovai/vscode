@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import './media/openInAgents.css';
-import { $, append } from '../../../../../base/browser/dom.js';
+import { $, append, getWindowId } from '../../../../../base/browser/dom.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { getDefaultHoverDelegate } from '../../../../../base/browser/ui/hover/hoverDelegateFactory.js';
 import { IAction } from '../../../../../base/common/actions.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { mainWindow } from '../../../../../base/browser/window.js';
 import { ServicesAccessor } from '../../../../../editor/browser/editorExtensions.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
@@ -56,10 +57,24 @@ function getInvokingWorkspaceFolder(accessor: ServicesAccessor): URI | undefined
 	return resource ? workspaceContextService.getWorkspaceFolder(resource)?.uri : undefined;
 }
 
+/**
+ * Opens the agents window and closes the editor window that asked for it.
+ *
+ * Kingu shows agents and editing one surface at a time, so this is the mirror of
+ * `returnToVSCodeEditor` coming the other way. Only the invoking window closes,
+ * which leaves other editor windows alone, and going through `closeWindow` keeps
+ * the dirty-editor prompt in play.
+ */
+async function openAgentsWindowFromEditor(nativeHostService: INativeHostService, options: IOpenAgentsWindowOptions): Promise<void> {
+	const invokingWindowId = getWindowId(mainWindow);
+	await nativeHostService.openAgentsWindow(options);
+	await nativeHostService.closeWindow({ targetWindowId: invokingWindowId });
+}
+
 async function openCurrentWorkspaceInAgentsWindow(accessor: ServicesAccessor, source: AgentsWindowOpenSource): Promise<void> {
 	const nativeHostService = accessor.get(INativeHostService);
 	const workspaceContextService = accessor.get(IWorkspaceContextService);
-	await nativeHostService.openAgentsWindow({
+	await openAgentsWindowFromEditor(nativeHostService, {
 		folderUri: getInvokingWorkspaceFolder(accessor) ?? workspaceContextService.getWorkspace().folders[0]?.uri,
 		source,
 	});
@@ -184,7 +199,7 @@ export class OpenAgentsWindowAction extends Action2 {
 	async run(accessor: ServicesAccessor, args?: IOpenAgentsWindowOptions): Promise<void> {
 		const nativeHostService = accessor.get(INativeHostService);
 		const folderUri = !args?.folderUri && !args?.sessionResource ? getInvokingWorkspaceFolder(accessor) : undefined;
-		await nativeHostService.openAgentsWindow({
+		await openAgentsWindowFromEditor(nativeHostService, {
 			...args,
 			...(folderUri ? { folderUri, folderUriIsDefault: true } : undefined),
 			source: args?.source ?? AgentsWindowOpenSource.CommandPalette,
@@ -251,7 +266,7 @@ export class OpenChatSessionInAgentsWindowAction extends Action2 {
 		// new-session composer to it.
 		const hasRealSession = sessionResource && !isUntitledChatSession(sessionResource);
 		const folderUri = getInvokingWorkspaceFolder(accessor) ?? workspaceContextService.getWorkspace().folders[0]?.uri;
-		await nativeHostService.openAgentsWindow({
+		await openAgentsWindowFromEditor(nativeHostService, {
 			folderUri: !hasRealSession && folderUri?.scheme === Schemas.file ? folderUri.toJSON() : undefined,
 			sessionResource: hasRealSession ? sessionResource?.toJSON() : undefined,
 			source,

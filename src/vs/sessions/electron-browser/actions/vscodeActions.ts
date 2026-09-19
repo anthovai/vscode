@@ -61,11 +61,11 @@ export class OpenSessionInVSCodeAction extends Action2 {
 
 		const folderUri = this.getFolderUriToOpen(sessionsService, sessionsProvidersService, remoteAgentHostService);
 		if (!folderUri) {
-			return nativeHostService.openWindow();
+			return switchToVSCodeEditor(nativeHostService, () => nativeHostService.openWindow());
 		}
 
 		const chatSessionToOpen = getChatSessionToOpenInEditor(sessionsService.activeSession.get());
-		return nativeHostService.openWindow([{ folderUri }], { forceNewWindow: true, chatSessionToOpen });
+		return switchToVSCodeEditor(nativeHostService, () => nativeHostService.openWindow([{ folderUri }], { forceNewWindow: true, chatSessionToOpen }));
 	}
 
 	private getFolderUriToOpen(sessionsService: ISessionsService, sessionsProvidersService: ISessionsProvidersService, remoteAgentHostService: IRemoteAgentHostService): URI | undefined {
@@ -113,11 +113,9 @@ export class OpenVSCodeWindowAction extends Action2 {
 		const currentWindowId = getWindowId(mainWindow);
 		const vscodeWindow = windows.find(w => w.id !== currentWindowId);
 
-		if (vscodeWindow) {
-			await nativeHostService.focusWindow({ targetWindowId: vscodeWindow.id });
-		} else {
-			await nativeHostService.openWindow();
-		}
+		await switchToVSCodeEditor(nativeHostService, () => vscodeWindow
+			? nativeHostService.focusWindow({ targetWindowId: vscodeWindow.id })
+			: nativeHostService.openWindow());
 	}
 }
 
@@ -159,6 +157,18 @@ export function shouldShowReturnToVSCodeEditor(windows: readonly IOpenedMainWind
 export async function returnToVSCodeEditor(nativeHostService: INativeHostService, currentWindowId: number): Promise<void> {
 	await nativeHostService.openWindow();
 	await nativeHostService.closeWindow({ targetWindowId: currentWindowId });
+}
+
+/**
+ * Switching modes must leave one window, not two: the editor window comes up and the
+ * Agents window that asked for it goes away. `openEditorWindow` is whichever open/focus
+ * call the caller needs; only the invoking window closes, so a second Agents window
+ * opened elsewhere survives. This mirrors `openAgentsWindowFromEditor` coming the other way.
+ */
+export async function switchToVSCodeEditor(nativeHostService: INativeHostService, openEditorWindow: () => Promise<unknown>): Promise<void> {
+	const invokingWindowId = getWindowId(mainWindow);
+	await openEditorWindow();
+	await nativeHostService.closeWindow({ targetWindowId: invokingWindowId });
 }
 
 export class OpenInVSCodeWidgetContribution extends Disposable implements IWorkbenchContribution {
