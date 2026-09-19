@@ -265,6 +265,9 @@ import './contrib/tunnelHost/electron-browser/tunnelHost.contribution.js';
 // Sessions (desktop only)
 import './contrib/sessions/electron-browser/sessions.contribution.js';
 
+// Kingu: the vault's desktop-only knowledge (shell environment, WSL distributions)
+import './contrib/kingu/electron-browser/kinguVaultEnvironment.contribution.js';
+
 //#endregion
 
 export { main } from './electron-browser/sessions.main.js';

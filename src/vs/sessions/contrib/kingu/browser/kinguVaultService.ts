@@ -22,6 +22,7 @@ import {
 	sessionTitle,
 } from '../common/kinguVault.js';
 import { IKinguVaultSourceDefinition, KINGU_VAULT_SOURCES, pathSegments } from '../common/kinguVaultSources.js';
+import { getKinguVaultEnvironmentSource, IKinguVaultEnvironment } from '../common/kinguVaultEnvironment.js';
 
 /**
  * How many transcripts are opened at once.
@@ -134,8 +135,15 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	}
 
 	private async _scan(token: CancellationToken): Promise<readonly IKinguVaultSession[]> {
-		const home = await this._pathService.userHome();
+		const [home, environment] = await Promise.all([
+			this._pathService.userHome(),
+			this._environment(),
+		]);
+		// The local home first, so a duplicate root reached two ways keeps the
+		// spelling the user would recognise.
+		const homes = [home, ...environment?.homeDirectories ?? []];
 		const sessions: IKinguVaultSession[] = [];
+		const seen = new Set<string>();
 		// Per source, so one agent whose layout has changed under us cannot empty
 		// the whole vault.
 		for (const source of KINGU_VAULT_SOURCES) {
@@ -143,7 +151,14 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 				break;
 			}
 			try {
-				sessions.push(...await this._scanSource(home, source, token));
+				for (const session of await this._scanSource(homes, environment, source, token)) {
+					// A root reached both by default and by an override is one directory,
+					// and its sessions must not be listed twice.
+					if (!seen.has(session.id)) {
+						seen.add(session.id);
+						sessions.push(session);
+					}
+				}
 			} catch (error) {
 				this._logService.warn(`[Kingu] vault scan failed for ${source.id}`, error);
 			}
@@ -151,10 +166,37 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		return sessions.sort((a, b) => b.modified - a.modified);
 	}
 
-	private async _scanSource(home: URI, source: IKinguVaultSourceDefinition, token: CancellationToken): Promise<IKinguVaultSession[]> {
+	/** What the host knows about other homes and moved roots, when anything does. */
+	private async _environment(): Promise<IKinguVaultEnvironment | undefined> {
+		try {
+			return await getKinguVaultEnvironmentSource()?.resolve();
+		} catch (error) {
+			// The vault is still readable without it; it just sees less.
+			this._logService.warn('[Kingu] could not resolve the vault environment', error);
+			return undefined;
+		}
+	}
+
+	private async _scanSource(
+		homes: readonly URI[],
+		environment: IKinguVaultEnvironment | undefined,
+		source: IKinguVaultSourceDefinition,
+		token: CancellationToken,
+	): Promise<IKinguVaultSession[]> {
+		const roots: URI[] = [];
+		for (const home of homes) {
+			for (const rootSegments of source.roots) {
+				roots.push(joinPath(home, ...rootSegments));
+			}
+		}
+		// An override names one absolute directory, so it is a root in its own right
+		// rather than something to resolve against each home.
+		for (const override of environment?.rootOverrides.get(source.id) ?? []) {
+			roots.push(URI.file(override));
+		}
+
 		const sessions: IKinguVaultSession[] = [];
-		for (const rootSegments of source.roots) {
-			const root = joinPath(home, ...rootSegments);
+		for (const root of roots) {
 			const files = await this._walk(root, source, [], token);
 			await forEachLimited(files, SCAN_CONCURRENCY, async file => {
 				if (token.isCancellationRequested) {
