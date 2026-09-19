@@ -25,6 +25,15 @@ export const enum KinguVaultSource {
 	Cline = 'cline',
 	OpenCode = 'opencode',
 	Antigravity = 'antigravity',
+	Grok = 'grok',
+	Devin = 'devin',
+	Hermes = 'hermes',
+	Rovo = 'rovo',
+	Pi = 'pi',
+	Omp = 'omp',
+	PrimeAgent = 'prime-agent',
+	OpenClaw = 'openclaw',
+	Kimi = 'kimi',
 }
 
 /** One past session, as much as can be known without reading the whole transcript. */
@@ -438,21 +447,49 @@ function collapseWhitespace(value: string): string {
  * left alone when it is not.
  */
 function unwrapPrompt(value: string): { readonly text: string; readonly typed: boolean } {
-	// The explicit marker, where an agent provides one.
-	const query = /<user_query>([\s\S]*?)<\/user_query>/.exec(value);
-	if (query?.[1]?.trim()) {
-		return { text: collapseWhitespace(query[1]), typed: true };
+	// Walk the tag blocks the turn opens with. Agents prepend several — environment
+	// context, recommended plugins, timestamps — and they vary by version, so the
+	// shape is matched rather than the tag names.
+	//
+	// Anchored at the start on purpose. A prompt is often a diff, and a diff can
+	// contain any of these tags as ordinary text: searching the whole turn for a
+	// marker let a session be titled after a fragment of the file it was reviewing.
+	let rest = value;
+	for (;;) {
+		const block = leadingTagBlock(rest);
+		if (!block) {
+			break;
+		}
+		if (block.tag === 'user_query') {
+			// The explicit marker, where an agent provides one.
+			const inner = collapseWhitespace(block.inner);
+			return inner ? { text: inner, typed: true } : { text: collapseWhitespace(value), typed: false };
+		}
+		rest = rest.slice(block.length);
 	}
-	// Otherwise strip whatever tag blocks the turn opens with. Agents prepend
-	// several — environment context, recommended plugins, timestamps — and they
-	// vary by version, so the shape is matched rather than the tag names. What is
-	// left after them is what the user actually typed; nothing left means this
-	// whole turn was injected and the next one is the first real question.
-	const stripped = collapseWhitespace(value.replace(/^(?:\s*<([a-zA-Z][\w-]*)>[\s\S]*?<\/\1>)+/, ''));
+	// What is left after the injected blocks is what the user actually typed;
+	// nothing left means the whole turn was injected and the next one is the first
+	// real question.
+	const stripped = collapseWhitespace(rest);
 	if (stripped) {
 		return { text: stripped, typed: true };
 	}
 	return { text: collapseWhitespace(value), typed: false };
+}
+
+/** The `<tag>…</tag>` block `value` opens with, or `undefined` when it opens with none. */
+function leadingTagBlock(value: string): { readonly tag: string; readonly inner: string; readonly length: number } | undefined {
+	const open = /^\s*<([a-zA-Z][\w-]*)>/.exec(value);
+	if (!open) {
+		return undefined;
+	}
+	const tag = open[1];
+	const close = '</' + tag + '>';
+	const closeAt = value.indexOf(close, open[0].length);
+	// An unclosed tag is ordinary text as far as this is concerned.
+	return closeAt === -1
+		? undefined
+		: { tag, inner: value.slice(open[0].length, closeAt), length: closeAt + close.length };
 }
 
 /**

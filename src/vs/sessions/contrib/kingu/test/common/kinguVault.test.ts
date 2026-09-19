@@ -21,6 +21,8 @@ import {
 	isAntigravityTranscript,
 	isClineSessionManifest,
 	isDiscoverable,
+	isKimiSessionState,
+	isOmpSessionDirectory,
 	KINGU_VAULT_SOURCES,
 	vaultSource,
 } from '../../common/kinguVaultSources.js';
@@ -125,6 +127,51 @@ suite('Kingu vault', () => {
 			assert.strictEqual(isDiscoverable(gemini, relative('proj/chat.jsonl')), true);
 		});
 
+		test('Grok takes the session summary, not every file in the group', () => {
+			const grok = vaultSource(KinguVaultSource.Grok);
+			assert.strictEqual(isDiscoverable(grok, relative('cwd-group/sess1/summary.json')), true);
+			assert.strictEqual(isDiscoverable(grok, relative('cwd-group/sess1/messages.json')), false);
+		});
+
+		test('Hermes takes only its prefixed session files', () => {
+			const hermes = vaultSource(KinguVaultSource.Hermes);
+			assert.strictEqual(isDiscoverable(hermes, relative('session_abc.json')), true);
+			assert.strictEqual(isDiscoverable(hermes, relative('index.json')), false);
+		});
+
+		test('Rovo takes the metadata file that names a session', () => {
+			const rovo = vaultSource(KinguVaultSource.Rovo);
+			assert.strictEqual(isDiscoverable(rovo, relative('sess1/metadata.json')), true);
+			assert.strictEqual(isDiscoverable(rovo, relative('sess1/turns.json')), false);
+		});
+
+		test('OMP prunes the artifact directories its subagents write into', () => {
+			const omp = vaultSource(KinguVaultSource.Omp);
+			const artifact = '2026-01-02T03-04-05-678Z_0123abcd-4567-89ab-cdef-0123456789ab';
+			assert.strictEqual(isDiscoverable(omp, relative('workspace/session.jsonl')), true);
+			// A coordinator would otherwise be buried under its own workers.
+			assert.strictEqual(isDiscoverable(omp, relative('workspace/' + artifact + '/worker.jsonl')), false);
+		});
+
+		test('OpenClaw reads both state directories of the same install', () => {
+			const openclaw = vaultSource(KinguVaultSource.OpenClaw);
+			assert.strictEqual(openclaw.roots.length, 2);
+			assert.strictEqual(isDiscoverable(openclaw, relative('agent1/sessions/s1.jsonl')), true);
+			assert.strictEqual(isDiscoverable(openclaw, relative('agent1/memory/s1.jsonl')), false);
+		});
+
+		test('Kimi takes the session state, not the sibling wire transcripts', () => {
+			const kimi = vaultSource(KinguVaultSource.Kimi);
+			assert.strictEqual(isDiscoverable(kimi, relative('wd_repo_ab12/session_x/state.json')), true);
+			assert.strictEqual(isDiscoverable(kimi, relative('wd_repo_ab12/agents/state.json')), false);
+		});
+
+		test('every agent the ADE table covers has an entry here', () => {
+			// The count is asserted so adding an agent to the enum without a root is
+			// caught rather than silently contributing nothing.
+			assert.strictEqual(KINGU_VAULT_SOURCES.length, 18);
+		});
+
 		test('a file below a source depth is not surfaced', () => {
 			const cline = vaultSource(KinguVaultSource.Cline);
 			assert.strictEqual(isDiscoverable(cline, relative('a/b/b.json')), false);
@@ -146,6 +193,21 @@ suite('Kingu vault', () => {
 		test('clineMessagesPath names the sibling holding the turns', () => {
 			assert.strictEqual(clineMessagesPath('/s/abc/abc.json'), '/s/abc/abc.messages.json');
 			assert.strictEqual(clineMessagesPath('/s/abc/abc.jsonl'), undefined);
+		});
+
+		test('isOmpSessionDirectory keeps the workspace but prunes an artifact directory', () => {
+			const artifact = '2026-01-02T03-04-05-678Z_0123abcd-4567-89ab-cdef-0123456789ab';
+			assert.strictEqual(isOmpSessionDirectory('workspace', 0), true);
+			// Depth 0 is the workspace, which is never an artifact directory.
+			assert.strictEqual(isOmpSessionDirectory(artifact, 0), true);
+			assert.strictEqual(isOmpSessionDirectory(artifact, 1), false);
+			assert.strictEqual(isOmpSessionDirectory('notes', 1), true);
+		});
+
+		test('isKimiSessionState needs the session directory, not just the file name', () => {
+			assert.strictEqual(isKimiSessionState(['session_x', 'state.json']), true);
+			assert.strictEqual(isKimiSessionState(['agents', 'state.json']), false);
+			assert.strictEqual(isKimiSessionState(['state.json']), false);
 		});
 
 		test('isAntigravityTranscript needs the whole chain, not just the file name', () => {
@@ -276,6 +338,26 @@ suite('Kingu vault', () => {
 		test('keeps the text that follows an injected block in the same turn', () => {
 			const transcript = lines({ role: 'user', content: '<environment_context>cwd</environment_context>now do it' });
 			assert.strictEqual(readFirstUserPrompt(transcript), 'now do it');
+		});
+
+		test('ignores a marker tag buried in the body, which a diff can contain', () => {
+			// A review prompt carries the file it is reviewing, and that file may itself
+			// mention these tags. Titling from one gave sessions the name of a code
+			// fragment instead of the request.
+			const prompt = 'Review this change. diff: + const q = /<user_query>(.*)<\\/user_query>/;';
+			const transcript = lines({ role: 'user', content: prompt });
+			assert.ok(readFirstUserPrompt(transcript)?.startsWith('Review this change.'));
+		});
+
+		test('still reads a marker that opens the turn, after the blocks before it', () => {
+			const wrapped = '<timestamp>today</timestamp><user_query>merge the branches</user_query>';
+			const transcript = lines({ role: 'user', content: wrapped });
+			assert.strictEqual(readFirstUserPrompt(transcript), 'merge the branches');
+		});
+
+		test('treats an unclosed tag as ordinary text', () => {
+			const transcript = lines({ role: 'user', content: '<not-closed and then some words' });
+			assert.strictEqual(readFirstUserPrompt(transcript), '<not-closed and then some words');
 		});
 
 		test('takes the first user turn, not a later one', () => {

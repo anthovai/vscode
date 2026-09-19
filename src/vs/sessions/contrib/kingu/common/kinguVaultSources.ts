@@ -67,6 +67,25 @@ export function isAntigravityTranscript(segments: readonly string[]): boolean {
 		&& segments[end - 3] !== undefined;
 }
 
+/**
+ * OMP's session artifact directories, named `<stamp>_<uuid>`.
+ *
+ * Task subagent transcripts live inside them. Surfaced as top-level rows they
+ * drown a coordinator under its own workers, so the subtree is pruned.
+ */
+const OMP_ARTIFACT_DIR = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Depth 0 is the workspace directory, which is never an artifact directory. */
+export function isOmpSessionDirectory(name: string, depth: number): boolean {
+	return depth === 0 || !OMP_ARTIFACT_DIR.test(name);
+}
+
+/** Kimi's layout is `<sessions>/wd_<name>_<hash>/session_<uuid>/state.json`. */
+export function isKimiSessionState(segments: readonly string[]): boolean {
+	return segments[segments.length - 1] === 'state.json'
+		&& (segments[segments.length - 2]?.startsWith('session_') ?? false);
+}
+
 /** Cline names each session's manifest after the directory holding it. */
 export function isClineSessionManifest(segments: readonly string[]): boolean {
 	const fileName = segments[segments.length - 1];
@@ -172,6 +191,83 @@ export const KINGU_VAULT_SOURCES: readonly IKinguVaultSourceDefinition[] = [
 			|| (depth === 1 && name === '.system_generated')
 			|| (depth === 2 && name === 'logs'),
 		filePredicate: isAntigravityTranscript,
+	},
+	{
+		id: KinguVaultSource.Grok,
+		label: localize('kingu.vault.source.grok', "Grok"),
+		roots: [['.grok', 'sessions']],
+		extensions: ['.json'],
+		// Grouped by an encoding of the working directory, then by session.
+		maxDepth: 2,
+		filePredicate: segments => segments[segments.length - 1] === 'summary.json',
+	},
+	{
+		id: KinguVaultSource.Devin,
+		label: localize('kingu.vault.source.devin', "Devin"),
+		roots: [['.local', 'share', 'devin', 'cli', 'transcripts']],
+		extensions: ['.json'],
+		maxDepth: 2,
+		isJsonDocument: true,
+	},
+	{
+		id: KinguVaultSource.Hermes,
+		label: localize('kingu.vault.source.hermes', "Hermes"),
+		roots: [['.hermes', 'sessions']],
+		extensions: ['.json'],
+		maxDepth: 1,
+		filePredicate: segments => segments[segments.length - 1].startsWith('session_'),
+		isJsonDocument: true,
+	},
+	{
+		id: KinguVaultSource.Rovo,
+		label: localize('kingu.vault.source.rovo', "Rovo Dev"),
+		roots: [['.rovodev', 'sessions']],
+		extensions: ['.json'],
+		maxDepth: 2,
+		filePredicate: segments => segments[segments.length - 1] === 'metadata.json',
+		isJsonDocument: true,
+	},
+	{
+		id: KinguVaultSource.Pi,
+		label: localize('kingu.vault.source.pi', "Pi"),
+		roots: [['.pi', 'agent', 'sessions']],
+		extensions: ['.jsonl'],
+		maxDepth: 2,
+	},
+	{
+		id: KinguVaultSource.Omp,
+		label: localize('kingu.vault.source.omp', "OMP"),
+		roots: [['.omp', 'agent', 'sessions']],
+		extensions: ['.jsonl'],
+		maxDepth: 2,
+		directoryPredicate: isOmpSessionDirectory,
+	},
+	{
+		id: KinguVaultSource.PrimeAgent,
+		label: localize('kingu.vault.source.primeAgent', "Prime Agent"),
+		roots: [['.prime', 'agent', 'sessions']],
+		extensions: ['.jsonl'],
+		maxDepth: 2,
+	},
+	{
+		id: KinguVaultSource.OpenClaw,
+		label: localize('kingu.vault.source.openclaw', "OpenClaw"),
+		// The current and legacy state directories are the same install under two
+		// names, so both are walked and their sessions land in one list.
+		roots: [['.openclaw', 'agents'], ['.clawdbot', 'agents']],
+		extensions: ['.jsonl'],
+		maxDepth: 3,
+		filePredicate: segments => segments.includes('sessions'),
+	},
+	{
+		id: KinguVaultSource.Kimi,
+		label: localize('kingu.vault.source.kimi', "Kimi"),
+		roots: [['.kimi-code', 'sessions']],
+		extensions: ['.json'],
+		maxDepth: 2,
+		// Only the session state, not the sibling wire transcripts.
+		filePredicate: isKimiSessionState,
+		isJsonDocument: true,
 	},
 ];
 
