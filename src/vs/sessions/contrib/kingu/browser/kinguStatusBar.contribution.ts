@@ -23,6 +23,7 @@ import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_STATUS_BAR_PROVIDERS, KinguQuotaProv
 import { KinguQuotaProblem } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
 import { KinguHostService } from './kinguHostService.js';
+import { IKinguAdvertisedUrlService, KinguAdvertisedUrlService } from './kinguAdvertisedUrlService.js';
 import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -32,6 +33,11 @@ import { describeListeningPort } from '../../../../platform/kinguHost/common/kin
 import { formatRateLimit, formatWindow, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 
 registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed);
+// Eager, unlike the rest: it has to be listening to the terminals before a dev
+// server prints its address, and a server prints it once. Created lazily when
+// the ports entry first asked, it would have missed every announcement made
+// before that — which is all of them.
+registerSingleton(IKinguAdvertisedUrlService, KinguAdvertisedUrlService, InstantiationType.Eager);
 
 /**
  * A codicon per provider.
@@ -129,6 +135,7 @@ class KinguStatusBarContribution extends Disposable {
 		@IKinguVaultService private readonly _vaultService: IKinguVaultService,
 		@IKinguHostService private readonly _hostService: IKinguHostService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
+		@IKinguAdvertisedUrlService private readonly _advertisedUrls: IKinguAdvertisedUrlService,
 	) {
 		super();
 
@@ -141,6 +148,9 @@ class KinguStatusBarContribution extends Disposable {
 		this._register(this._vaultService.onDidChangeSessions(() => this._updateVault()));
 		this._register(this._hostService.onDidChange(() => this._updateProviders()));
 		this._register(this._terminalService.onDidChangeInstances(() => this._updateTerminals()));
+		// A server announcing its address changes what the entry offers to open,
+		// which is worth a redraw even though the count has not moved.
+		this._register(this._advertisedUrls.onDidChange(() => this._updatePorts()));
 		this._register({ dispose: () => { for (const entry of this._providers.values()) { entry.dispose(); } this._providers.clear(); } });
 		const timer = mainWindow.setInterval(() => this._update(), REFRESH_INTERVAL_MS);
 		this._register({ dispose: () => mainWindow.clearInterval(timer) });
@@ -172,8 +182,16 @@ class KinguStatusBarContribution extends Disposable {
 				this._ports.clear();
 				return;
 			}
-			// Named, because a port number alone cannot be told from another window's.
-			const rows = ports.map(describeListeningPort).join('\n');
+			// An address that belongs to a port nothing is serving any more is a lie
+			// the next server on that port would inherit.
+			this._advertisedUrls.retain(new Set(ports.map(port => port.port)));
+			// The address the server announced when it can be had, because that is
+			// what a person would type: the scheme, the host it chose and the path it
+			// serves from are none of them recoverable from the socket.
+			const rows = ports.map(port => {
+				const advertised = this._advertisedUrls.get(port.port);
+				return advertised ? `${describeListeningPort(port)} · ${advertised.url}` : describeListeningPort(port);
+			}).join('\n');
 			const entry: IStatusbarEntry = {
 				name: localize('kingu.status.ports.name', "Listening ports"),
 				text: `$(plug) ${ports.length}`,
@@ -490,18 +508,33 @@ class OpenKinguPortAction extends Action2 {
 		const hostService = accessor.get(IKinguHostService);
 		const quickInputService = accessor.get(IQuickInputService);
 		const openerService = accessor.get(IOpenerService);
+		const advertisedUrls = accessor.get(IKinguAdvertisedUrlService);
 
 		const ports = await hostService.readListeningPorts();
 		if (ports.length === 0) {
 			return;
 		}
 		const picked = await quickInputService.pick(
-			ports.map(port => ({ label: String(port.port), description: port.process, port })),
-			{ title: localize('kingu.status.openPort.title', "Open a listening port"), placeHolder: localize('kingu.status.openPort.placeholder', "Ports this app's processes are serving") });
+			ports.map(port => {
+				const advertised = advertisedUrls.get(port.port);
+				return {
+					label: String(port.port),
+					description: port.process,
+					// Shown so the choice is made on the address that will open, not on
+					// a number and a hope. A port with no announcement shows none.
+					detail: advertised?.url,
+					port,
+					advertised,
+				};
+			}),
+			{ title: localize('kingu.status.openPort.title', "Open a listening port"), placeHolder: localize('kingu.status.openPort.placeholder', "Ports this app's processes are serving"), matchOnDetail: true });
 		if (picked) {
-			// Loopback rather than the bind address: a server on `0.0.0.0` is reached
-			// from this machine at localhost, and that is the machine doing the asking.
-			await openerService.open(URI.parse(`http://localhost:${picked.port.port}`), { openExternal: true });
+			// The address the server announced, when it announced one: it knows its
+			// own scheme, hostname and path, and none of those can be read off the
+			// socket. Failing that, loopback — a server on `0.0.0.0` is reached from
+			// this machine at localhost, and this machine is the one doing the asking.
+			const url = picked.advertised?.url ?? `http://localhost:${picked.port.port}`;
+			await openerService.open(URI.parse(url), { openExternal: true });
 		}
 	}
 }

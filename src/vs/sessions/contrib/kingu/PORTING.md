@@ -21,6 +21,7 @@ it is a cost we do not want), **open** (a real gap, not yet done).
 | `ai-vault-search` | `KinguVaultService.search` + `common/kinguVaultSearchBudget.ts` | The ADE indexes into SQLite in a child process. Here it is a bounded walk with a per-host read allowance. See *Search* below. |
 | `rate-limits`, `claude-usage`, `codex-usage` | `platform/kinguHost/` | Quota per provider, read in the main process because a renderer cannot reach these endpoints and should never hold the token. |
 | `ports` | `platform/kinguHost/common/kinguHostPorts.ts` | Scoped to this app's process tree, which is what makes the count readable. |
+| `ports/advertised-url-*` | `common/kinguAdvertisedUrls.ts` | Read from the terminal's own line events, so the ADE's PTY buffering and ANSI stripping are not needed — see *Advertised URLs* below. |
 | `memory` | `kinguHostChannel._getMemoryBytes` | Total plus a breakdown by process kind. |
 | `claude-usage`, `codex-usage` pricing | `common/kinguPricing.ts` | Both price lists, each with its own token semantics — see *Pricing* below. |
 | `usage/` worktree attribution | `common/kinguVaultAttribution.ts` | Resolved from git itself rather than from a worktree registry the ADE keeps. |
@@ -71,10 +72,7 @@ onto it. Porting the ADE's version would mean running two of each.
 
 Real gaps, in the order they seem worth closing.
 
-1. **Advertised URLs for ports.** The ADE watches a dev server's output for
-   the URL it prints, so the ports list offers `http://localhost:5173/` rather
-   than a number and a guess. Here the port entry assumes loopback and `http`.
-2. **A Windows remote host.** Remote roots are built from the host's own
+1. **A Windows remote host.** Remote roots are built from the host's own
    `defaultDirectory` and joined with forward slashes, which a Windows host
    accepts — but every remote test so far has been against Linux.
 
@@ -145,3 +143,38 @@ ledger-api                  $0.09 ·   4.0k  directory  · kingu-remote-test:/sr
 Three rows, two of them sharing a label. The kind, the machine and the path are
 all in the row because without them a report that spans hosts is a total of the
 wrong thing.
+
+## Advertised URLs
+
+A port number cannot be opened. A dev server's scheme, the hostname it chose
+and the path it serves from are all stated exactly once — in the line it prints
+when it comes up — and nowhere else. So that line is what is read.
+
+The ADE does this from raw PTY chunks: it buffers them, strips ANSI, OSC and
+cursor movement, and reassembles URLs split across writes. None of that is here
+because the terminal in this window emits `onLineData`, which is already
+unwrapped and already stripped. That is the whole of the difference, and it is
+most of the ADE's module.
+
+Which address wins, when a server announces several: a name the project
+arranged for, then loopback, then a LAN address, then a public one — a name
+because its certificates and cookies are issued against it, loopback because
+this machine is the one asking. `https` beats `http` from the same server, and
+otherwise the newer announcement wins, because a restart is news. A bind-
+everything address is rewritten to loopback: `http://0.0.0.0:3000` is what the
+server bound to, not somewhere to go.
+
+Nothing is persisted, and an address is dropped as soon as its port stops
+listening. The line stays in the scrollback after the process is gone, so
+without that the next server on that port would inherit the last one's URL and
+path.
+
+Verified by running a server that announces itself the way Vite does, in a
+terminal of this window:
+
+```
+5173 node.exe · http://localhost:5173/app/
+```
+
+— the Local address chosen over the Network one it printed beside it, the path
+kept, and the whole entry gone once the server was killed.
