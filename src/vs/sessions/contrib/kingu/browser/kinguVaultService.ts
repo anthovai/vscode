@@ -8,13 +8,17 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { FileType, IFileService } from '../../../../platform/files/common/files.js';
+import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IPathService } from '../../../../workbench/services/path/common/pathService.js';
 import {
 	findExcerpt,
 	IKinguUsageSummary,
+	IKinguVaultSearchOptions,
+	IKinguVaultSearchOutcome,
 	IKinguVaultSearchResult,
 	IKinguVaultService,
+	KinguVaultSearchStop,
 	IKinguVaultSession,
 	KinguVaultSource,
 	readFirstUserPrompt,
@@ -33,6 +37,10 @@ import {
 	subagentTitle,
 } from '../common/kinguVaultSubagents.js';
 import { getKinguVaultEnvironmentSource, IKinguVaultEnvironment } from '../common/kinguVaultEnvironment.js';
+import { IKinguVaultHost, remoteVaultHosts } from '../common/kinguVaultRemote.js';
+import { IKinguVaultFileStamp, KinguVaultDescriptionCache } from '../common/kinguVaultCache.js';
+import { groupSearchByHost, KinguSearchLedger, searchBudgetFor } from '../common/kinguVaultSearchBudget.js';
+import { IRemoteAgentHostService } from '../../../../platform/agentHost/common/remoteAgentHostService.js';
 
 /**
  * How many transcripts are opened at once.
@@ -53,13 +61,13 @@ const SCAN_CONCURRENCY = 8;
 const DESCRIBE_PREFIX_BYTES = 128 * 1024;
 
 /**
- * How much of a transcript search reads.
+ * What the local machine is called when a host has to be named.
  *
- * A bound is needed for the same reason, and unlike the title this one does lose
- * something: a hit past the cut is not found. It is set high enough to cover an
- * ordinary session whole.
+ * A local session carries no host label, because the list would be a wall of
+ * "this computer"; the one place the name is needed is a report that a search
+ * did not finish, where "some machine" would be useless.
  */
-const MAX_SEARCH_BYTES = 8 * 1024 * 1024;
+const LOCAL_HOST_KEY = localize('kingu.vault.localHost', "this machine");
 
 /**
  * Indexes the sessions other coding agents have left on this machine.
@@ -92,13 +100,27 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	 * — and the short result it stopped at would be cached as the whole vault.
 	 */
 	private readonly _scanning = this._register(new CancellationTokenSource());
+	/**
+	 * What each transcript was last described as.
+	 *
+	 * Deliberately outlives {@link invalidate}, which is the point: invalidation
+	 * says the *set* of sessions may have changed, not that every transcript was
+	 * rewritten. The scan re-walks the directories and re-stats the files, and
+	 * pays to read only the ones whose stat moved.
+	 */
+	private readonly _descriptions = new KinguVaultDescriptionCache();
 
 	constructor(
 		@IFileService private readonly _fileService: IFileService,
 		@IPathService private readonly _pathService: IPathService,
 		@ILogService private readonly _logService: ILogService,
+		@IRemoteAgentHostService private readonly _remoteAgentHostService: IRemoteAgentHostService,
 	) {
 		super();
+		// A host connecting or dropping changes which transcripts exist to be
+		// listed, so the index is rebuilt rather than left describing a machine
+		// this window can no longer read.
+		this._register(this._remoteAgentHostService.onDidChangeConnections(() => this.invalidate()));
 	}
 
 	getSessions(token = CancellationToken.None): Promise<readonly IKinguVaultSession[]> {
@@ -118,40 +140,88 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		this._onDidChangeSessions.fire();
 	}
 
-	async search(query: string, token = CancellationToken.None): Promise<readonly IKinguVaultSearchResult[]> {
+	async search(query: string, options: IKinguVaultSearchOptions = {}, token = CancellationToken.None): Promise<IKinguVaultSearchOutcome> {
 		const trimmed = query.trim();
+		const sessions = trimmed ? await this.getSessions(token) : [];
 		if (!trimmed) {
-			return [];
+			return { results: [], searched: 0, total: 0, stopped: 'complete', truncatedHosts: [] };
 		}
-		const sessions = await this.getSessions(token);
+
+		const maxResults = options.maxResults ?? Number.POSITIVE_INFINITY;
 		const results: IKinguVaultSearchResult[] = [];
-		await forEachLimited(sessions, SCAN_CONCURRENCY, async session => {
-			if (token.isCancellationRequested) {
-				return;
-			}
-			// Both halves are searched for the agents that split a session in two,
-			// so a hit in the turns is found from the manifest that names them.
-			for (const resource of [session.resource, session.contentResource]) {
-				const text = resource && await this._read(resource, MAX_SEARCH_BYTES);
-				const excerpt = text && findExcerpt(text, trimmed);
-				if (excerpt) {
-					results.push({ session, excerpt });
+		const truncated = new Set<string>();
+		let searched = 0;
+		let stopped: KinguVaultSearchStop = 'complete';
+
+		// Each machine walks under its own allowance and its own number of reads in
+		// flight, and the machines walk at the same time. One host being slow or
+		// unreachable therefore delays only its own half of the answer — which is
+		// the whole point of searching across hosts rather than one after another.
+		await Promise.all([...groupSearchByHost(sessions)].map(async ([hostLabel, hostSessions]) => {
+			const ledger = new KinguSearchLedger(searchBudgetFor(hostLabel !== undefined));
+			await forEachLimited(hostSessions, ledger.budget.concurrency, async session => {
+				if (token.isCancellationRequested) {
+					stopped = 'cancelled';
 					return;
 				}
-			}
-		});
-		// Re-sorted because the bounded walk completes out of order.
-		return results.sort((a, b) => b.session.modified - a.session.modified);
+				if (results.length >= maxResults) {
+					stopped = 'maxResults';
+					return;
+				}
+				const allowance = ledger.claim();
+				if (allowance === 0) {
+					// Named rather than passed over: a search that quietly skipped half a
+					// host would read as "no matches there", which is a different answer.
+					truncated.add(hostLabel ?? LOCAL_HOST_KEY);
+					if (stopped === 'complete') {
+						stopped = 'budget';
+					}
+					return;
+				}
+				searched++;
+				let used = 0;
+				// Both halves are searched for the agents that split a session in two,
+				// so a hit in the turns is found from the manifest that names them.
+				for (const resource of [session.resource, session.contentResource]) {
+					const text = resource && await this._read(resource, allowance - used);
+					used += text?.length ?? 0;
+					const excerpt = text && findExcerpt(text, trimmed);
+					if (excerpt) {
+						const result = { session, excerpt };
+						results.push(result);
+						options.onResult?.(result);
+						break;
+					}
+					if (used >= allowance) {
+						break;
+					}
+				}
+				ledger.refund(allowance, used);
+			});
+		}));
+
+		return {
+			// Re-sorted because the bounded walk completes out of order.
+			results: results.sort((a, b) => b.session.modified - a.session.modified).slice(0, maxResults),
+			searched,
+			total: sessions.length,
+			stopped,
+			truncatedHosts: [...truncated],
+		};
 	}
 
 	private async _scan(token: CancellationToken): Promise<readonly IKinguVaultSession[]> {
+		this._descriptions.resetStats();
 		const [home, environment] = await Promise.all([
 			this._pathService.userHome(),
 			this._environment(),
 		]);
 		// The local home first, so a duplicate root reached two ways keeps the
 		// spelling the user would recognise.
-		const homes = [home, ...environment?.homeDirectories ?? []];
+		const hosts: IKinguVaultHost[] = [
+			...[home, ...environment?.homeDirectories ?? []].map(uri => ({ home: uri, label: undefined })),
+			...remoteVaultHosts(this._remoteAgentHostService.connections),
+		];
 		const sessions: IKinguVaultSession[] = [];
 		const seen = new Set<string>();
 		// Per source, so one agent whose layout has changed under us cannot empty
@@ -161,7 +231,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 				break;
 			}
 			try {
-				for (const session of await this._scanSource(homes, environment, source, token)) {
+				for (const session of await this._scanSource(hosts, environment, source, token)) {
 					// A root reached both by default and by an override is one directory,
 					// and its sessions must not be listed twice.
 					if (!seen.has(session.id)) {
@@ -173,6 +243,11 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 				this._logService.warn(`[Kingu] vault scan failed for ${source.id}`, error);
 			}
 		}
+		// Logged because the reuse rate is the whole reason a rescan over a remote
+		// host is affordable, and a cache that silently stopped working would look
+		// like nothing more than a slow window.
+		const { reused, read } = this._descriptions.stats;
+		this._logService.trace(`[Kingu] vault scan: ${sessions.length} sessions, ${reused} reused, ${read} read, ${hosts.length} hosts`);
 		return sessions.sort((a, b) => b.modified - a.modified);
 	}
 
@@ -188,31 +263,32 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	}
 
 	private async _scanSource(
-		homes: readonly URI[],
+		hosts: readonly IKinguVaultHost[],
 		environment: IKinguVaultEnvironment | undefined,
 		source: IKinguVaultSourceDefinition,
 		token: CancellationToken,
 	): Promise<IKinguVaultSession[]> {
-		const roots: URI[] = [];
-		for (const home of homes) {
+		const roots: { resource: URI; hostLabel: string | undefined }[] = [];
+		for (const host of hosts) {
 			for (const rootSegments of source.roots) {
-				roots.push(joinPath(home, ...rootSegments));
+				roots.push({ resource: joinPath(host.home, ...rootSegments), hostLabel: host.label });
 			}
 		}
 		// An override names one absolute directory, so it is a root in its own right
-		// rather than something to resolve against each home.
+		// rather than something to resolve against each home. It is always local:
+		// it came from this machine's environment.
 		for (const override of environment?.rootOverrides.get(source.id) ?? []) {
-			roots.push(URI.file(override));
+			roots.push({ resource: URI.file(override), hostLabel: undefined });
 		}
 
 		const sessions: IKinguVaultSession[] = [];
 		for (const root of roots) {
-			const files = await this._walk(root, source, [], token);
+			const files = await this._walk(root.resource, source, [], token);
 			await forEachLimited(files, SCAN_CONCURRENCY, async file => {
 				if (token.isCancellationRequested) {
 					return;
 				}
-				const session = await this._describe(file.resource, source, file.relativeSegments);
+				const session = await this._describe(file.resource, source, file.relativeSegments, root.hostLabel);
 				if (session) {
 					sessions.push(session);
 				}
@@ -249,18 +325,30 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		return found;
 	}
 
-	private async _describe(resource: URI, source: IKinguVaultSourceDefinition, relativeSegments: readonly string[]): Promise<IKinguVaultSession | undefined> {
+	private async _describe(resource: URI, source: IKinguVaultSourceDefinition, relativeSegments: readonly string[], hostLabel?: string): Promise<IKinguVaultSession | undefined> {
 		let modified: number;
+		let stamp: IKinguVaultFileStamp;
 		try {
-			modified = (await this._fileService.stat(resource)).mtime ?? 0;
+			const stat = await this._fileService.stat(resource);
+			modified = stat.mtime ?? 0;
+			stamp = { mtime: modified, size: stat.size };
 		} catch {
 			return undefined;
+		}
+		// The stat is the whole cost of a session that has not changed since the
+		// last scan, which is nearly all of them on nearly every scan.
+		const key = resource.toString();
+		const cached = this._descriptions.get(key, stamp);
+		if (cached) {
+			return cached;
 		}
 		const contentResource = this._contentResource(resource, source);
 		const fromPath = source.workingDirectoryFromPath?.(relativeSegments);
 		const head = await this._read(resource, DESCRIBE_PREFIX_BYTES);
 		if (head === undefined) {
-			return this._nameOnly(resource, source, contentResource, fromPath, modified, relativeSegments);
+			// Deliberately not cached: the read failed, and a host that was briefly
+			// unreachable must not have its whole corpus pinned as name-only.
+			return this._nameOnly(resource, source, contentResource, fromPath, modified, relativeSegments, hostLabel);
 		}
 
 		let title: string | undefined;
@@ -282,8 +370,8 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			title = turns ? readFirstUserPrompt(turns) : undefined;
 		}
 
-		return {
-			id: `${source.id}:${resource.path}`,
+		const session: IKinguVaultSession = {
+			id: sessionId(source.id, resource),
 			source: source.id,
 			sourceLabel: source.label,
 			rootRelativeSegments: relativeSegments,
@@ -292,7 +380,10 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			title: sessionTitle(title, basename(resource)),
 			workingDirectory: workingDirectory ?? fromPath,
 			modified,
+			hostLabel,
 		};
+		this._descriptions.set(key, stamp, session);
+		return session;
 	}
 
 	async getSubagents(session: IKinguVaultSession, token = CancellationToken.None): Promise<readonly IKinguVaultSession[]> {
@@ -329,7 +420,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		const meta = readSubagentMeta(metaContent ?? '');
 		const head = await this._read(resource, DESCRIBE_PREFIX_BYTES);
 		return {
-			id: `${parent.source}:${resource.path}`,
+			id: sessionId(parent.source, resource),
 			source: parent.source,
 			sourceLabel: parent.sourceLabel,
 			// A worker's transcript is reached through its parent, never by a root
@@ -340,6 +431,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			title: subagentTitle(meta, head ? readFirstUserPrompt(head) : undefined, basename(resource)),
 			workingDirectory: parent.workingDirectory,
 			modified,
+			hostLabel: parent.hostLabel,
 		};
 	}
 
@@ -348,8 +440,9 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			return EMPTY_USAGE;
 		}
 		// Bounded like search, and for the same reason: a pathological transcript
-		// must not decide how long this takes.
-		const transcript = await this._read(session.resource, MAX_SEARCH_BYTES);
+		// must not decide how long this takes, and a remote one is read over a link
+		// the agent is also using.
+		const transcript = await this._read(session.resource, searchBudgetFor(session.hostLabel !== undefined).perSessionBytes);
 		return transcript ? readTranscriptUsage(transcript, session.source) : EMPTY_USAGE;
 	}
 
@@ -404,6 +497,10 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 				// Absent for most sessions; the one that mattered is already gone.
 			}
 		}
+		// The description outlives invalidation by design, so a deletion has to say
+		// so explicitly — otherwise a new transcript written to the freed path
+		// within the filesystem's mtime resolution would inherit this one's title.
+		this._descriptions.invalidate(session.resource.toString());
 		this.invalidate();
 	}
 
@@ -413,9 +510,10 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	}
 
 	/** A session we could not read the body of still belongs in the list. */
-	private _nameOnly(resource: URI, source: IKinguVaultSourceDefinition, contentResource: URI | undefined, workingDirectory: string | undefined, modified: number, relativeSegments: readonly string[]): IKinguVaultSession {
+	private _nameOnly(resource: URI, source: IKinguVaultSourceDefinition, contentResource: URI | undefined, workingDirectory: string | undefined, modified: number, relativeSegments: readonly string[], hostLabel: string | undefined): IKinguVaultSession {
 		return {
-			id: `${source.id}:${resource.path}`,
+			hostLabel,
+			id: sessionId(source.id, resource),
 			source: source.id,
 			sourceLabel: source.label,
 			rootRelativeSegments: relativeSegments,
@@ -468,6 +566,18 @@ async function forEachLimited<T>(items: readonly T[], limit: number, body: (item
 		}
 	});
 	await Promise.all(workers);
+}
+
+/**
+ * A session's identity.
+ *
+ * The authority is part of it because the same path exists on every machine:
+ * two hosts both running an agent out of `/home/dev` would otherwise collide
+ * and the vault would list one of them. It is empty for a local `file:` URI, so
+ * a local id is just the path it always was.
+ */
+function sessionId(source: KinguVaultSource, resource: URI): string {
+	return `${source}:${resource.authority}${resource.path}`;
 }
 
 function joinPath(base: URI, ...segments: string[]): URI {

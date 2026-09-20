@@ -19,14 +19,15 @@ import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus } from '../../
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguRateLimits/common/kinguQuotaProviders.js';
-import { IKinguRateLimitService, KinguQuotaProblem } from '../../../../platform/kinguRateLimits/common/kinguRateLimits.js';
-import { KinguRateLimitService } from './kinguRateLimitService.js';
+import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
+import { KinguQuotaProblem } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
+import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
+import { KinguHostService } from './kinguHostService.js';
 import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
 import { formatRateLimit, formatWindow, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 
-registerSingleton(IKinguRateLimitService, KinguRateLimitService, InstantiationType.Delayed);
+registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed);
 
 /**
  * A codicon per provider.
@@ -107,6 +108,7 @@ class KinguStatusBarContribution extends Disposable {
 	private readonly _vault = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _terminals = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _memory = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly _ports = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _providers = new Map<KinguQuotaProvider, IStatusbarEntryAccessor>();
 	private _lastQuotaRefresh = 0;
 
@@ -116,7 +118,7 @@ class KinguStatusBarContribution extends Disposable {
 		@IAgentHostService private readonly _agentHostService: IAgentHostService,
 		@IRemoteAgentHostService private readonly _remoteAgentHostService: IRemoteAgentHostService,
 		@IKinguVaultService private readonly _vaultService: IKinguVaultService,
-		@IKinguRateLimitService private readonly _rateLimitService: IKinguRateLimitService,
+		@IKinguHostService private readonly _hostService: IKinguHostService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 	) {
 		super();
@@ -128,7 +130,7 @@ class KinguStatusBarContribution extends Disposable {
 		this._register(this._agentHostService.rootState.onDidChange(() => this._updateRateLimit()));
 		this._register(this._remoteAgentHostService.onDidChangeConnections(() => this._updateRemote()));
 		this._register(this._vaultService.onDidChangeSessions(() => this._updateVault()));
-		this._register(this._rateLimitService.onDidChange(() => this._updateProviders()));
+		this._register(this._hostService.onDidChange(() => this._updateProviders()));
 		this._register(this._terminalService.onDidChangeInstances(() => this._updateTerminals()));
 		this._register({ dispose: () => { for (const entry of this._providers.values()) { entry.dispose(); } this._providers.clear(); } });
 		const timer = mainWindow.setInterval(() => this._update(), REFRESH_INTERVAL_MS);
@@ -142,7 +144,39 @@ class KinguStatusBarContribution extends Disposable {
 		this._updateProviders();
 		this._updateTerminals();
 		this._updateMemory();
+		this._updatePorts();
 		this._maybeRefreshQuota();
+	}
+
+	/**
+	 * What this machine is listening on.
+	 *
+	 * An agent that has just started a dev server leaves no other trace in this
+	 * window — the run happened in its own terminal, or in none — so the port
+	 * appearing here is how the user learns the thing is up, and on which port.
+	 */
+	private _updatePorts(): void {
+		void this._hostService.readListeningPorts().then(ports => {
+			if (this._store.isDisposed) {
+				return;
+			}
+			if (ports.length === 0) {
+				this._ports.clear();
+				return;
+			}
+			const numbers = ports.map(port => port.port);
+			const entry: IStatusbarEntry = {
+				name: localize('kingu.status.ports.name', "Listening ports"),
+				text: `$(plug) ${ports.length}`,
+				ariaLabel: localize('kingu.status.ports.aria', "{0} ports listening", ports.length),
+				tooltip: localize('kingu.status.ports.tooltip', "Listening on {0}", numbers.join(', ')),
+			};
+			if (this._ports.value) {
+				this._ports.value.update(entry);
+			} else {
+				this._ports.value = this._statusbarService.addEntry(entry, 'kingu.status.ports', StatusbarAlignment.RIGHT, 94);
+			}
+		});
 	}
 
 	/**
@@ -178,7 +212,7 @@ class KinguStatusBarContribution extends Disposable {
 	 * is a fraction of the answer once an agent host is running.
 	 */
 	private _updateMemory(): void {
-		void this._rateLimitService.readMemoryBytes().then(bytes => {
+		void this._hostService.readMemoryBytes().then(bytes => {
 			if (this._store.isDisposed || bytes === undefined || bytes <= 0) {
 				return;
 			}
@@ -192,7 +226,7 @@ class KinguStatusBarContribution extends Disposable {
 			if (this._memory.value) {
 				this._memory.value.update(entry);
 			} else {
-				this._memory.value = this._statusbarService.addEntry(entry, 'kingu.status.memory', StatusbarAlignment.RIGHT, 94);
+				this._memory.value = this._statusbarService.addEntry(entry, 'kingu.status.memory', StatusbarAlignment.RIGHT, 96);
 			}
 		});
 	}
@@ -204,7 +238,7 @@ class KinguStatusBarContribution extends Disposable {
 			return;
 		}
 		this._lastQuotaRefresh = now;
-		void this._rateLimitService.refresh();
+		void this._hostService.refresh();
 	}
 
 	/**
@@ -227,7 +261,7 @@ class KinguStatusBarContribution extends Disposable {
 
 	private _updateProvider(provider: KinguQuotaProvider, priority: number): void {
 		const existing = this._providers.get(provider);
-		const result = this._rateLimitService.quotas.get(provider);
+		const result = this._hostService.quotas.get(provider);
 		const windows = result?.ok
 			? [result.quota.session, result.quota.weekly].filter(limit => limit !== undefined)
 			: [];
@@ -360,19 +394,22 @@ class KinguStatusBarContribution extends Disposable {
 			return;
 		}
 		const names = connected.map(connection => connection.name || connection.address).filter(Boolean);
-		const text = connected.length === 1
-			? localize('kingu.status.remote.one', "{0}", names[0] ?? localize('kingu.status.remote.unnamed', "remote"))
+		const where = connected.length === 1
+			? names[0] ?? localize('kingu.status.remote.unnamed', "Connected")
 			: localize('kingu.status.remote.many', "{0} hosts", connected.length);
 		const entry: IStatusbarEntry = {
 			name: localize('kingu.status.remote.name', "Remote agent host"),
-			text: `$(remote) ${text}`,
-			ariaLabel: localize('kingu.status.remote.aria', "Connected to {0}", text),
+			// The trailing dot is the light: green while every host answers. It is
+			// coloured from this entry's own id in CSS, because a status bar entry
+			// colours its whole label at once and the host's name is not the news.
+			text: `$(server) SSH ${where} $(circle-filled)`,
+			ariaLabel: localize('kingu.status.remote.aria', "Connected to {0}", where),
 			tooltip: names.join('\n'),
 		};
 		if (this._remote.value) {
 			this._remote.value.update(entry);
 		} else {
-			this._remote.value = this._statusbarService.addEntry(entry, 'kingu.status.remote', StatusbarAlignment.RIGHT, 100);
+			this._remote.value = this._statusbarService.addEntry(entry, 'kingu.status.remote', StatusbarAlignment.RIGHT, 93);
 		}
 	}
 }
@@ -398,7 +435,7 @@ class RefreshKinguQuotasAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IKinguRateLimitService).refresh();
+		await accessor.get(IKinguHostService).refresh();
 	}
 }
 

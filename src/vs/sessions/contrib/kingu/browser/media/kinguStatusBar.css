@@ -14,3 +14,18 @@
 .kingu-sessions .part.statusbar .statusbar-item .kingu-quota-cells {
 	letter-spacing: -0.5px;
 }
+
+/* The SSH entry's trailing dot is a light, not a glyph: green while the hosts
+   answer. A status bar entry colours its whole label at once, so it is reached
+   here by the entry's own id — the part the eye should catch is the dot, not
+   the host's name beside it. */
+#kingu\.status\.remote .codicon-circle-filled {
+	color: var(--vscode-charts-green);
+	font-size: 8px;
+}
+
+/* The leading server icon carries the same colour, which is what makes the
+   entry readable as one status rather than as an icon and a sentence. */
+#kingu\.status\.remote .codicon-server {
+	color: var(--vscode-charts-green);
+}

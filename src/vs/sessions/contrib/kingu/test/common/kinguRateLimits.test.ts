@@ -11,7 +11,7 @@ import {
 	problemForStatus,
 	readClaudeAccessToken,
 	readClaudeQuota,
-} from '../../../../../platform/kinguRateLimits/common/kinguRateLimits.js';
+} from '../../../../../platform/kinguHost/common/kinguRateLimits.js';
 
 const NOW = 1_800_000_000_000;
 

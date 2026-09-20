@@ -15,7 +15,7 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
-import { IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js';
+import { IKinguVaultSearchOutcome, IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js';
 import { formatTokens, IKinguUsage, totalTokens, uncachedTokens } from '../common/kinguVaultUsage.js';
 import { KINGU_VAULT_SOURCES } from '../common/kinguVaultSources.js';
 import { KinguVaultService } from './kinguVaultService.js';
@@ -133,6 +133,35 @@ class BrowseKinguVaultAction extends Action2 {
 }
 
 /**
+ * How many matches a search collects before it stops reading.
+ *
+ * A person searching their history is looking for one session. Past a screenful
+ * the extra results are not what makes the search useful, and every one of them
+ * cost a transcript read — over a remote host, a read across the wire.
+ */
+const MAX_SEARCH_RESULTS = 50;
+
+/**
+ * What a search has to admit about itself, or nothing when it read everything.
+ *
+ * Shown because the alternative is a list that looks complete and is not: a
+ * remote host whose allowance ran out returns no matches from the transcripts
+ * it never opened, which is indistinguishable from having none.
+ */
+function searchFootnote(outcome: IKinguVaultSearchOutcome): string | undefined {
+	if (outcome.stopped === 'maxResults') {
+		return localize('kingu.vault.search.capped', "First {0} matches, from {1} of {2} sessions.", outcome.results.length, outcome.searched, outcome.total);
+	}
+	if (outcome.stopped === 'budget') {
+		return localize('kingu.vault.search.truncated', "{0} matches. Not every session on {1} was read.", outcome.results.length, outcome.truncatedHosts.join(', '));
+	}
+	if (outcome.stopped === 'cancelled') {
+		return localize('kingu.vault.search.cancelled', "Stopped after {0} of {1} sessions.", outcome.searched, outcome.total);
+	}
+	return undefined;
+}
+
+/**
  * Searches inside those transcripts.
  *
  * Separate from browsing because the search reads every transcript, which the
@@ -166,20 +195,54 @@ class SearchKinguVaultAction extends Action2 {
 		}
 
 		const source = new CancellationTokenSource();
+		const picker = quickInputService.createQuickPick<IVaultPick>();
 		try {
-			const picked = await quickInputService.pick(
-				vaultService.search(query, source.token).then(results => results.map(result => toPick(result.session, result.excerpt))),
-				{
-					title: localize('kingu.vault.search.resultsTitle', "Kingu Vault: {0}", query),
-					placeHolder: localize('kingu.vault.search.resultsPlaceholder', "Matching sessions"),
-					matchOnDescription: true,
-					matchOnDetail: true,
-				});
+			picker.title = localize('kingu.vault.search.resultsTitle', "Kingu Vault: {0}", query);
+			picker.placeholder = localize('kingu.vault.search.resultsPlaceholder', "Matching sessions");
+			picker.matchOnDescription = true;
+			picker.matchOnDetail = true;
+			picker.busy = true;
+			picker.show();
+
+			// One promise for the whole picker, settled by whichever comes first.
+			// Written this way rather than awaited in two steps because hiding can
+			// happen during the walk, and an `onDidHide` registered afterwards would
+			// be waiting for an event that has already gone by.
+			let settle!: (picked: IVaultPick | undefined) => void;
+			const chosen = new Promise<IVaultPick | undefined>(resolve => { settle = resolve; });
+			picker.onDidAccept(() => settle(picker.selectedItems[0]));
+			// Dismissing the picker is the user saying they are done waiting, and the
+			// walk is reading transcripts across every machine until it is told so.
+			picker.onDidHide(() => { source.cancel(); settle(undefined); });
+
+			// Filled as matches arrive rather than at the end. Over a remote host most
+			// of the wait is the last transcripts, and a list that is usable while
+			// they are still being read is the difference between a search and a stall.
+			const found: IVaultPick[] = [];
+			void vaultService.search(query, {
+				maxResults: MAX_SEARCH_RESULTS,
+				onResult: result => {
+					found.push(toPick(result.session, result.excerpt));
+					picker.items = found;
+				},
+			}, source.token).then(outcome => {
+				if (source.token.isCancellationRequested) {
+					return;
+				}
+				picker.busy = false;
+				// Re-set from the outcome rather than left in arrival order: the walk
+				// finishes out of order, and newest-first is the order a person reads
+				// their own history in.
+				picker.items = outcome.results.map(result => toPick(result.session, result.excerpt));
+				picker.placeholder = searchFootnote(outcome) ?? picker.placeholder;
+			});
+
+			const picked = await chosen;
 			if (picked) {
 				await editorService.openEditor({ resource: picked.session.resource, options: { pinned: true } });
 			}
 		} finally {
-			// The search reads every transcript, so a dismissed picker has to stop it.
+			picker.dispose();
 			source.dispose(true);
 		}
 	}

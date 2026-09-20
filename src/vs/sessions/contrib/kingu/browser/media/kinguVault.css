@@ -141,6 +141,17 @@
 	flex: 0 0 auto;
 }
 
+/* The machine a row is on, shown only when it is not this one. Bordered rather
+   than coloured: it is a fact about where the session lives, not a link. */
+.kingu-vault-row-host {
+	flex: 0 0 auto;
+	padding: 0 4px;
+	border: 1px solid var(--vscode-contrastBorder, var(--vscode-widget-border, transparent));
+	border-radius: 3px;
+	color: var(--vscode-charts-green);
+	white-space: nowrap;
+}
+
 .kingu-vault-row-directory {
 	overflow: hidden;
 	text-overflow: ellipsis;

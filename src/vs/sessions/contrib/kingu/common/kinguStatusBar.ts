@@ -3,7 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import { IKinguRateLimit } from '../../../../platform/kinguRateLimits/common/kinguRateLimitTypes.js';
+import { IKinguRateLimit } from '../../../../platform/kinguHost/common/kinguHostTypes.js';
 
 export type { IKinguRateLimit };
 

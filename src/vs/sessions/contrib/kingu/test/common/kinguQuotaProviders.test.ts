@@ -18,7 +18,7 @@ import {
 	readKimiQuota,
 	readKimiToken,
 	windowMinutes,
-} from '../../../../../platform/kinguRateLimits/common/kinguQuotaProviders.js';
+} from '../../../../../platform/kinguHost/common/kinguQuotaProviders.js';
 
 const NOW = 1_800_000_000_000;
 

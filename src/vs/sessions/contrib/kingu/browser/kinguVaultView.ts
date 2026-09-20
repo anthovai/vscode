@@ -195,7 +195,10 @@ export class KinguVaultView extends AbstractCustomView {
 			return true;
 		}
 		return session.title.toLowerCase().includes(this._filter)
-			|| (session.workingDirectory?.toLowerCase().includes(this._filter) ?? false);
+			|| (session.workingDirectory?.toLowerCase().includes(this._filter) ?? false)
+			// So a machine's name finds its sessions, which is how a person looks for
+			// "what was I doing on the build box".
+			|| (session.hostLabel?.toLowerCase().includes(this._filter) ?? false);
 	}
 
 	private _renderRow(session: IKinguVaultSession): HTMLElement {
@@ -204,6 +207,14 @@ export class KinguVaultView extends AbstractCustomView {
 
 		const meta = $('.kingu-vault-row-meta');
 		meta.appendChild($('.kingu-vault-row-source', undefined, session.sourceLabel));
+		// Only on a row that is somewhere else. A badge on every row saying "this
+		// computer" would be a badge on nothing, and the badge is here to make the
+		// handful of remote rows findable among hundreds of local ones.
+		if (session.hostLabel) {
+			meta.appendChild($('.kingu-vault-row-host', {
+				title: localize('kingu.vault.view.hostTooltip', "On {0}", session.hostLabel),
+			}, session.hostLabel));
+		}
 		// Offered on every row rather than only where workers exist: knowing there
 		// are none is an answer, and finding out costs a directory listing that the
 		// scan deliberately does not pay for every row.

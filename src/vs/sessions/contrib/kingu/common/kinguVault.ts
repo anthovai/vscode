@@ -65,12 +65,57 @@ export interface IKinguVaultSession {
 	readonly workingDirectory: string | undefined;
 	/** Last write time, in milliseconds since the epoch. */
 	readonly modified: number;
+	/**
+	 * The machine the transcript is on, when it is not this one.
+	 *
+	 * Absent for a local session rather than set to the name of this computer:
+	 * the label exists to mark the rows that are somewhere else.
+	 */
+	readonly hostLabel?: string;
 }
 
 export interface IKinguVaultSearchResult {
 	readonly session: IKinguVaultSession;
 	/** The matching line, trimmed for display. */
 	readonly excerpt: string;
+}
+
+export interface IKinguVaultSearchOptions {
+	/**
+	 * Stop once this many sessions have matched.
+	 *
+	 * A person searching their history is looking for one session, and the walk
+	 * costs a transcript read per session it does not find it in — so the cap is
+	 * what makes a search over several machines finish at all.
+	 */
+	readonly maxResults?: number;
+	/**
+	 * Called as each match is found, before the walk finishes.
+	 *
+	 * Offered so a picker can fill while the slow half of the corpus is still
+	 * being read, which over a remote host is most of the wait.
+	 */
+	readonly onResult?: (result: IKinguVaultSearchResult) => void;
+}
+
+/** Why a search stopped, which decides whether its results are the whole answer. */
+export type KinguVaultSearchStop =
+	/** Every indexed session was read. */
+	| 'complete'
+	/** {@link IKinguVaultSearchOptions.maxResults} was reached. */
+	| 'maxResults'
+	/** A machine's read allowance ran out before its transcripts did. */
+	| 'budget'
+	| 'cancelled';
+
+export interface IKinguVaultSearchOutcome {
+	readonly results: readonly IKinguVaultSearchResult[];
+	/** Sessions actually read, which is fewer than `total` whenever it stopped early. */
+	readonly searched: number;
+	readonly total: number;
+	readonly stopped: KinguVaultSearchStop;
+	/** The machines whose allowance ran out, so the gap can be named rather than hidden. */
+	readonly truncatedHosts: readonly string[];
 }
 
 /** Everything the vault spent, split the ways a person asks about it. */
@@ -101,8 +146,15 @@ export interface IKinguVaultService {
 	/** The indexed sessions, newest first. Triggers a scan if none has run yet. */
 	getSessions(token?: CancellationToken): Promise<readonly IKinguVaultSession[]>;
 
-	/** Sessions whose transcript contains `query`, newest first. */
-	search(query: string, token?: CancellationToken): Promise<readonly IKinguVaultSearchResult[]>;
+	/**
+	 * Sessions whose transcript contains `query`, newest first.
+	 *
+	 * Walks every machine the vault indexes, each under its own read allowance
+	 * and its own number of transcripts in flight — a host reached over the agent
+	 * connection cannot be read like a local disk without making the search take
+	 * minutes. The outcome says where it stopped for that reason.
+	 */
+	search(query: string, options?: IKinguVaultSearchOptions, token?: CancellationToken): Promise<IKinguVaultSearchOutcome>;
 
 	/**
 	 * The workers this session handed tasks to, newest first, or an empty list
