@@ -1358,6 +1358,7 @@ export class CodeApplication extends Disposable {
 		// manager is invisible to `process.env`. This is the window's own resolver,
 		// already used for the same reason elsewhere.
 		mainProcessElectronServer.registerChannel(KINGU_HOST_CHANNEL_NAME, new KinguHostChannel(
+			this.logService,
 			() => this.resolveShellEnvironment(this.environmentMainService.args, process.env, false)));
 
 		// Policies (main & shared process)

@@ -8,6 +8,7 @@ import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { KinguQuotaProvider } from './kinguQuotaProviders.js';
 import { KinguQuotaResult } from './kinguRateLimits.js';
 import { IKinguListeningPort } from './kinguHostPorts.js';
+import { IKinguComputerRequest, KinguComputerResult } from '../../kinguComputer/common/kinguComputerProtocol.js';
 
 /** What the app is holding, and what is holding it. */
 export interface IKinguMemoryReading {
@@ -57,4 +58,13 @@ export interface IKinguHostService {
 	 * know is invisible. Presented as what it is.
 	 */
 	findExecutables(commands: readonly string[]): Promise<Readonly<Record<string, string>>>;
+
+	/**
+	 * What is on the desktop right now: the applications, their windows, and one
+	 * window's accessibility tree.
+	 *
+	 * Reads only. Acting on the desktop is a separate decision that has not been
+	 * made, and there is no path to it from here.
+	 */
+	readDesktop(request: IKinguComputerRequest): Promise<KinguComputerResult>;
 }

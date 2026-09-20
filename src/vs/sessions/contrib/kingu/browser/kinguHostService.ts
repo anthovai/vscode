@@ -13,6 +13,7 @@ import { KinguQuotaResult } from '../../../../platform/kinguHost/common/kinguRat
 import { IKinguHostService, IKinguMemoryReading } from '../../../../platform/kinguHost/common/kinguHostService.js';
 import { IKinguListeningPort } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
 import { KINGU_HOST_CHANNEL_NAME } from '../../../../platform/kinguHost/common/kinguHostTypes.js';
+import { IKinguComputerRequest, KinguComputerResult } from '../../../../platform/kinguComputer/common/kinguComputerProtocol.js';
 
 /**
  * The window's view of what only the machine's own process can see.
@@ -74,6 +75,14 @@ export class KinguHostService extends Disposable implements IKinguHostService {
 			return await this._channel.call<Record<string, string>>('findExecutables', commands);
 		} catch {
 			return {};
+		}
+	}
+
+	async readDesktop(request: IKinguComputerRequest): Promise<KinguComputerResult> {
+		try {
+			return await this._channel.call<KinguComputerResult>('readDesktop', request);
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
 		}
 	}
 

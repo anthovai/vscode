@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import './media/kinguStatusBar.css';
+import { $ } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
@@ -67,27 +68,43 @@ function formatBytes(bytes: number): string {
 	return gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
-/** How many cells the bar is drawn with. */
-const GAUGE_CELLS = 8;
-
 /**
- * The bar, drawn in the label rather than as an element.
+ * A gauge, as a real element.
  *
- * A status bar entry does take an `HTMLElement`, but only its constructor reads
- * it — `update()` refreshes the text and leaves the element alone, so a bar
- * built that way freezes at whatever the first reading was. Drawn in the label
- * it tracks the value, which is the entire point of a gauge.
+ * Built once and then mutated in place. A status bar entry does accept an
+ * `HTMLElement`, and `update()` ignores it -- but it is appended to the item's
+ * container in the constructor and stays there, so a caller that keeps the
+ * reference can move the bar itself. An earlier attempt drew the bar with block
+ * characters after concluding an element could never track a live value; that
+ * was wrong, and the block bar is what it looked like.
  *
- * It fills to the fullest window, since that is the one that will stop the user
- * first, while the text still names every window.
+ * `text` is left empty on the entry because the label and the content element
+ * render side by side, so a filled label would draw the reading twice. The
+ * accessible name comes from `ariaLabel`, which is where it belongs.
  */
-function renderGauge(windows: readonly IKinguRateLimit[], text: string): string {
-	const worst = windows.reduce((highest, limit) => limit.usedPercent > highest.usedPercent ? limit : highest, windows[0]);
-	const filled = Math.round((worst.usedPercent / 100) * GAUGE_CELLS);
-	// A non-zero reading keeps at least one cell: a bar that reads empty while the
-	// number beside it does not is worse than a coarse bar.
-	const cells = worst.usedPercent > 0 ? Math.max(1, filled) : 0;
-	return '█'.repeat(cells) + '░'.repeat(GAUGE_CELLS - cells) + ' ' + text;
+class KinguGauge {
+
+	readonly element = $('span.kingu-quota');
+	private readonly _fill = $('span.kingu-quota-fill');
+	private readonly _text = $('span.kingu-quota-text');
+
+	constructor(icon: ThemeIcon) {
+		const track = $('span.kingu-quota-track');
+		track.appendChild(this._fill);
+		this.element.appendChild($(`span.kingu-quota-icon${ThemeIcon.asCSSSelector(icon)}`));
+		this.element.appendChild(track);
+		this.element.appendChild(this._text);
+	}
+
+	/** Fills to the fullest window, which is the one that will stop the user first. */
+	update(windows: readonly IKinguRateLimit[], text: string): void {
+		const worst = windows.reduce((highest, limit) => limit.usedPercent > highest.usedPercent ? limit : highest, windows[0]);
+		this._fill.style.width = `${Math.round(worst.usedPercent)}%`;
+		// The bar changes colour where the number stops being background reading.
+		this._fill.classList.toggle('warn', worst.usedPercent >= 75);
+		this._fill.classList.toggle('danger', worst.usedPercent >= 90);
+		this._text.textContent = text;
+	}
 }
 
 /** How often the bar re-reads what it shows. */
@@ -126,6 +143,11 @@ class KinguStatusBarContribution extends Disposable {
 	private readonly _memory = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _ports = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _providers = new Map<KinguQuotaProvider, IStatusbarEntryAccessor>();
+	/**
+	 * The gauge element per provider, kept because the status bar appends it once
+	 * and never touches it again — so moving the bar is this contribution's job.
+	 */
+	private readonly _gauges = new Map<KinguQuotaProvider, KinguGauge>();
 	private _lastQuotaRefresh = 0;
 
 	constructor(
@@ -320,6 +342,9 @@ class KinguStatusBarContribution extends Disposable {
 		if (windows.length === 0) {
 			existing?.dispose();
 			this._providers.delete(provider);
+			// The element went with the entry; a provider that reports again builds
+			// a new one rather than re-appending an orphan.
+			this._gauges.delete(provider);
 			if (result && !result.ok) {
 				this._logProblemOnce(provider, result.problem);
 			}
@@ -328,11 +353,18 @@ class KinguStatusBarContribution extends Disposable {
 
 		const label = KINGU_QUOTA_PROVIDER_LABELS[provider];
 		const text = windows.map(formatRateLimit).join(' · ');
+		let gauge = this._gauges.get(provider);
+		if (!gauge) {
+			gauge = new KinguGauge(PROVIDER_ICONS[provider]);
+			this._gauges.set(provider, gauge);
+		}
+		gauge.update(windows, text);
 		const entry: IStatusbarEntry = {
 			name: localize('kingu.status.quota.name', "{0} quota", label),
-			// `text` is the fallback for surfaces that cannot take an element, and the
-			// accessible name comes from `ariaLabel` either way.
-			text: `$(${PROVIDER_ICONS[provider].id}) ${renderGauge(windows, text)}`,
+			// Empty: the label and the content element render side by side, so a
+			// filled label would draw the reading twice.
+			text: '',
+			content: gauge.element,
 			ariaLabel: localize('kingu.status.quota.aria', "{0} quota: {1}", label, text),
 			tooltip: this._quotaTooltip(label, windows),
 			command: KINGU_REFRESH_QUOTAS_COMMAND_ID,
@@ -439,8 +471,11 @@ class KinguStatusBarContribution extends Disposable {
 			return;
 		}
 		const names = connected.map(connection => connection.name || connection.address).filter(Boolean);
+		// The state, not the host's name. The strip is read at a glance and the
+		// question it answers there is whether the connection is up; which machine
+		// is a second question, and the tooltip is where a second question goes.
 		const where = connected.length === 1
-			? names[0] ?? localize('kingu.status.remote.unnamed', "Connected")
+			? localize('kingu.status.remote.connected', "Connected")
 			: localize('kingu.status.remote.many', "{0} hosts", connected.length);
 		const entry: IStatusbarEntry = {
 			name: localize('kingu.status.remote.name', "Remote agent host"),

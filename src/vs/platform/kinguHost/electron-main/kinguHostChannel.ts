@@ -50,6 +50,9 @@ import { executableNames, executableSearchDirectories, MAX_COMMANDS_PER_REQUEST,
 import { KNOWN_AGENT_COMMANDS } from '../common/kinguAgentCommands.js';
 import { IProcessEnvironment } from '../../../base/common/platform.js';
 import { IKinguMemoryReading } from '../common/kinguHostService.js';
+import { ILogService } from '../../log/common/log.js';
+import { IKinguComputerRequest, KinguComputerResult } from '../../kinguComputer/common/kinguComputerProtocol.js';
+import { KinguComputerSidecar } from '../../kinguComputer/node/kinguComputerSidecar.js';
 export { KINGU_HOST_CHANNEL_NAME } from '../common/kinguHostTypes.js';
 
 /** A status read; a slow one is worth abandoning rather than waiting on. */
@@ -76,8 +79,13 @@ export class KinguHostChannel implements IServerChannel {
 	 * rare, and the alternative is re-walking PATH on every redraw.
 	 */
 	private _executables: Promise<ReadonlyMap<string, string>> | undefined;
+	/** Started on first use and retired when idle; see `KinguComputerSidecar`. */
+	private _computer: KinguComputerSidecar | undefined;
 
-	constructor(private readonly _resolveShellEnv?: () => Promise<IProcessEnvironment>) { }
+	constructor(
+		private readonly _logService: ILogService,
+		private readonly _resolveShellEnv?: () => Promise<IProcessEnvironment>,
+	) { }
 
 	listen<T>(): Event<T> {
 		throw new Error('No events on the Kingu host channel');
@@ -86,6 +94,9 @@ export class KinguHostChannel implements IServerChannel {
 	async call<T>(_context: unknown, command: string, arg?: unknown): Promise<T> {
 		if (command === 'getQuota') {
 			return await this._getQuota(arg as KinguQuotaProvider | undefined) as T;
+		}
+		if (command === 'readDesktop') {
+			return await this._readDesktop(arg as IKinguComputerRequest) as T;
 		}
 		if (command === 'findExecutables') {
 			return await this._findExecutables(Array.isArray(arg) ? arg as string[] : []) as T;
@@ -222,6 +233,21 @@ export class KinguHostChannel implements IServerChannel {
 			}
 		}
 		return resolved;
+	}
+
+	/**
+	 * What is on the desktop right now.
+	 *
+	 * Reads only. The runtime behind this can also act, and the host in front of
+	 * it refuses anything that is not one of the four reading tools — see
+	 * `KinguComputerSidecar`.
+	 */
+	private async _readDesktop(request: IKinguComputerRequest | undefined): Promise<KinguComputerResult> {
+		if (!request?.tool) {
+			return { ok: false, error: 'No desktop request was given.' };
+		}
+		this._computer ??= new KinguComputerSidecar(this._logService);
+		return this._computer.request(request);
 	}
 
 	/** Every listening TCP socket the platform will name a process for. */

@@ -9,10 +9,47 @@
 	font-size: 11px;
 }
 
-/* The gauge is drawn in the entry's own label, so it needs no markup of its
-   own — only a tighter tracking so eight block cells read as one bar. */
-.kingu-sessions .part.statusbar .statusbar-item .kingu-quota-cells {
-	letter-spacing: -0.5px;
+/* The gauge: an icon, a bar, and the windows in text. Sized to sit inside a
+   22px strip without changing its height. */
+.kingu-quota {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.kingu-quota-icon {
+	font-size: 13px;
+}
+
+.kingu-quota-track {
+	width: 46px;
+	height: 5px;
+	border-radius: 3px;
+	overflow: hidden;
+	/* A flat translucent white rather than `opacity` on the track: opacity
+	   applies to the whole subtree, so dimming the track here dimmed the fill
+	   inside it to invisibility — which is how the first attempt at this bar
+	   came out empty. */
+	background: rgba(127, 127, 127, 0.3);
+}
+
+.kingu-quota-fill {
+	display: block;
+	height: 100%;
+	border-radius: 3px;
+	background: var(--vscode-foreground);
+	/* The reading moves in steps of whole percent every thirty seconds, so the
+	   bar slides to the new value rather than jumping. */
+	transition: width 240ms ease-out;
+}
+
+/* Past three quarters the number stops being background reading. */
+.kingu-quota-fill.warn {
+	background: var(--vscode-editorWarning-foreground);
+}
+
+.kingu-quota-fill.danger {
+	background: var(--vscode-editorError-foreground);
 }
 
 /* The SSH entry's trailing dot is a light, not a glyph: green while the hosts
