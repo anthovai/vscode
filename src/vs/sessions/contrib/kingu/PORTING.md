@@ -25,6 +25,7 @@ it is a cost we do not want), **open** (a real gap, not yet done).
 | `memory` | `kinguHostChannel._getMemoryBytes` | Total plus a breakdown by process kind. |
 | `claude-usage`, `codex-usage` pricing | `common/kinguPricing.ts` | Both price lists, each with its own token semantics — see *Pricing* below. |
 | `usage/` worktree attribution | `common/kinguVaultAttribution.ts` | Resolved from git itself rather than from a worktree registry the ADE keeps. |
+| `preflight/agent-detection` | `platform/kinguHost/common/kinguAgentCommands.ts` | Which agent CLIs are installed, using the fork's own shell-environment resolver for PATH. |
 | `ssh`, `wsl`, `runtime` | — | Satisfied by the fork's own `IRemoteAgentHostService`; see below. |
 
 ## Already here, and better
@@ -72,7 +73,11 @@ onto it. Porting the ADE's version would mean running two of each.
 
 Real gaps, in the order they seem worth closing.
 
-1. **An actual Windows remote host.** The Windows *path* handling is fixed and
+1. **`stats`.** The ADE keeps an event log — `agent_start`, `agent_stop`,
+   `pr_created` — and aggregates it into "how many agents have I spawned, how
+   long do they run". Nothing here corresponds. Whether it is worth having is a
+   product question rather than a porting one.
+2. **An actual Windows remote host.** The Windows *path* handling is fixed and
    tested — see below — but no test has connected to a machine running Windows,
    because standing one up here needs an elevated install of OpenSSH Server.
    What is untested is the fork's own SSH transport and CLI bootstrap against a
@@ -206,3 +211,37 @@ ledger-win  $0.06 · 3.0k  directory · kingu-remote-test:C:\code\ledger-win · 
 
 The report completed, the path is shown the way the machine that owns it writes
 it, and nothing was logged as unattributable.
+
+## Which agents are installed
+
+The vault answers "what have I run". This answers "what could I run", and the
+two together are what make a list of eighteen agents mean anything: an agent
+with sessions and no CLI is one the user has moved away from, a CLI with no
+sessions is one they installed and never used, and neither is visible from
+either half alone.
+
+Detection is a directory listing, not an execution. Running each candidate with
+`--version` would be a surer answer and would also mean this app spawning a
+dozen third-party binaries whenever somebody opened a list, so what is reported
+is presence on disk — reported as presence, not as "working".
+
+PATH comes from the fork's own `getResolvedShellEnv`, which is already used for
+this exact reason: a desktop app on macOS or Linux is started by the session
+manager and never sees the login shell's PATH, so an agent installed by a
+version manager is invisible to `process.env`. The ADE carries its own
+shell-PATH hydration for the same problem; this uses the window's.
+
+A row that finds nothing names the command it looked for, because "not found"
+beside an agent the user demonstrably has reads as a bug. On this machine:
+
+```
+Claude       installed C:\Users\aidev\AppData\Roaming\npm\claude.cmd · 398 sessions
+Gemini       installed C:\Users\aidev\AppData\Roaming\npm\gemini.cmd · 2 sessions
+Cursor       not found cursor-agent · 97 sessions
+Codex        not found codex · 50 sessions
+```
+
+Both "not found" rows are correct, and both are the interesting case: Codex was
+used fifty times and its CLI is gone, while Cursor's ninety-seven sessions came
+from the editor, which is installed — `cursor-agent`, its CLI, is not. Naming
+the command is what lets a reader tell those apart.

@@ -69,6 +69,14 @@ export class KinguHostService extends Disposable implements IKinguHostService {
 		}
 	}
 
+	async findExecutables(commands: readonly string[]): Promise<Readonly<Record<string, string>>> {
+		try {
+			return await this._channel.call<Record<string, string>>('findExecutables', commands);
+		} catch {
+			return {};
+		}
+	}
+
 	private async _refresh(): Promise<void> {
 		// In parallel because they are separate providers: one being slow or down
 		// must not delay the others' gauges.

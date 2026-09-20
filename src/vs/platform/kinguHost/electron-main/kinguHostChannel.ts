@@ -46,6 +46,9 @@ import {
 	parseNetstatPorts,
 	parseSsPorts,
 } from '../common/kinguHostPorts.js';
+import { executableNames, executableSearchDirectories, MAX_COMMANDS_PER_REQUEST, MAX_SEARCH_DIRECTORIES } from '../common/kinguExecutables.js';
+import { KNOWN_AGENT_COMMANDS } from '../common/kinguAgentCommands.js';
+import { IProcessEnvironment } from '../../../base/common/platform.js';
 import { IKinguMemoryReading } from '../common/kinguHostService.js';
 export { KINGU_HOST_CHANNEL_NAME } from '../common/kinguHostTypes.js';
 
@@ -67,13 +70,25 @@ const REQUEST_TIMEOUT_MS = 10_000;
  */
 export class KinguHostChannel implements IServerChannel {
 
+	/**
+	 * What each command resolved to last time, so a second window asking costs
+	 * nothing. Not invalidated: an agent installed while the app is running is
+	 * rare, and the alternative is re-walking PATH on every redraw.
+	 */
+	private _executables: Promise<ReadonlyMap<string, string>> | undefined;
+
+	constructor(private readonly _resolveShellEnv?: () => Promise<IProcessEnvironment>) { }
+
 	listen<T>(): Event<T> {
 		throw new Error('No events on the Kingu host channel');
 	}
 
-	async call<T>(_context: unknown, command: string, provider?: KinguQuotaProvider): Promise<T> {
+	async call<T>(_context: unknown, command: string, arg?: unknown): Promise<T> {
 		if (command === 'getQuota') {
-			return await this._getQuota(provider) as T;
+			return await this._getQuota(arg as KinguQuotaProvider | undefined) as T;
+		}
+		if (command === 'findExecutables') {
+			return await this._findExecutables(Array.isArray(arg) ? arg as string[] : []) as T;
 		}
 		if (command === 'getMemoryBytes') {
 			return this._getMemoryBytes() as T;
@@ -134,6 +149,79 @@ export class KinguHostChannel implements IServerChannel {
 			// A missing tool, a denied read: the strip simply shows no ports.
 			return [];
 		}
+	}
+
+	/**
+	 * Which of these commands are installed, and where.
+	 *
+	 * Answered here because it is a question about the machine: it needs the
+	 * login shell's PATH, which a sandboxed window does not have and could not
+	 * obtain, and it needs to stat directories the window cannot reach.
+	 *
+	 * Resolution is a directory listing, not an execution. Running each
+	 * candidate with `--version` would be a surer answer and would also mean
+	 * this app spawning a dozen third-party binaries every time somebody opened
+	 * a list — so presence on disk is what is reported, and it is reported as
+	 * presence rather than as "working".
+	 */
+	private async _findExecutables(commands: readonly string[]): Promise<Record<string, string>> {
+		const wanted = [...new Set(commands)].slice(0, MAX_COMMANDS_PER_REQUEST);
+		if (wanted.length === 0) {
+			return {};
+		}
+		this._executables ??= this._scanExecutables();
+		const found = await this._executables;
+		const answer: Record<string, string> = {};
+		for (const command of wanted) {
+			const resolved = found.get(command);
+			if (resolved) {
+				answer[command] = resolved;
+			}
+		}
+		return answer;
+	}
+
+	private async _scanExecutables(): Promise<ReadonlyMap<string, string>> {
+		const resolved = new Map<string, string>();
+		let environment: IProcessEnvironment = process.env;
+		try {
+			// The login shell's PATH when it can be had; this process's otherwise.
+			environment = { ...process.env, ...await this._resolveShellEnv?.() };
+		} catch {
+			// A shell that could not be probed is not a reason to report nothing.
+		}
+		const directories = executableSearchDirectories({
+			platform: platform(),
+			// Both spellings: Windows environment names are case-insensitive and a
+			// resolved shell environment can carry either.
+			pathEnv: environment.PATH ?? environment.Path,
+			home: homedir(),
+		}).slice(0, MAX_SEARCH_DIRECTORIES);
+
+		// One listing per directory rather than a stat per candidate: a PATH of
+		// forty directories against twenty agents is eight hundred stats, and the
+		// same answer comes from forty reads.
+		for (const directory of directories) {
+			let entries: string[];
+			try {
+				entries = await fs.readdir(directory);
+			} catch {
+				continue;
+			}
+			const present = new Set(platform() === 'win32' ? entries.map(entry => entry.toLowerCase()) : entries);
+			for (const command of KNOWN_AGENT_COMMANDS) {
+				if (resolved.has(command)) {
+					continue;
+				}
+				for (const name of executableNames(platform(), command)) {
+					if (present.has(platform() === 'win32' ? name.toLowerCase() : name)) {
+						resolved.set(command, join(directory, name));
+						break;
+					}
+				}
+			}
+		}
+		return resolved;
 	}
 
 	/** Every listening TCP socket the platform will name a process for. */

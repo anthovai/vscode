@@ -47,4 +47,14 @@ export interface IKinguHostService {
 
 	/** The TCP ports something on this machine is listening on. */
 	readListeningPorts(): Promise<readonly IKinguListeningPort[]>;
+
+	/**
+	 * Where each of these commands is installed, for the ones that are.
+	 *
+	 * Absent from the result means "not found on PATH or in a place an installer
+	 * puts one", which is not quite the same as "not installed" — an agent
+	 * reachable only through a shell alias or a version manager this does not
+	 * know is invisible. Presented as what it is.
+	 */
+	findExecutables(commands: readonly string[]): Promise<Readonly<Record<string, string>>>;
 }

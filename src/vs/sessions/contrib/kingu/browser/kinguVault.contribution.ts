@@ -20,6 +20,10 @@ import { formatTokens, IKinguUsage, totalTokens, uncachedTokens, usageModels } f
 import { estimateCostUsd, formatCostUsd } from '../common/kinguPricing.js';
 import { IKinguProject, KinguProjectKind } from '../common/kinguVaultAttribution.js';
 import { KINGU_VAULT_SOURCES } from '../common/kinguVaultSources.js';
+import { KINGU_AGENT_COMMANDS, KNOWN_AGENT_COMMANDS } from '../../../../platform/kinguHost/common/kinguAgentCommands.js';
+import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { URI } from '../../../../base/common/uri.js';
 import { KinguVaultService } from './kinguVaultService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -351,6 +355,86 @@ class RefreshKinguVaultAction extends Action2 {
 }
 
 /**
+ * What agents this machine actually has.
+ *
+ * The vault answers "what have I run"; this answers "what could I run", and
+ * the two together are what make the list of eighteen agents mean anything. An
+ * agent with sessions and no CLI is one the user has moved away from; a CLI
+ * with no sessions is one they installed and never used; neither is visible
+ * from either half alone.
+ */
+class KinguAgentsAction extends Action2 {
+
+	static readonly ID = 'kingu.agents.list';
+
+	constructor() {
+		super({
+			id: KinguAgentsAction.ID,
+			title: localize2('kingu.agents.list', "Kingu: Agents on This Machine"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const hostService = accessor.get(IKinguHostService);
+		const vaultService = accessor.get(IKinguVaultService);
+		const quickInputService = accessor.get(IQuickInputService);
+		const openerService = accessor.get(IOpenerService);
+
+		const [installed, sessions] = await Promise.all([
+			hostService.findExecutables(KNOWN_AGENT_COMMANDS),
+			vaultService.getSessions(),
+		]);
+		const counted = new Map<string, number>();
+		for (const session of sessions) {
+			counted.set(session.source, (counted.get(session.source) ?? 0) + 1);
+		}
+
+		const rows = KINGU_VAULT_SOURCES.map(source => {
+			const commands = KINGU_AGENT_COMMANDS[source.id] ?? [];
+			const found = commands.map(command => installed[command]).find(Boolean);
+			const count = counted.get(source.id) ?? 0;
+			return { source, commands, found, count };
+		});
+		// Installed first, then the ones with history: what is usable now is the
+		// answer, and what was used before is the next most interesting thing.
+		rows.sort((left, right) => Number(!!right.found) - Number(!!left.found) || right.count - left.count);
+
+		const picked = await quickInputService.pick(rows.map(row => ({
+			label: row.source.label,
+			description: row.found
+				? localize('kingu.agents.installed', "installed")
+				: localize('kingu.agents.notFound', "not found"),
+			// Found: the path, because "installed" invites "which one" on a machine
+			// with more than one version manager. Not found: the command that was
+			// looked for, because otherwise the row reads as "you do not have this
+			// agent" when what it means is "its CLI is not on PATH" — and for an
+			// agent whose editor is installed but whose CLI is not, those are
+			// different statements and the user is the one who can tell them apart.
+			detail: [row.found ?? (row.commands.join(', ') || undefined), sessionsLabel(row.count)].filter(Boolean).join(' · '),
+			row,
+		})), {
+			title: localize('kingu.agents.title', "Agents on this machine"),
+			placeHolder: localize('kingu.agents.placeholder', "Found by looking on PATH and where installers put binaries — not by running anything. Pick one to see its sessions."),
+			matchOnDescription: true,
+			matchOnDetail: true,
+		});
+		if (picked?.row.count) {
+			await openerService.open(URI.parse(`command:${BrowseKinguVaultAction.ID}`));
+		}
+	}
+}
+
+function sessionsLabel(count: number): string {
+	return count === 0
+		? localize('kingu.agents.noSessions', "no sessions")
+		: count === 1
+			? localize('kingu.agents.oneSession', "1 session")
+			: localize('kingu.agents.manySessions', "{0} sessions", count);
+}
+
+/**
  * Continues a past session from another agent here.
  *
  * Separate from browsing because the two answer different questions: browsing
@@ -552,3 +636,4 @@ registerAction2(OpenKinguVaultAction);
 registerAction2(BrowseKinguVaultAction);
 registerAction2(SearchKinguVaultAction);
 registerAction2(RefreshKinguVaultAction);
+registerAction2(KinguAgentsAction);

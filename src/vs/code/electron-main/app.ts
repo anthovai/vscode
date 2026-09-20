@@ -1352,7 +1352,13 @@ export class CodeApplication extends Disposable {
 		// Kingu: the quota a window shows for an agent account. Served here because a
 		// renderer's origin cannot reach the provider, and because the credential then
 		// never has to cross into a window.
-		mainProcessElectronServer.registerChannel(KINGU_HOST_CHANNEL_NAME, new KinguHostChannel());
+		// The shell environment is handed in rather than resolved in the channel:
+		// a desktop app on macOS or Linux is started by the session manager and
+		// never sees the login shell's PATH, so an agent CLI installed by a version
+		// manager is invisible to `process.env`. This is the window's own resolver,
+		// already used for the same reason elsewhere.
+		mainProcessElectronServer.registerChannel(KINGU_HOST_CHANNEL_NAME, new KinguHostChannel(
+			() => this.resolveShellEnvironment(this.environmentMainService.args, process.env, false)));
 
 		// Policies (main & shared process)
 		const policyChannel = disposables.add(new PolicyChannel(accessor.get(IPolicyService)));
