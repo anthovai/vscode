@@ -21,11 +21,17 @@ import {
 import {
 	GROK_AUTH_HEADER,
 	GROK_BILLING_URL,
+	GEMINI_LOAD_CODE_ASSIST_BODY,
+	GEMINI_LOAD_CODE_ASSIST_URL,
+	GEMINI_QUOTA_URL,
 	KIMI_DEFAULT_BASE_URL,
 	KIMI_USAGE_PATH,
 	KinguQuotaProvider,
 	readGrokQuota,
 	readGrokToken,
+	readGeminiProjectId,
+	readGeminiQuota,
+	readGeminiToken,
 	readKimiQuota,
 	readKimiToken,
 } from '../common/kinguQuotaProviders.js';
@@ -65,6 +71,7 @@ export class KinguRateLimitChannel implements IServerChannel {
 			case KinguQuotaProvider.Claude: return this._getClaudeQuota();
 			case KinguQuotaProvider.Grok: return this._getGrokQuota();
 			case KinguQuotaProvider.Kimi: return this._getKimiQuota();
+			case KinguQuotaProvider.Gemini: return this._getGeminiQuota();
 			default: return { ok: false, problem: 'unavailable' };
 		}
 	}
@@ -108,14 +115,58 @@ export class KinguRateLimitChannel implements IServerChannel {
 	}
 
 	/**
+	 * Gemini takes two calls: the account does not know its own project, so the
+	 * project is discovered first and the quota asked for by name.
+	 */
+	private async _getGeminiQuota(): Promise<KinguQuotaResult> {
+		const raw = await readIfPresent(join(homedir(), '.gemini', 'oauth_creds.json'));
+		if (raw === undefined) {
+			return { ok: false, problem: 'noCredentials' };
+		}
+		const read = readGeminiToken(raw, Date.now());
+		if (!read.ok) {
+			return { ok: false, problem: read.problem };
+		}
+		const headers = {
+			Authorization: `Bearer ${read.token}`,
+			'Content-Type': 'application/json',
+		};
+		try {
+			const discovery = await net.fetch(GEMINI_LOAD_CODE_ASSIST_URL, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(GEMINI_LOAD_CODE_ASSIST_BODY),
+				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+			});
+			if (!discovery.ok) {
+				return { ok: false, problem: problemForStatus(discovery.status) };
+			}
+			const project = readGeminiProjectId(await discovery.json());
+			if (!project) {
+				// Signed in, but this account has no Code Assist project — there is no
+				// quota to report rather than a failure to report.
+				return { ok: false, problem: 'noCredentials' };
+			}
+			return await this._request(GEMINI_QUOTA_URL, headers, readGeminiQuota, JSON.stringify({ project }));
+		} catch {
+			return { ok: false, problem: 'unavailable' };
+		}
+	}
+
+	/**
 	 * One request, one shape of failure.
 	 *
 	 * Nothing about a rejection is returned or logged: a failed request can carry
 	 * the options that produced it, and one of those headers is the user's token.
 	 */
-	private async _request(url: string, headers: Record<string, string>, read: (body: unknown, now: number) => IKinguProviderQuota): Promise<KinguQuotaResult> {
+	private async _request(url: string, headers: Record<string, string>, read: (body: unknown, now: number) => IKinguProviderQuota, body?: string): Promise<KinguQuotaResult> {
 		try {
-			const response = await net.fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+			const response = await net.fetch(url, {
+				method: body === undefined ? 'GET' : 'POST',
+				headers,
+				body,
+				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+			});
 			if (!response.ok) {
 				return { ok: false, problem: problemForStatus(response.status) };
 			}

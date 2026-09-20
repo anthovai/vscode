@@ -10,6 +10,9 @@ import {
 	KINGU_QUOTA_PROVIDERS,
 	KinguQuotaProvider,
 	readDate,
+	readGeminiProjectId,
+	readGeminiQuota,
+	readGeminiToken,
 	readGrokQuota,
 	readGrokToken,
 	readKimiQuota,
@@ -129,7 +132,51 @@ suite('Kingu quota providers', () => {
 		assert.strictEqual(readDate(undefined), undefined);
 	});
 
+	suite('Gemini', () => {
+
+		test('reads the stored token', () => {
+			assert.deepStrictEqual(readGeminiToken(JSON.stringify({ access_token: 'tok' }), NOW), { ok: true, token: 'tok' });
+		});
+
+		test('treats an expired token as expired rather than refreshing it', () => {
+			const json = JSON.stringify({ access_token: 'tok', expiry_date: NOW - 1 });
+			assert.deepStrictEqual(readGeminiToken(json, NOW), { ok: false, problem: 'expiredCredentials' });
+		});
+
+		test('reads the project the discovery call named', () => {
+			assert.strictEqual(readGeminiProjectId({ cloudaicompanionProject: 'proj-1' }), 'proj-1');
+			assert.strictEqual(readGeminiProjectId({}), undefined);
+			assert.strictEqual(readGeminiProjectId('nope'), undefined);
+		});
+
+		test('inverts the remaining fraction into a used percentage', () => {
+			const quota = readGeminiQuota({ buckets: [{ remainingFraction: 0.25, resetTime: '2026-01-01T00:00:00Z', modelId: 'm' }] }, NOW);
+			assert.strictEqual(quota.session?.usedPercent, 75);
+			assert.strictEqual(quota.session?.resetsAt, Date.parse('2026-01-01T00:00:00Z'));
+		});
+
+		test('shows the fullest bucket, which is the one that will stop you first', () => {
+			const quota = readGeminiQuota({
+				buckets: [
+					{ remainingFraction: 0.9, modelId: 'a' },
+					{ remainingFraction: 0.1, modelId: 'b' },
+					{ remainingFraction: 0.5, modelId: 'c' },
+				],
+			}, NOW);
+			assert.strictEqual(quota.session?.usedPercent, 90);
+		});
+
+		test('accepts a bare array as well as a wrapped one', () => {
+			assert.strictEqual(readGeminiQuota([{ remainingFraction: 0.2, modelId: 'a' }], NOW).session?.usedPercent, 80);
+		});
+
+		test('skips a bucket with no fraction, and reports none when all are skipped', () => {
+			assert.strictEqual(readGeminiQuota({ buckets: [{ modelId: 'a' }] }, NOW).session, undefined);
+			assert.strictEqual(readGeminiQuota({}, NOW).session, undefined);
+		});
+	});
+
 	test('the provider ids are the ones the channel dispatches on', () => {
-		assert.deepStrictEqual([...KINGU_QUOTA_PROVIDERS], [KinguQuotaProvider.Claude, KinguQuotaProvider.Grok, KinguQuotaProvider.Kimi]);
+		assert.deepStrictEqual([...KINGU_QUOTA_PROVIDERS], [KinguQuotaProvider.Claude, KinguQuotaProvider.Grok, KinguQuotaProvider.Kimi, KinguQuotaProvider.Gemini]);
 	});
 });

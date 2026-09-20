@@ -11,6 +11,7 @@ export const enum KinguQuotaProvider {
 	Claude = 'claude',
 	Grok = 'grok',
 	Kimi = 'kimi',
+	Gemini = 'gemini',
 }
 
 /** What to call each one in the bar. */
@@ -18,12 +19,14 @@ export const KINGU_QUOTA_PROVIDER_LABELS: Readonly<Record<KinguQuotaProvider, st
 	[KinguQuotaProvider.Claude]: 'Claude',
 	[KinguQuotaProvider.Grok]: 'Grok',
 	[KinguQuotaProvider.Kimi]: 'Kimi',
+	[KinguQuotaProvider.Gemini]: 'Gemini',
 };
 
 export const KINGU_QUOTA_PROVIDERS: readonly KinguQuotaProvider[] = [
 	KinguQuotaProvider.Claude,
 	KinguQuotaProvider.Grok,
 	KinguQuotaProvider.Kimi,
+	KinguQuotaProvider.Gemini,
 ];
 
 const WEEK_MINUTES = 10_080;
@@ -204,6 +207,86 @@ export function windowMinutes(window: { readonly duration?: unknown; readonly ti
 function integer(value: unknown): number | undefined {
 	const parsed = typeof value === 'string' ? Number.parseInt(value, 10) : value;
 	return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : undefined;
+}
+
+// #endregion
+
+// #region Gemini
+
+/** Where the project this account bills against is discovered. */
+export const GEMINI_LOAD_CODE_ASSIST_URL = 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
+
+/** Where that project's remaining quota is reported. */
+export const GEMINI_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota';
+
+/** What the discovery call sends to identify the caller. */
+export const GEMINI_LOAD_CODE_ASSIST_BODY = { metadata: { ideType: 'GEMINI_CLI', pluginType: 'GEMINI' } };
+
+/** The token Gemini's CLI stored, and whether it is still valid. */
+export function readGeminiToken(credentialsJson: string, now: number): { readonly ok: true; readonly token: string } | { readonly ok: false; readonly problem: KinguQuotaProblem } {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(credentialsJson);
+	} catch {
+		return { ok: false, problem: 'noCredentials' };
+	}
+	const record = (parsed && typeof parsed === 'object' ? parsed : {}) as { access_token?: unknown; expiry_date?: unknown };
+	const token = typeof record.access_token === 'string' ? record.access_token.trim() : '';
+	if (!token) {
+		return { ok: false, problem: 'noCredentials' };
+	}
+	const expiry = readDate(record.expiry_date);
+	if (expiry !== undefined && expiry <= now) {
+		// Reported rather than refreshed: renewing it means writing a new token into
+		// the CLI's own credential store, which this does not own.
+		return { ok: false, problem: 'expiredCredentials' };
+	}
+	return { ok: true, token };
+}
+
+/** The project the discovery call named, or `undefined` when it named none. */
+export function readGeminiProjectId(body: unknown): string | undefined {
+	if (!body || typeof body !== 'object') {
+		return undefined;
+	}
+	const project = (body as { cloudaicompanionProject?: unknown }).cloudaicompanionProject;
+	return typeof project === 'string' && project ? project : undefined;
+}
+
+interface IGeminiBucket {
+	readonly remainingFraction?: unknown;
+	readonly resetTime?: unknown;
+	readonly modelId?: unknown;
+}
+
+/**
+ * Gemini's quota response as one window.
+ *
+ * It reports a bucket per model, each as the fraction *remaining*, so each is
+ * inverted into a used percentage. The bar shows one number, and the fullest
+ * bucket is the one that matters: it is the first that will stop the user.
+ */
+export function readGeminiQuota(body: unknown, now: number): IKinguProviderQuota {
+	const raw = Array.isArray(body)
+		? body
+		: ((body && typeof body === 'object' ? body : {}) as { buckets?: unknown }).buckets;
+	let worst: IKinguRateLimit | undefined;
+	for (const entry of Array.isArray(raw) ? raw as IGeminiBucket[] : []) {
+		const remaining = entry?.remainingFraction;
+		if (typeof remaining !== 'number' || !Number.isFinite(remaining)) {
+			continue;
+		}
+		const candidate: IKinguRateLimit = {
+			usedPercent: clamp((1 - remaining) * 100),
+			// The buckets are hourly; the response states no length of its own.
+			windowDurationMins: 60,
+			resetsAt: readDate(entry?.resetTime),
+		};
+		if (!worst || candidate.usedPercent > worst.usedPercent) {
+			worst = candidate;
+		}
+	}
+	return { session: worst, weekly: undefined, updatedAt: now };
 }
 
 // #endregion
