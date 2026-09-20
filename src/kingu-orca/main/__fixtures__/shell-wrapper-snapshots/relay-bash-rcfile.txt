@@ -1,0 +1,360 @@
+# Kingu relay bash overlay wrapper
+_kingu_shell_features=",${KINGU_SHELL_FEATURES:-},"
+builtin unset KINGU_SHELL_FEATURES
+__kingu_has_feature() { [[ "$_kingu_shell_features" == *",$1,"* ]]; }
+__kingu_has_feature identity && printf "\033]777;kingu-shell-start:%s\007" "$$"
+# Why a plain variable: the channel is consumed and destroyed in these first
+# lines, so nothing this shell later spawns can see or inherit the selection.
+__kingu_ready_marker=""
+__kingu_has_feature ready && __kingu_ready_marker=1
+unset _kingu_shell_features
+unset -f __kingu_has_feature
+[[ -f /etc/profile ]] && source /etc/profile
+if [[ -f "$HOME/.bash_profile" ]]; then
+  source "$HOME/.bash_profile"
+elif [[ -f "$HOME/.bash_login" ]]; then
+  source "$HOME/.bash_login"
+elif [[ -f "$HOME/.profile" ]]; then
+  source "$HOME/.profile"
+fi
+# Why: enable bracketed paste so Kingu can deliver a multiline startup prompt as
+# a single literal paste (ESC[200~…ESC[201~); without it, older readline builds
+# treat each embedded newline as Enter and mangle the prompt into PS2
+# continuation. Modern readline defaults this on; force it for the rest.
+[[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
+# Why: remote startup files can re-export user defaults after relay spawn.
+[[ -n "${KINGU_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${KINGU_OPENCODE_CONFIG_DIR}"
+[[ -n "${KINGU_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${KINGU_MIMOCODE_HOME}"
+[[ -n "${KINGU_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"${KINGU_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="${KINGU_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+# Why: OMP does not auto-load Kingu's managed status extension; wrap only
+# interactive launch invocations so subcommands such as `omp config` keep
+# their normal argv shape.
+__kingu_omp_should_skip_extension() {
+  case "${1:-}" in
+    'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
+    '__complete'|'acp'|'agents'|'auth-broker'|'auth-gateway'|'bench'|'commit'|'completions'|'config'|'dry-balance'|'gallery'|'grep'|'grievances'|'install'|'join'|'models'|'plugin'|'read'|'say'|'search'|'setup'|'shell'|'ssh'|'stats'|'tiny-models'|'token'|'ttsr'|'update'|'usage'|'worktree'|'q'|'wt') return 0 ;;
+  esac
+  return 1
+}
+__kingu_omp_cwd_is_usable() {
+  local __kingu_physical_cwd
+  [[ -x . ]] || return 1
+  if [[ -n "${PWD:-}" && -d "${PWD:-}" ]]; then
+    [[ "${PWD}" -ef . ]]
+  else
+    # Why compare the path: shell builtins can print a cached path for a deleted cwd.
+    __kingu_physical_cwd="$(builtin pwd -P 2>/dev/null)" || return 1
+    [[ -d "$__kingu_physical_cwd" && "$__kingu_physical_cwd" -ef . ]]
+  fi
+}
+__kingu_omp_invoke() {
+  local __kingu_use_extension="$1"
+  shift
+  if [[ $__kingu_use_extension -eq 1 && -n "${KINGU_OMP_STATUS_EXTENSION:-}" && -f "${KINGU_OMP_STATUS_EXTENSION}" ]]; then
+    if [[ "${1:-}" == "launch" ]]; then
+      shift
+      command omp launch --extension "${KINGU_OMP_STATUS_EXTENSION}" "$@"
+    else
+      command omp --extension "${KINGU_OMP_STATUS_EXTENSION}" "$@"
+    fi
+  else
+    command omp "$@"
+  fi
+}
+__kingu_omp() {
+  local __kingu_use_extension=1
+  __kingu_omp_should_skip_extension "${1:-}" && __kingu_use_extension=0
+  if ! __kingu_omp_cwd_is_usable; then
+    local __kingu_logical_cwd="${PWD:-${KINGU_WORKTREE_PATH:-${KINGU_ROOT_PATH:-}}}"
+    # Why: a restored shell can retain the deleted directory inode after its path is recreated.
+    (
+      if [[ -z "$__kingu_logical_cwd" ]]; then
+        printf 'Kingu: OMP cannot start because no terminal working directory is available. Open a new terminal in an existing directory.\n' >&2
+        return 1
+      fi
+      if ! builtin cd -P -- "$__kingu_logical_cwd" 2>/dev/null; then
+        printf 'Kingu: OMP cannot access the terminal working directory "%s". Open a new terminal in an existing directory.\n' "$__kingu_logical_cwd" >&2
+        return 1
+      fi
+      __kingu_omp_invoke "$__kingu_use_extension" "$@"
+    )
+  else
+    __kingu_omp_invoke "$__kingu_use_extension" "$@"
+  fi
+}
+if [[ -n "${KINGU_OMP_STATUS_EXTENSION:-}" ]]; then
+  # Why the function reserved word: it suppresses alias expansion of the name, which
+  # an `alias omp` otherwise rewrites at parse time, aborting the rest of the file.
+  function omp { __kingu_omp "$@"; }
+fi
+
+if [[ -n "${KINGU_HISTFILE:-}" ]]; then
+  HISTFILE="$KINGU_HISTFILE"
+  builtin unset KINGU_HISTFILE
+elif [[ "${HISTFILE:-}" == "$ZDOTDIR/.zsh_history" ]]; then
+  # Why also when Kingu injected nothing: /etc/zshrc derived this from Kingu's
+  # wrapper ZDOTDIR, so history would accumulate INSIDE the wrapper dir and the
+  # user's real history would be invisible — the plain #11044 bug, with no
+  # per-worktree scoping involved. Matching the exact clobbered value means a
+  # HISTFILE the user set deliberately is never touched.
+  HISTFILE="${KINGU_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
+fi
+# Why: SSH bash sessions need the same command lifecycle markers as local
+# bash so agent rows stop showing "working" when the foreground command exits.
+__kingu_initializing_wrapper=1
+__kingu_osc133_precmd() {
+  local exit_code=$?
+  __kingu_in_prompt_command=1
+  if [[ -n "${__kingu_in_command:-}" ]]; then
+    printf "\033]133;D;%s\007" "$exit_code"
+    unset __kingu_in_command
+  fi
+  printf "\033]133;A\007"
+  return "$exit_code"
+}
+__kingu_osc133_prompt_done() {
+  unset __kingu_in_prompt_command; __kingu_adopt_outer_debug_trap
+  trap '__kingu_osc133_preexec' DEBUG
+}
+__kingu_osc133_preexec() {
+  if [[ -n "${__kingu_prompt_status_capture_command:-}" && "$BASH_COMMAND" == "$__kingu_prompt_status_capture_command" ]]; then
+    unset __kingu_initial_prompt
+    __kingu_in_legacy_prompt_wrapper=1
+    return 0
+  fi
+  if [[ -n "${__kingu_initializing_wrapper:-}${__kingu_in_debug_capture:-}${__kingu_initial_prompt:-}${__kingu_in_prompt_dispatch:-}${__kingu_in_legacy_prompt_wrapper:-}${__kingu_in_prompt_command:-}" ]]; then
+    [[ -z "${__kingu_initializing_wrapper:-}${__kingu_in_debug_capture:-}" ]] || return 0
+    if [[ -n "${__kingu_initial_prompt:-}" && "$BASH_COMMAND" == "__kingu_osc133_precmd" ]]; then
+      unset __kingu_initial_prompt; return 0
+    fi
+    if [[ -n "${__kingu_in_prompt_dispatch:-}" ]]; then
+      [[ -n "${__kingu_dispatching_user_prompt_command:-}" ]] || return 0
+      if [[ "${FUNCNAME[1]:-}" == "__kingu_run_prompt_command_array" ]]; then
+        case "$BASH_COMMAND" in
+          '(( __kingu_exit_code == 0 ))'|'__kingu_restore_prompt_status "$__kingu_exit_code"'|'eval "$__kingu_prompt_part"'|'eval "$__kingu_final_prompt_command"'|__kingu_dispatching_user_prompt_command=*|__kingu_osc133_precmd|__kingu_osc133_prompt_done|__kingu_prompt_mark) return 0 ;;
+        esac
+      fi
+    elif [[ "${FUNCNAME[1]:-}" == "__kingu_run_prompt_command_array" || "$BASH_COMMAND" == "__kingu_run_prompt_command_array" ]]; then
+      return 0
+    fi
+    [[ -z "${__kingu_in_legacy_prompt_wrapper:-}" || -n "${__kingu_dispatching_user_prompt_command:-}" ]] || return 0
+    if [[ -n "${__kingu_in_prompt_command:-}" && "$BASH_COMMAND" == "__kingu_in_debug_capture=1" ]]; then
+      return 0
+    fi
+  fi
+  case "${FUNCNAME[1]:-}" in __kingu_osc133_*|__kingu_prompt_mark|__kingu_restore_prompt_status) return 0 ;; esac
+  case "$BASH_COMMAND" in __kingu_osc133_precmd|__kingu_osc133_prompt_done|__kingu_prompt_mark) return 0 ;; esac
+  __kingu_run_user_debug_trap
+  [[ -z "${__kingu_in_prompt_command:-}" ]] || return 0
+  [[ -z "${__kingu_in_command:-}" ]] || return 0
+  printf "\033]133;C\007"
+  __kingu_in_command=1
+}
+__kingu_normalize_prompt_command_part() {
+  local __kingu_value="$1" __kingu_output_name="$2" __kingu_character __kingu_chunk
+  local __kingu_value_length=${#1} __kingu_suffix_length=0 __kingu_backslash_length=0
+  local __kingu_output_length __kingu_scan_start
+  while (( __kingu_value_length - __kingu_suffix_length >= 1024 )); do
+    __kingu_scan_start=$(( __kingu_value_length - __kingu_suffix_length - 1024 ))
+    __kingu_chunk="${__kingu_value:__kingu_scan_start:1024}"
+    case "$__kingu_chunk" in
+      *[!$' \t\n;']*) break ;;
+      *) __kingu_suffix_length=$(( __kingu_suffix_length + 1024 )) ;;
+    esac
+  done
+  while (( __kingu_suffix_length < __kingu_value_length )); do
+    __kingu_character="${__kingu_value: -__kingu_suffix_length - 1:1}"
+    case "$__kingu_character" in
+      ' '|$'\t'|$'\n'|';') __kingu_suffix_length=$(( __kingu_suffix_length + 1 )) ;;
+      *) break ;;
+    esac
+  done
+  __kingu_output_length=$(( ${#__kingu_value} - __kingu_suffix_length ))
+  while (( __kingu_output_length - __kingu_backslash_length >= 1024 )); do
+    __kingu_scan_start=$(( __kingu_output_length - __kingu_backslash_length - 1024 ))
+    __kingu_chunk="${__kingu_value:__kingu_scan_start:1024}"
+    case "$__kingu_chunk" in
+      *[!\\]*) break ;;
+      *) __kingu_backslash_length=$(( __kingu_backslash_length + 1024 )) ;;
+    esac
+  done
+  while (( __kingu_backslash_length < __kingu_output_length )); do
+    __kingu_character="${__kingu_value:__kingu_output_length - __kingu_backslash_length - 1:1}"
+    [[ "$__kingu_character" == '\' ]] || break
+    __kingu_backslash_length=$(( __kingu_backslash_length + 1 ))
+  done
+  # Preserve the first separator when an odd backslash run escapes it.
+  if (( __kingu_suffix_length > 0 && __kingu_backslash_length % 2 == 1 )); then
+    __kingu_suffix_length=$(( __kingu_suffix_length - 1 ))
+    __kingu_backslash_length=0
+  fi
+  __kingu_output_length=$(( ${#__kingu_value} - __kingu_suffix_length ))
+  __kingu_value="${__kingu_value:0:__kingu_output_length}"
+  # Bash 4.4-5.0 scalar prompt evaluation preserves an odd terminal backslash.
+  if (( __kingu_suffix_length == 0 && ((BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] == 0)) && __kingu_backslash_length % 2 == 1 )); then
+    __kingu_value="$__kingu_value\\"
+  fi
+  printf -v "$__kingu_output_name" '%s' "$__kingu_value"
+}
+__kingu_restore_prompt_status() {
+  return "$1"
+}
+__kingu_update_user_debug_trap() {
+  local __kingu_debug_trap_spec="$1" __kingu_unchanged_debug_trap_spec="$2"
+  local __kingu_debug_trap_command
+  [[ "$__kingu_debug_trap_spec" != "$__kingu_unchanged_debug_trap_spec" ]] || return 0
+  [[ "$__kingu_debug_trap_spec" != "trap -- '__kingu_osc133_preexec' DEBUG" ]] || return 0
+  if [[ -z "$__kingu_debug_trap_spec" ]]; then
+    __kingu_user_debug_trap=""
+    unset __kingu_chained_debug_trap
+    return 0
+  fi
+  __kingu_debug_trap_command="${__kingu_debug_trap_spec#trap -- }"
+  __kingu_debug_trap_command="${__kingu_debug_trap_command% DEBUG}"
+  eval "__kingu_user_debug_trap=$__kingu_debug_trap_command"
+  unset __kingu_chained_debug_trap
+}
+__kingu_run_user_debug_trap() {
+  if [[ -n "${__kingu_user_debug_trap:-}" ]]; then
+    eval "$__kingu_user_debug_trap" || true
+  fi
+}
+__kingu_adopt_outer_debug_trap() {
+  local __kingu_debug_trap_spec="${__kingu_outer_debug_trap_spec:-}"
+  unset __kingu_outer_debug_trap_spec
+  __kingu_update_user_debug_trap "$__kingu_debug_trap_spec" "trap -- '__kingu_osc133_preexec' DEBUG"
+}
+__kingu_run_prompt_command_array() {
+  local __kingu_exit_code="${__kingu_prompt_status:-$?}" __kingu_prompt_part __kingu_prompt_index __kingu_user_count
+  local __kingu_suffix_part
+  local __kingu_final_prompt_command
+  local __kingu_in_prompt_dispatch=1 __kingu_dispatching_user_prompt_command=""
+  unset __kingu_prompt_status
+  __kingu_adopt_outer_debug_trap
+  trap '__kingu_osc133_preexec' DEBUG
+  for __kingu_prompt_part in "${__kingu_prompt_command_prefix[@]+"${__kingu_prompt_command_prefix[@]}"}"; do
+    if (( __kingu_exit_code == 0 )); then
+      eval "$__kingu_prompt_part"
+    else
+      __kingu_restore_prompt_status "$__kingu_exit_code" || eval "$__kingu_prompt_part"
+    fi
+  done
+  __kingu_user_count=0
+  for __kingu_prompt_part in "${__kingu_prompt_command_array[@]+"${__kingu_prompt_command_array[@]}"}"; do
+    __kingu_user_count=$(( __kingu_user_count + 1 ))
+  done
+  for (( __kingu_prompt_index = 0; __kingu_prompt_index + 1 < __kingu_user_count; __kingu_prompt_index++ )); do
+    __kingu_prompt_part="${__kingu_prompt_command_array[__kingu_prompt_index]}"
+    __kingu_dispatching_user_prompt_command=1
+    if (( __kingu_exit_code == 0 )); then
+      eval "$__kingu_prompt_part"
+    else
+      __kingu_restore_prompt_status "$__kingu_exit_code" || eval "$__kingu_prompt_part"
+    fi
+    __kingu_dispatching_user_prompt_command=""
+  done
+  if (( __kingu_user_count > 0 )); then
+    __kingu_prompt_part="${__kingu_prompt_command_array[__kingu_user_count - 1]}"
+    # Why: keep the final user hook and Kingu suffixes in one status-preserving eval.
+    __kingu_final_prompt_command='eval "$__kingu_prompt_part"'
+    for __kingu_suffix_part in "${__kingu_prompt_command_suffix[@]+"${__kingu_prompt_command_suffix[@]}"}"; do
+      __kingu_final_prompt_command+=$'\n'"$__kingu_suffix_part"
+    done
+    __kingu_dispatching_user_prompt_command=1
+    if (( __kingu_exit_code == 0 )); then
+      eval "$__kingu_final_prompt_command"
+    else
+      __kingu_restore_prompt_status "$__kingu_exit_code" || eval "$__kingu_final_prompt_command"
+    fi
+    __kingu_dispatching_user_prompt_command=""
+  else
+    for __kingu_prompt_part in "${__kingu_prompt_command_suffix[@]+"${__kingu_prompt_command_suffix[@]}"}"; do
+      if (( __kingu_exit_code == 0 )); then
+        eval "$__kingu_prompt_part"
+      else
+        __kingu_restore_prompt_status "$__kingu_exit_code" || eval "$__kingu_prompt_part"
+      fi
+    done
+  fi
+  return "$__kingu_exit_code"
+}
+__kingu_finish_legacy_prompt_dispatch() {
+  local __kingu_suffix_part
+  if [[ -n "${__kingu_in_prompt_command:-}" ]]; then
+    for __kingu_suffix_part in "${__kingu_prompt_command_suffix[@]+"${__kingu_prompt_command_suffix[@]}"}"; do
+      eval "$__kingu_suffix_part"
+    done
+  fi
+  trap '__kingu_osc133_preexec' DEBUG
+  unset __kingu_in_legacy_prompt_wrapper
+}
+__kingu_normalize_prompt_command() {
+  [[ -z "${__kingu_prompt_command_normalized:-}" ]] || return 0
+  local __kingu_prompt_part
+  local -a __kingu_normalized=()
+  for __kingu_prompt_part in "${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"}"; do
+    __kingu_normalize_prompt_command_part "$__kingu_prompt_part" __kingu_prompt_part
+    [[ -n "$__kingu_prompt_part" ]] && __kingu_normalized+=("$__kingu_prompt_part")
+  done
+  __kingu_prompt_command_normalized=1
+  if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+    PROMPT_COMMAND=("${__kingu_normalized[@]+"${__kingu_normalized[@]}"}")
+  else
+    __kingu_prompt_command_array=("${__kingu_normalized[@]+"${__kingu_normalized[@]}"}")
+    __kingu_prompt_command_prefix=()
+    __kingu_prompt_command_suffix=()
+    unset PROMPT_COMMAND
+    # Why: PID scope distinguishes legacy prompt dispatch from ordinary user command text.
+    __kingu_prompt_status_variable="__kingu_prompt_status_$$"
+    __kingu_prompt_status_capture_command="$__kingu_prompt_status_variable=\$?"
+    __kingu_prompt_status_value="\${$__kingu_prompt_status_variable}"
+    PROMPT_COMMAND="$__kingu_prompt_status_capture_command; __kingu_prompt_status=$__kingu_prompt_status_value"'; __kingu_prompt_had_functrace=""; if [[ -o functrace ]]; then __kingu_prompt_had_functrace=1; set +T; fi; __kingu_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__kingu_prompt_had_functrace" ]] || set -T; unset __kingu_prompt_had_functrace; __kingu_run_prompt_command_array; __kingu_finish_legacy_prompt_dispatch'
+  fi
+}
+__kingu_prepend_prompt_command() {
+  local command="$1"
+  __kingu_normalize_prompt_command
+  if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+    PROMPT_COMMAND=("$command" "${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"}")
+  else
+    __kingu_prompt_command_prefix=("$command" "${__kingu_prompt_command_prefix[@]+"${__kingu_prompt_command_prefix[@]}"}")
+  fi
+}
+__kingu_append_prompt_command() {
+  local command="$1"
+  __kingu_normalize_prompt_command
+  if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+    PROMPT_COMMAND+=("$command")
+  else
+    __kingu_prompt_command_suffix+=("$command")
+  fi
+}
+__kingu_prepend_prompt_command "__kingu_osc133_precmd"
+# Why: SSH startup commands are renderer-delivered; emit the same internal
+# readiness marker as local shells only when that delivery mode asks for it.
+if [[ -n "$__kingu_ready_marker" ]]; then
+  __kingu_prompt_mark() {
+    printf "\033]777;kingu-shell-ready\007"
+  }
+  __kingu_append_prompt_command "__kingu_prompt_mark"
+fi
+__kingu_append_prompt_command '__kingu_in_debug_capture=1; __kingu_prompt_had_functrace=""; if [[ -o functrace ]]; then __kingu_prompt_had_functrace=1; set +T; fi; __kingu_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__kingu_prompt_had_functrace" ]] || set -T; unset __kingu_prompt_had_functrace __kingu_in_debug_capture'
+__kingu_append_prompt_command "__kingu_osc133_prompt_done"
+__kingu_had_functrace=""
+[[ -o functrace ]] && __kingu_had_functrace=1
+set +T
+__kingu_debug_trap_spec="$(trap -p DEBUG)"
+[[ -z "$__kingu_had_functrace" ]] || set -T
+if [[ -n "$__kingu_debug_trap_spec" && "$__kingu_debug_trap_spec" != "trap -- '__kingu_osc133_preexec' DEBUG" ]]; then
+  __kingu_debug_trap_command="${__kingu_debug_trap_spec#trap -- }"
+  __kingu_debug_trap_command="${__kingu_debug_trap_command% DEBUG}"
+  eval "__kingu_user_debug_trap=$__kingu_debug_trap_command"
+fi
+unset __kingu_debug_trap_spec __kingu_debug_trap_command __kingu_had_functrace
+unset -f __kingu_normalize_prompt_command_part __kingu_normalize_prompt_command __kingu_prepend_prompt_command __kingu_append_prompt_command
+unset __kingu_prompt_command_normalized
+# Why: arm DEBUG after wrapper setup so the relay rcfile itself does not emit
+# fake command-start/end markers before the first prompt.
+__kingu_initial_prompt=1
+trap '__kingu_osc133_preexec' DEBUG
+unset __kingu_initializing_wrapper

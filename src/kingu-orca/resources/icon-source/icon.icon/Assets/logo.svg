@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Kingu Intelligence brand mark: crown + shades + mustache -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="#000"/>
+  <g fill="#fff">
+    <!-- crown -->
+    <path d="M136 88 L186 168 L256 96 L326 168 L376 88 L396 228 L116 228 Z" stroke="#fff" stroke-width="18" stroke-linejoin="round" fill="none"/>
+    <!-- brow sweep -->
+    <path d="M120 250 Q256 218 392 250" stroke="#fff" stroke-width="16" fill="none" stroke-linecap="round"/>
+    <!-- glasses -->
+    <rect x="128" y="268" width="112" height="72" rx="14"/>
+    <rect x="272" y="268" width="112" height="72" rx="14"/>
+    <rect x="240" y="288" width="32" height="14"/>
+    <!-- mustache -->
+    <path d="M150 372 Q160 396 188 396 L324 396 Q352 396 362 372" stroke="#fff" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <!-- diamond -->
+    <rect x="236" y="416" width="40" height="40" rx="8" transform="rotate(45 256 436)"/>
+  </g>
+</svg>

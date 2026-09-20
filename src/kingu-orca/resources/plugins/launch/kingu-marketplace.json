@@ -1,0 +1,36 @@
+{
+  "name": "Kingu Official Plugins",
+  "owner": "anthovai",
+  "plugins": [
+    {
+      "id": "anthovai.kingu-portuguese",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/anthovai/kingu-intelligence-portuguese.git",
+        "ref": "v1.0.0"
+      },
+      "description": "Brazilian Portuguese translations for common Kingu navigation.",
+      "categories": ["languages", "official"]
+    },
+    {
+      "id": "anthovai.kingu-multipass-recipes",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/anthovai/kingu-intelligence-multipass-recipes.git",
+        "ref": "v1.0.0"
+      },
+      "description": "A reviewed starter lifecycle for disposable Multipass workspaces.",
+      "categories": ["vm-recipes", "official"]
+    },
+    {
+      "id": "anthovai.kingu-navigation-shortcuts",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/anthovai/kingu-intelligence-navigation-shortcuts.git",
+        "ref": "v1.0.0"
+      },
+      "description": "Command aliases and optional shortcuts for frequent Kingu views.",
+      "categories": ["keybindings", "official"]
+    }
+  ]
+}

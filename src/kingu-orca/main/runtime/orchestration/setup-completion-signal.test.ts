@@ -1,0 +1,95 @@
+import { describe, expect, it, vi } from 'vitest'
+import { buildObservedSetupCommand, createSetupCompletionScanner } from './setup-completion-signal'
+
+describe('orchestration setup completion signal', () => {
+  it('preserves a POSIX setup exit code in a visible completion signal', () => {
+    const { command } = buildObservedSetupCommand(
+      '/repo/.git/kingu/setup-runner.sh',
+      'posix',
+      'token-posix'
+    )
+
+    expect(command).toContain('bash /repo/.git/kingu/setup-runner.sh')
+    expect(command).toContain('__KINGU_SETUP_COMPLETE__:token-posix:%s\\n')
+    expect(command).toContain('"$status"')
+    expect(command).toContain('exit "$status"')
+  })
+
+  it('preserves a native Windows setup path and exit code without shell interpolation', () => {
+    const runnerPath = 'C:\\repo %name%!^&\\.git\\kingu\\setup-runner.cmd'
+    const observed = buildObservedSetupCommand(runnerPath, 'windows', 'token-windows')
+    const encodedCommand = observed.command.split(' ').at(-1)
+    const script = Buffer.from(encodedCommand ?? '', 'base64').toString('utf16le')
+
+    expect(observed.command).toContain('powershell.exe -NoLogo -NoProfile -NonInteractive')
+    expect(observed.env).toEqual({ KINGU_SETUP_RUNNER_PATH: runnerPath })
+    expect(script).toContain('& $runner')
+    expect(script).toContain('__KINGU_SETUP_COMPLETE__:token-windows:')
+    expect(script).toContain('exit $status')
+    expect(script).not.toContain(runnerPath)
+  })
+
+  it('keeps a WSL runner on the POSIX completion path', () => {
+    const { command } = buildObservedSetupCommand(
+      '\\\\wsl.localhost\\Ubuntu\\repo\\.git\\kingu\\setup-runner.sh',
+      'windows',
+      'token-wsl'
+    )
+
+    expect(command).toContain('bash /repo/.git/kingu/setup-runner.sh')
+    expect(command).toContain('__KINGU_SETUP_COMPLETE__:token-wsl:%s\\n')
+    expect(command).toContain('exit "$status"')
+  })
+
+  it('routes a WSL-launched Windows-drive runner through its /mnt mount', () => {
+    const { command } = buildObservedSetupCommand(
+      'C:\\repo\\.git\\kingu\\setup-runner.sh',
+      'windows',
+      'token-mnt',
+      { family: 'posix', executable: 'wsl.exe' }
+    )
+
+    expect(command).toContain('bash /mnt/c/repo/.git/kingu/setup-runner.sh')
+    expect(command).not.toContain('bash /c/repo')
+  })
+
+  it('keeps a Git Bash runner on the MSYS drive form', () => {
+    const { command } = buildObservedSetupCommand(
+      'C:\\repo\\.git\\kingu\\setup-runner.sh',
+      'windows',
+      'token-git-bash',
+      { family: 'posix' }
+    )
+
+    expect(command).toContain('bash /c/repo/.git/kingu/setup-runner.sh')
+  })
+
+  it('keeps a batch runner on the Windows completion path from a Git Bash pane', () => {
+    // Regression (#6896): a Git Bash terminal with a batch setup script still gets a .cmd
+    // runner; observing it must not shell out to bash or type a bare `cmd.exe /c` switch.
+    const runnerPath = 'C:\\repo\\.git\\kingu\\setup-runner.cmd'
+    const observed = buildObservedSetupCommand(runnerPath, 'windows', 'token-git-bash-cmd', {
+      family: 'posix'
+    })
+
+    expect(observed.command).toContain('powershell.exe -NoLogo -NoProfile -NonInteractive')
+    expect(observed.command).not.toContain('bash ')
+    expect(observed.env).toEqual({ KINGU_SETUP_RUNNER_PATH: runnerPath })
+  })
+
+  it('recognizes one completion signal across output chunk boundaries', () => {
+    const onComplete = vi.fn()
+    const scanner = createSetupCompletionScanner('token-chunks', onComplete)
+
+    scanner.scan('installing...\r\n__KINGU_SETUP_COMPLETE__:wrong:0\r\n__KINGU_SETUP_COMP')
+    scanner.scan('LETE__:token-chunks:1')
+    expect(onComplete).not.toHaveBeenCalled()
+    scanner.scan('7\r')
+    expect(onComplete).not.toHaveBeenCalled()
+    scanner.scan('\nPS C:\\repo>')
+    scanner.scan('__KINGU_SETUP_COMPLETE__:token-chunks:0\r\n')
+
+    expect(onComplete).toHaveBeenCalledOnce()
+    expect(onComplete).toHaveBeenCalledWith(17)
+  })
+})

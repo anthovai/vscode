@@ -1,0 +1,36 @@
+{
+  "settings": {
+    "appearance": {
+      "language": {
+        "title": "Idioma",
+        "description": "Escolha o idioma usado na interface do Kingu.",
+        "system": "Sistema",
+        "english": "Inglês",
+        "chinese": "Chinês simplificado",
+        "korean": "Coreano",
+        "japanese": "Japonês",
+        "spanish": "Espanhol"
+      }
+    }
+  },
+  "menu": {
+    "checkForUpdates": "Verificar atualizações...",
+    "settings": "Configurações",
+    "file": "Arquivo",
+    "exit": "Sair",
+    "edit": "Editar",
+    "appearance": "Aparência",
+    "view": "Visualizar",
+    "reload": "Recarregar",
+    "window": "Janela",
+    "help": "Ajuda",
+    "paste": "Colar"
+  },
+  "tray": {
+    "openKingu": "Abrir o Kingu",
+    "quit": "Encerrar",
+    "minimizeNotice": {
+      "body": "O Kingu continua em execução na bandeja do sistema"
+    }
+  }
+}
