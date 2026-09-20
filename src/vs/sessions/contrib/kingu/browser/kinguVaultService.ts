@@ -28,7 +28,8 @@ import {
 	sessionTitle,
 } from '../common/kinguVault.js';
 import { IKinguVaultSourceDefinition, isDiscoverable, KINGU_VAULT_SOURCES, pathSegments, vaultSource } from '../common/kinguVaultSources.js';
-import { addUsage, EMPTY_USAGE, IKinguUsage, readTranscriptUsage } from '../common/kinguVaultUsage.js';
+import { addUsage, EMPTY_USAGE, IKinguUsage, readTranscriptUsage, uncachedTokens } from '../common/kinguVaultUsage.js';
+import { ancestorDirectories, IKinguProject, projectFor, readWorktreeRepository, unattributedProject } from '../common/kinguVaultAttribution.js';
 import {
 	isSubagentTranscriptName,
 	readSubagentMeta,
@@ -70,6 +71,18 @@ const DESCRIBE_PREFIX_BYTES = 128 * 1024;
 const LOCAL_HOST_KEY = localize('kingu.vault.localHost', "this machine");
 
 /**
+ * How far up the tree the search for a repository goes.
+ *
+ * A working directory nested deeper than this inside a repository is not a
+ * thing that happens; a path that is not in one at all is, and without a bound
+ * every such session would walk to the filesystem root.
+ */
+const MAX_REPOSITORY_SEARCH_DEPTH = 12;
+
+/** A worktree's `.git` is one line; this is generous for it and small enough to be free. */
+const GIT_POINTER_BYTES = 4 * 1024;
+
+/**
  * Indexes the sessions other coding agents have left on this machine.
  *
  * Ported from the Kingu ADE's vault scanner, with the file access rewritten onto
@@ -109,6 +122,14 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	 * pays to read only the ones whose stat moved.
 	 */
 	private readonly _descriptions = new KinguVaultDescriptionCache();
+	/**
+	 * The project each working directory resolved to.
+	 *
+	 * Shared across the whole report rather than per session: a few hundred
+	 * sessions come from a handful of repositories, and the resolution is a walk
+	 * up the tree statting `.git` — over a remote host, one round trip a level.
+	 */
+	private readonly _projects = new Map<string, Promise<IKinguProject>>();
 
 	constructor(
 		@IFileService private readonly _fileService: IFileService,
@@ -449,6 +470,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	async getUsageSummary(token = CancellationToken.None, onProgress?: (done: number, total: number) => void): Promise<IKinguUsageSummary> {
 		const sessions = await this.getSessions(token);
 		const bySource = new Map<KinguVaultSource, IKinguUsage>();
+		const byProject = new Map<string, { project: IKinguProject; usage: IKinguUsage; sessions: number }>();
 		let total = EMPTY_USAGE;
 		let sessionsRead = 0;
 		let done = 0;
@@ -467,8 +489,65 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			sessionsRead++;
 			total = addUsage(total, usage);
 			bySource.set(session.source, addUsage(bySource.get(session.source) ?? EMPTY_USAGE, usage));
+
+			const project = await this._projectFor(session);
+			const existing = byProject.get(project.id);
+			byProject.set(project.id, {
+				project,
+				usage: addUsage(existing?.usage ?? EMPTY_USAGE, usage),
+				sessions: (existing?.sessions ?? 0) + 1,
+			});
 		});
-		return { total, bySource, sessionsRead, sessionsTotal: sessions.length };
+		return {
+			total,
+			bySource,
+			// Largest first, because a report is read from the top and the top is
+			// where the answer to "what is costing me" is.
+			byProject: [...byProject.values()].sort((left, right) => uncachedTokens(right.usage) - uncachedTokens(left.usage)),
+			sessionsRead,
+			sessionsTotal: sessions.length,
+		};
+	}
+
+	/**
+	 * Where a session ran, as something a report can total.
+	 *
+	 * The transcript records a working directory; what a person wants totalled
+	 * is the repository or worktree that directory is in. Resolved by walking up
+	 * for a `.git`, which is the same question git itself asks, and cached per
+	 * directory because a few hundred sessions share a handful of repositories.
+	 */
+	private async _projectFor(session: IKinguVaultSession): Promise<IKinguProject> {
+		const directory = session.workingDirectory?.trim();
+		if (!directory) {
+			return unattributedProject(session.hostLabel);
+		}
+		const key = `${session.resource.authority}\u0000${directory}`;
+		let pending = this._projects.get(key);
+		if (!pending) {
+			pending = this._resolveProject(session, directory);
+			this._projects.set(key, pending);
+		}
+		return pending;
+	}
+
+	private async _resolveProject(session: IKinguVaultSession, directory: string): Promise<IKinguProject> {
+		for (const ancestor of ancestorDirectories(directory, MAX_REPOSITORY_SEARCH_DEPTH)) {
+			const git = session.resource.with({ path: `${ancestor}/.git` });
+			let stat;
+			try {
+				stat = await this._fileService.stat(git);
+			} catch {
+				continue;
+			}
+			// A directory is a checkout; a file is a linked worktree pointing at the
+			// repository that owns it. That is git's own distinction, not a heuristic.
+			const worktreeOf = stat.isDirectory
+				? undefined
+				: readWorktreeRepository(await this._read(git, GIT_POINTER_BYTES) ?? '');
+			return projectFor({ workingDirectory: directory, hostLabel: session.hostLabel, repositoryRoot: ancestor, worktreeOf });
+		}
+		return projectFor({ workingDirectory: directory, hostLabel: session.hostLabel, repositoryRoot: undefined, worktreeOf: undefined });
 	}
 
 	async deleteSession(session: IKinguVaultSession): Promise<void> {

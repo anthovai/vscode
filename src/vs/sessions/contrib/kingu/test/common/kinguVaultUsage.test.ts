@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { KinguVaultSource } from '../../common/kinguVault.js';
-import { addUsage, EMPTY_USAGE, formatTokens, readTranscriptUsage, totalTokens, uncachedTokens } from '../../common/kinguVaultUsage.js';
+import { addUsage, EMPTY_USAGE, formatTokens, readTranscriptUsage, totalTokens, uncachedTokens, usageModels } from '../../common/kinguVaultUsage.js';
 
 const lines = (...records: object[]) => records.map(r => JSON.stringify(r)).join('\n');
 const claudeTurn = (usage: object, model = 'claude-opus-5') => ({ message: { role: 'assistant', model, usage } });
@@ -35,7 +35,9 @@ suite('Kingu vault usage', () => {
 				claudeTurn({ output_tokens: 1 }, 'claude-sonnet-5'),
 				claudeTurn({ output_tokens: 1 }, 'claude-opus-5'),
 			), KinguVaultSource.Claude);
-			assert.deepStrictEqual(usage.models, ['claude-opus-5', 'claude-sonnet-5']);
+			assert.deepStrictEqual(usageModels(usage), ['claude-opus-5', 'claude-sonnet-5']);
+			// And each model keeps its own share, which is what a price applies to.
+			assert.deepStrictEqual(usage.byModel.map(entry => entry.outputTokens), [2, 1]);
 		});
 
 		test('ignores records that carry no usage', () => {
@@ -99,19 +101,24 @@ suite('Kingu vault usage', () => {
 
 	suite('addUsage', () => {
 
-		test('adds the counts and unions the models', () => {
-			const a = { ...EMPTY_USAGE, inputTokens: 10, models: ['a'] };
-			const b = { ...EMPTY_USAGE, inputTokens: 5, outputTokens: 2, models: ['a', 'b'] };
+		const model = (name: string, inputTokens: number) => ({ model: name, inputTokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 });
+
+		test('adds the counts and merges each model into one entry', () => {
+			const a = { ...EMPTY_USAGE, inputTokens: 10, byModel: [model('a', 10)] };
+			const b = { ...EMPTY_USAGE, inputTokens: 5, outputTokens: 2, byModel: [model('a', 3), model('b', 2)] };
 			const sum = addUsage(a, b);
 			assert.strictEqual(sum.inputTokens, 15);
 			assert.strictEqual(sum.outputTokens, 2);
-			assert.deepStrictEqual(sum.models, ['a', 'b']);
+			assert.deepStrictEqual(usageModels(sum), ['a', 'b']);
+			// Merged rather than appended: two entries for one model would be priced
+			// twice by anything that iterates them.
+			assert.deepStrictEqual(sum.byModel.map(entry => entry.inputTokens), [13, 2]);
 		});
 
 		test('leaves its operands alone', () => {
-			const a = { ...EMPTY_USAGE, models: ['a'] };
-			addUsage(a, { ...EMPTY_USAGE, models: ['b'] });
-			assert.deepStrictEqual(a.models, ['a']);
+			const a = { ...EMPTY_USAGE, byModel: [model('a', 1)] };
+			addUsage(a, { ...EMPTY_USAGE, byModel: [model('a', 5), model('b', 1)] });
+			assert.deepStrictEqual(a.byModel, [model('a', 1)]);
 		});
 	});
 

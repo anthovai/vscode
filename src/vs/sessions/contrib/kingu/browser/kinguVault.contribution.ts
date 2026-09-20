@@ -10,13 +10,15 @@ import { Categories } from '../../../../platform/action/common/actionCommonCateg
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, IQuickPickItem, IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { IKinguVaultSearchOutcome, IKinguVaultService, IKinguVaultSession } from '../common/kinguVault.js';
-import { formatTokens, IKinguUsage, totalTokens, uncachedTokens } from '../common/kinguVaultUsage.js';
+import { formatTokens, IKinguUsage, totalTokens, uncachedTokens, usageModels } from '../common/kinguVaultUsage.js';
+import { estimateCostUsd, formatCostUsd } from '../common/kinguPricing.js';
+import { IKinguProject, KinguProjectKind } from '../common/kinguVaultAttribution.js';
 import { KINGU_VAULT_SOURCES } from '../common/kinguVaultSources.js';
 import { KinguVaultService } from './kinguVaultService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -75,13 +77,82 @@ interface IVaultPick extends IQuickPickItem {
 
 /** The split behind a total, which is where the surprise usually is. */
 function usageDetail(usage: IKinguUsage): string {
+	const models = usageModels(usage);
 	return localize('kingu.vault.usage.detail', "in {0} · out {1} · cache read {2} · cache write {3} · {5} all in{4}",
 		formatTokens(usage.inputTokens),
 		formatTokens(usage.outputTokens),
 		formatTokens(usage.cacheReadTokens),
 		formatTokens(usage.cacheWriteTokens),
-		usage.models.length > 0 ? ' · ' + usage.models.join(', ') : '',
+		models.length > 0 ? ' · ' + models.join(', ') : '',
 		formatTokens(totalTokens(usage)));
+}
+
+/**
+ * The figure a row leads with: the cost when it can be priced, the tokens when
+ * it cannot.
+ *
+ * Cost first because it is the question — but only when the price list knows
+ * every model in the row. A partial cost beside a full token count would read
+ * as the whole bill, and quietly under-report whichever models the list has
+ * not been taught yet. {@link usageCost} says so by returning nothing.
+ */
+function usageHeadline(usage: IKinguUsage): string {
+	const cost = usageCost(usage);
+	const tokens = formatTokens(uncachedTokens(usage));
+	return cost === undefined ? tokens : `${formatCostUsd(cost)} · ${tokens}`;
+}
+
+/** What a usage cost, or `undefined` when any model that spent anything is unpriced. */
+function usageCost(usage: IKinguUsage): number | undefined {
+	// A model that moved no tokens cannot make a total wrong, and blocking on one
+	// would suppress the cost of nearly every real session: Claude Code records
+	// its own non-model records under `<synthetic>`, which the price list has no
+	// business knowing and which always costs nothing.
+	const spent = usage.byModel.filter(entry => totalTokens(entry) > 0);
+	if (spent.length === 0) {
+		return undefined;
+	}
+	let total = 0;
+	for (const entry of spent) {
+		const cost = estimateCostUsd(entry.model, entry);
+		if (cost === undefined) {
+			return undefined;
+		}
+		total += cost;
+	}
+	return total;
+}
+
+function projectKindLabel(project: IKinguProject): string {
+	switch (project.kind) {
+		case KinguProjectKind.Worktree: return localize('kingu.vault.usage.kind.worktree', "worktree");
+		case KinguProjectKind.Repository: return localize('kingu.vault.usage.kind.repository', "repository");
+		case KinguProjectKind.Directory: return localize('kingu.vault.usage.kind.directory', "directory");
+		case KinguProjectKind.Unattributed: return localize('kingu.vault.usage.kind.unattributed', "not recorded");
+	}
+}
+
+/**
+ * Where a project is, as one string: the path, and the machine when it is not
+ * this one.
+ *
+ * Both halves earn their place. Two projects share a label often — a repository
+ * and an unrelated directory of the same name, a worktree of a repository with
+ * the same basename — and the path is the only thing that separates them. The
+ * machine matters because the report spans every host the vault reached, and a
+ * total that silently mixes them is a total of the wrong thing.
+ */
+function projectLocation(project: IKinguProject): string {
+	if (project.path === undefined) {
+		return project.hostLabel ?? localize('kingu.vault.usage.here', "this machine");
+	}
+	return project.hostLabel ? `${project.hostLabel}:${project.path}` : project.path;
+}
+
+function sessionCount(sessions: number): string {
+	return sessions === 1
+		? localize('kingu.vault.usage.oneSession', "1 session")
+		: localize('kingu.vault.usage.manySessions', "{0} sessions", sessions);
 }
 
 /**
@@ -433,21 +504,43 @@ class KinguVaultUsageReportAction extends Action2 {
 		if (!summary) {
 			return;
 		}
-		const rows: IQuickPickItem[] = [{
+		const rows: (IQuickPickItem | IQuickPickSeparator)[] = [{
 			label: localize('kingu.vault.usage.total', "All agents"),
-			description: formatTokens(uncachedTokens(summary.total)),
+			description: usageHeadline(summary.total),
 			detail: usageDetail(summary.total),
 		}];
+		rows.push({ label: localize('kingu.vault.usage.byAgent', "By agent"), type: 'separator' });
 		for (const [source, usage] of summary.bySource) {
 			rows.push({
 				label: KINGU_VAULT_SOURCES.find(candidate => candidate.id === source)?.label ?? source,
-				description: formatTokens(uncachedTokens(usage)),
+				description: usageHeadline(usage),
 				detail: usageDetail(usage),
 			});
 		}
+		if (summary.byProject.length > 0) {
+			rows.push({ label: localize('kingu.vault.usage.byProject', "By project"), type: 'separator' });
+			for (const entry of summary.byProject) {
+				rows.push({
+					label: entry.project.label,
+					description: usageHeadline(entry.usage),
+					// The location comes before the counts because it is what tells two
+					// rows apart: a repository and an unrelated directory of the same
+					// name are both `ledger-api` in the label, and on a report that
+					// spans machines neither says which one without this.
+					detail: localize('kingu.vault.usage.projectDetail', "{0} · {1} · {2} · {3}",
+						projectKindLabel(entry.project),
+						projectLocation(entry.project),
+						sessionCount(entry.sessions),
+						usageDetail(entry.usage)),
+				});
+			}
+		}
 		await quickInputService.pick(rows, {
 			title: localize('kingu.vault.usage.title', "Vault usage — {0} of {1} sessions recorded tokens", summary.sessionsRead, summary.sessionsTotal),
-			placeHolder: localize('kingu.vault.usage.placeholder', "Input and output tokens; cache reads are listed separately because they dwarf both. Tokens, not cost."),
+			placeHolder: localize('kingu.vault.usage.placeholder', "Cost is an estimate from a price list kept by hand; a model the list does not know is left out of it rather than counted as free."),
+			// So a path or a machine name finds its row, which is how a person looks
+			// for one when several share a label.
+			matchOnDetail: true,
 		});
 	}
 }

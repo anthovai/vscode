@@ -22,6 +22,8 @@ it is a cost we do not want), **open** (a real gap, not yet done).
 | `rate-limits`, `claude-usage`, `codex-usage` | `platform/kinguHost/` | Quota per provider, read in the main process because a renderer cannot reach these endpoints and should never hold the token. |
 | `ports` | `platform/kinguHost/common/kinguHostPorts.ts` | Scoped to this app's process tree, which is what makes the count readable. |
 | `memory` | `kinguHostChannel._getMemoryBytes` | Total plus a breakdown by process kind. |
+| `claude-usage`, `codex-usage` pricing | `common/kinguPricing.ts` | Both price lists, each with its own token semantics — see *Pricing* below. |
+| `usage/` worktree attribution | `common/kinguVaultAttribution.ts` | Resolved from git itself rather than from a worktree registry the ADE keeps. |
 | `ssh`, `wsl`, `runtime` | — | Satisfied by the fork's own `IRemoteAgentHostService`; see below. |
 
 ## Already here, and better
@@ -69,14 +71,10 @@ onto it. Porting the ADE's version would mean running two of each.
 
 Real gaps, in the order they seem worth closing.
 
-1. **Usage attribution.** The ADE's `usage/` and `claude-usage/` attribute
-   spend to a worktree and price it per model. Here `getUsageSummary` totals
-   tokens by agent and no further. Pricing is the easy half; attributing a
-   transcript to the worktree it ran in is the half that is worth something.
-2. **Advertised URLs for ports.** The ADE watches a dev server's output for
+1. **Advertised URLs for ports.** The ADE watches a dev server's output for
    the URL it prints, so the ports list offers `http://localhost:5173/` rather
    than a number and a guess. Here the port entry assumes loopback and `http`.
-3. **A Windows remote host.** Remote roots are built from the host's own
+2. **A Windows remote host.** Remote roots are built from the host's own
    `defaultDirectory` and joined with forward slashes, which a Windows host
    accepts — but every remote test so far has been against Linux.
 
@@ -111,3 +109,39 @@ it proved, and what it broke:
   `fsPath`, so a Linux host's `/home/dev/…` appeared with backslashes, and it
   promised a recycle bin that a remote host does not have. Both are fixed; a
   remote delete now says which machine and that it is outright.
+
+## Pricing and attribution
+
+Two price lists, because the two providers count differently and reading one
+as the other is wrong by a multiple. Claude reports cache reads apart from
+input; Codex's `input_tokens` *includes* the cached ones, so its uncached input
+has to be derived or every cached token is billed twice. Each list also tiers
+long context per bucket rather than per total.
+
+Both are lists maintained by hand, so a cost is always an estimate, and a model
+no list knows is reported as unpriced rather than as zero — a zero would read
+as "this was free", which is the one wrong answer that looks like an answer. A
+row is priced only when every model that actually spent tokens in it is priced.
+Models that moved no tokens are ignored, which is what lets a real session be
+priced at all: Claude Code files its own non-model records under `<synthetic>`.
+
+Attribution asks git rather than keeping a registry. A session's working
+directory is walked up for a `.git`; a directory there is a checkout and a file
+there is a linked worktree whose pointer names the repository that owns it.
+That distinction is git's own, so a worktree is reported as one, named after
+both the repository and the branch, and totalled apart from the checkout —
+which is the question worktrees exist to make askable. A directory in no
+repository attributes to itself rather than to a parent, because a parent would
+put unrelated projects in one row.
+
+Verified against a real repository and a real linked worktree on the SSH host:
+
+```
+ledger-api · reconcile-fix  $4.72 · 208.0k  worktree   · kingu-remote-test:/home/dev/worktrees/reconcile-fix · 2 sessions
+ledger-api                  $1.91 ·  54.0k  repository · kingu-remote-test:/home/dev/ledger-api             · 1 session
+ledger-api                  $0.09 ·   4.0k  directory  · kingu-remote-test:/srv/ledger-api                  · 3 sessions
+```
+
+Three rows, two of them sharing a label. The kind, the machine and the path are
+all in the row because without them a report that spans hosts is a total of the
+wrong thing.

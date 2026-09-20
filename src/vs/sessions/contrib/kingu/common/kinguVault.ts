@@ -8,6 +8,7 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Event } from '../../../../base/common/event.js';
 import { IKinguUsage } from './kinguVaultUsage.js';
+import { IKinguProject } from './kinguVaultAttribution.js';
 
 /**
  * The coding agents whose transcripts the vault can read.
@@ -118,11 +119,27 @@ export interface IKinguVaultSearchOutcome {
 	readonly truncatedHosts: readonly string[];
 }
 
+/** One project's share of the vault's spend. */
+export interface IKinguProjectUsage {
+	readonly project: IKinguProject;
+	readonly usage: IKinguUsage;
+	/** How many sessions ran there. */
+	readonly sessions: number;
+}
+
 /** Everything the vault spent, split the ways a person asks about it. */
 export interface IKinguUsageSummary {
 	readonly total: IKinguUsage;
 	/** By agent, so "which of these is costing me" has an answer. */
 	readonly bySource: ReadonlyMap<KinguVaultSource, IKinguUsage>;
+	/**
+	 * By the repository or worktree the session ran in, largest first.
+	 *
+	 * The question behind a usage report is almost never "how much did I spend"
+	 * — it is "on what", and the working directory is the only thing in a
+	 * transcript that answers it.
+	 */
+	readonly byProject: readonly IKinguProjectUsage[];
 	/** Sessions whose usage could be read, out of those indexed. */
 	readonly sessionsRead: number;
 	readonly sessionsTotal: number;

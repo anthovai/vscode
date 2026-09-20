@@ -5,23 +5,32 @@
 
 import { KinguVaultSource } from './kinguVault.js';
 
-/**
- * What a session cost in tokens.
- *
- * Tokens rather than money on purpose: prices change, differ by plan and by
- * region, and a number in currency that is quietly six months stale is worse
- * than no number. What the transcripts actually record is tokens, so that is
- * what this reports.
- */
-export interface IKinguUsage {
+/** The four counts every provider records, whatever it calls them. */
+export interface IKinguTokenCounts {
 	readonly inputTokens: number;
 	readonly outputTokens: number;
 	/** Tokens served from the prompt cache, which are billed differently everywhere. */
 	readonly cacheReadTokens: number;
 	/** Tokens written into the prompt cache. */
 	readonly cacheWriteTokens: number;
-	/** Models the session actually ran against, in first-seen order. */
-	readonly models: readonly string[];
+}
+
+/** One model's share of a session, which is what a price can be applied to. */
+export interface IKinguModelUsage extends IKinguTokenCounts {
+	readonly model: string;
+}
+
+/**
+ * What a session spent.
+ *
+ * The totals are the headline; the per-model split is underneath because a
+ * price belongs to a model and a session routinely uses more than one — a plan
+ * on Opus and the edits on Sonnet cost different amounts for the same tokens,
+ * and a total priced at one rate would be wrong by a multiple.
+ */
+export interface IKinguUsage extends IKinguTokenCounts {
+	/** What each model ran, in first-seen order. */
+	readonly byModel: readonly IKinguModelUsage[];
 }
 
 export const EMPTY_USAGE: IKinguUsage = {
@@ -29,14 +38,32 @@ export const EMPTY_USAGE: IKinguUsage = {
 	outputTokens: 0,
 	cacheReadTokens: 0,
 	cacheWriteTokens: 0,
-	models: [],
+	byModel: [],
 };
 
+/**
+ * The models a session ran against, in first-seen order.
+ *
+ * Only the ones that moved tokens. Claude Code files its own non-model records
+ * — hook output, local edits — under `<synthetic>`, and listing that beside the
+ * real models would answer "what did this run on" with something that is not a
+ * model and never cost anything.
+ */
+export function usageModels(usage: IKinguUsage): readonly string[] {
+	return usage.byModel.filter(entry => totalTokens(entry) > 0).map(entry => entry.model);
+}
+
 export function addUsage(a: IKinguUsage, b: IKinguUsage): IKinguUsage {
-	const models = a.models.slice();
-	for (const model of b.models) {
-		if (!models.includes(model)) {
-			models.push(model);
+	const byModel = a.byModel.map(entry => ({ ...entry }));
+	for (const entry of b.byModel) {
+		const existing = byModel.find(candidate => candidate.model === entry.model);
+		if (existing) {
+			existing.inputTokens += entry.inputTokens;
+			existing.outputTokens += entry.outputTokens;
+			existing.cacheReadTokens += entry.cacheReadTokens;
+			existing.cacheWriteTokens += entry.cacheWriteTokens;
+		} else {
+			byModel.push({ ...entry });
 		}
 	}
 	return {
@@ -44,12 +71,12 @@ export function addUsage(a: IKinguUsage, b: IKinguUsage): IKinguUsage {
 		outputTokens: a.outputTokens + b.outputTokens,
 		cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
 		cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
-		models,
+		byModel,
 	};
 }
 
 /** Every token the session moved, cache included. */
-export function totalTokens(usage: IKinguUsage): number {
+export function totalTokens(usage: IKinguTokenCounts): number {
 	return usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
 }
 
@@ -62,7 +89,7 @@ export function totalTokens(usage: IKinguUsage): number {
  * provider prices a cache read far below fresh input. So the figure a person is
  * shown first is this one, with the cache alongside it rather than inside it.
  */
-export function uncachedTokens(usage: IKinguUsage): number {
+export function uncachedTokens(usage: IKinguTokenCounts): number {
 	return usage.inputTokens + usage.outputTokens;
 }
 
@@ -91,13 +118,14 @@ function readPerMessageUsage(transcript: string): IKinguUsage {
 			continue;
 		}
 		const counts = message.usage;
-		usage = addUsage(usage, {
+		const model = typeof message.model === 'string' && message.model ? message.model : undefined;
+		const tokens = {
 			inputTokens: count(counts.input_tokens),
 			outputTokens: count(counts.output_tokens),
 			cacheReadTokens: count(counts.cache_read_input_tokens),
 			cacheWriteTokens: count(counts.cache_creation_input_tokens),
-			models: typeof message.model === 'string' && message.model ? [message.model] : [],
-		});
+		};
+		usage = addUsage(usage, { ...tokens, byModel: model ? [{ model, ...tokens }] : [] });
 	}
 	return usage;
 }
@@ -141,13 +169,20 @@ function readCumulativeUsage(transcript: string): IKinguUsage {
 		running.cacheWrite += delta(current.cacheWrite, previous?.cacheWrite);
 		previous = current;
 	}
-	return {
+	const tokens = {
 		inputTokens: running.input,
 		outputTokens: running.output,
 		cacheReadTokens: running.cacheRead,
 		cacheWriteTokens: running.cacheWrite,
-		models,
 	};
+	// The running total is the session's, not any one model's, so the split can
+	// only be honest when the session used one model. With more than one the
+	// models are still named — the report needs them — but every count sits on
+	// the first, and a cost derived from that would be a guess presented as
+	// arithmetic. `readTranscriptUsage`'s caller learns this from `byModel`
+	// having a single entry with the whole total in it.
+	const byModel = models.length === 1 ? [{ model: models[0], ...tokens }] : [];
+	return { ...tokens, byModel };
 }
 
 /** The new spend a running total represents, allowing for a restarted counter. */
