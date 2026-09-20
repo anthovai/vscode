@@ -8,3 +8,9 @@
 .kingu-sessions .part.statusbar {
 	font-size: 11px;
 }
+
+/* The gauge is drawn in the entry's own label, so it needs no markup of its
+   own — only a tighter tracking so eight block cells read as one bar. */
+.kingu-sessions .part.statusbar .statusbar-item .kingu-quota-cells {
+	letter-spacing: -0.5px;
+}

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import { net } from 'electron';
+import { app, net } from 'electron';
 import { promises as fs } from 'fs';
 import { homedir } from 'os';
 import { isAbsolute, join } from '../../../base/common/path.js';
@@ -63,7 +63,26 @@ export class KinguRateLimitChannel implements IServerChannel {
 		if (command === 'getQuota') {
 			return await this._getQuota(provider) as T;
 		}
+		if (command === 'getMemoryBytes') {
+			return this._getMemoryBytes() as T;
+		}
 		throw new Error(`Unknown Kingu rate limit command: ${command}`);
+	}
+
+	/**
+	 * What the app is holding, across every process it runs.
+	 *
+	 * The renderer can only see its own heap, which is a fraction of the answer —
+	 * the agent host, the extension host and the other windows are where the
+	 * memory of an agent session actually goes.
+	 */
+	private _getMemoryBytes(): number | undefined {
+		try {
+			// `workingSetSize` is reported in kilobytes.
+			return app.getAppMetrics().reduce((total, metric) => total + (metric.memory?.workingSetSize ?? 0), 0) * 1024;
+		} catch {
+			return undefined;
+		}
 	}
 
 	private async _getQuota(provider: KinguQuotaProvider | undefined): Promise<KinguQuotaResult> {

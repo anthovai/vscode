@@ -50,6 +50,14 @@ export class KinguRateLimitService extends Disposable implements IKinguRateLimit
 		return this._inFlight;
 	}
 
+	async readMemoryBytes(): Promise<number | undefined> {
+		try {
+			return await this._channel.call<number | undefined>('getMemoryBytes');
+		} catch {
+			return undefined;
+		}
+	}
+
 	private async _refresh(): Promise<void> {
 		// In parallel because they are separate providers: one being slow or down
 		// must not delay the others' gauges.

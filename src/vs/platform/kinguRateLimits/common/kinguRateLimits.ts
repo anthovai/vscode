@@ -68,6 +68,9 @@ export interface IKinguRateLimitService {
 
 	/** Reads again now. Safe to call often; concurrent calls share one request. */
 	refresh(): Promise<void>;
+
+	/** What the app is holding across all of its processes, when that is knowable. */
+	readMemoryBytes(): Promise<number | undefined>;
 }
 
 // #region Credentials

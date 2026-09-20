@@ -5,8 +5,13 @@
 
 import './media/kinguStatusBar.css';
 import { mainWindow } from '../../../../base/browser/window.js';
+import { Codicon } from '../../../../base/common/codicons.js';
+import { ThemeIcon } from '../../../../base/common/themables.js';
+import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
+import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IAgentHostService } from '../../../../platform/agentHost/common/agentService.js';
 import { readCodexAccountInfo } from '../../../../platform/agentHost/common/meta/codexAccount.js';
@@ -17,10 +22,56 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguRateLimits/common/kinguQuotaProviders.js';
 import { IKinguRateLimitService, KinguQuotaProblem } from '../../../../platform/kinguRateLimits/common/kinguRateLimits.js';
 import { KinguRateLimitService } from './kinguRateLimitService.js';
+import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
 import { formatRateLimit, formatWindow, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 
 registerSingleton(IKinguRateLimitService, KinguRateLimitService, InstantiationType.Delayed);
+
+/**
+ * A codicon per provider.
+ *
+ * Not their logos: shipping a brand's mark means shipping its asset and its
+ * terms, and a shape that merely resembles one is worse than an honest generic.
+ * Distinct enough to tell two gauges apart at a glance, which is the job.
+ */
+const PROVIDER_ICONS: Readonly<Record<KinguQuotaProvider, ThemeIcon>> = {
+	[KinguQuotaProvider.Claude]: Codicon.flame,
+	[KinguQuotaProvider.Grok]: Codicon.zap,
+	[KinguQuotaProvider.Kimi]: Codicon.circleFilled,
+	[KinguQuotaProvider.Gemini]: Codicon.sparkle,
+};
+
+export const KINGU_REFRESH_QUOTAS_COMMAND_ID = 'kingu.status.refreshQuotas';
+
+/** A byte count as the unit a person would say: `1.2 GB`, `840 MB`. */
+function formatBytes(bytes: number): string {
+	const gb = bytes / 1024 ** 3;
+	return gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`;
+}
+
+/** How many cells the bar is drawn with. */
+const GAUGE_CELLS = 8;
+
+/**
+ * The bar, drawn in the label rather than as an element.
+ *
+ * A status bar entry does take an `HTMLElement`, but only its constructor reads
+ * it — `update()` refreshes the text and leaves the element alone, so a bar
+ * built that way freezes at whatever the first reading was. Drawn in the label
+ * it tracks the value, which is the entire point of a gauge.
+ *
+ * It fills to the fullest window, since that is the one that will stop the user
+ * first, while the text still names every window.
+ */
+function renderGauge(windows: readonly IKinguRateLimit[], text: string): string {
+	const worst = windows.reduce((highest, limit) => limit.usedPercent > highest.usedPercent ? limit : highest, windows[0]);
+	const filled = Math.round((worst.usedPercent / 100) * GAUGE_CELLS);
+	// A non-zero reading keeps at least one cell: a bar that reads empty while the
+	// number beside it does not is worse than a coarse bar.
+	const cells = worst.usedPercent > 0 ? Math.max(1, filled) : 0;
+	return '█'.repeat(cells) + '░'.repeat(GAUGE_CELLS - cells) + ' ' + text;
+}
 
 /** How often the bar re-reads what it shows. */
 const REFRESH_INTERVAL_MS = 30_000;
@@ -54,6 +105,8 @@ class KinguStatusBarContribution extends Disposable {
 	private readonly _rateLimit = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _remote = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _vault = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly _terminals = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly _memory = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _providers = new Map<KinguQuotaProvider, IStatusbarEntryAccessor>();
 	private _lastQuotaRefresh = 0;
 
@@ -64,6 +117,7 @@ class KinguStatusBarContribution extends Disposable {
 		@IRemoteAgentHostService private readonly _remoteAgentHostService: IRemoteAgentHostService,
 		@IKinguVaultService private readonly _vaultService: IKinguVaultService,
 		@IKinguRateLimitService private readonly _rateLimitService: IKinguRateLimitService,
+		@ITerminalService private readonly _terminalService: ITerminalService,
 	) {
 		super();
 
@@ -75,6 +129,7 @@ class KinguStatusBarContribution extends Disposable {
 		this._register(this._remoteAgentHostService.onDidChangeConnections(() => this._updateRemote()));
 		this._register(this._vaultService.onDidChangeSessions(() => this._updateVault()));
 		this._register(this._rateLimitService.onDidChange(() => this._updateProviders()));
+		this._register(this._terminalService.onDidChangeInstances(() => this._updateTerminals()));
 		this._register({ dispose: () => { for (const entry of this._providers.values()) { entry.dispose(); } this._providers.clear(); } });
 		const timer = mainWindow.setInterval(() => this._update(), REFRESH_INTERVAL_MS);
 		this._register({ dispose: () => mainWindow.clearInterval(timer) });
@@ -85,7 +140,61 @@ class KinguStatusBarContribution extends Disposable {
 		this._updateRemote();
 		this._updateVault();
 		this._updateProviders();
+		this._updateTerminals();
+		this._updateMemory();
 		this._maybeRefreshQuota();
+	}
+
+	/**
+	 * How many terminals this window is running.
+	 *
+	 * Shown only when there are any: zero terminals is the resting state and an
+	 * entry saying so is noise.
+	 */
+	private _updateTerminals(): void {
+		const count = this._terminalService.instances.length;
+		if (count === 0) {
+			this._terminals.clear();
+			return;
+		}
+		const entry: IStatusbarEntry = {
+			name: localize('kingu.status.terminals.name', "Terminals"),
+			text: `$(terminal) ${count}`,
+			ariaLabel: localize('kingu.status.terminals.aria', "{0} terminals running", count),
+			tooltip: localize('kingu.status.terminals.tooltip', "{0} terminals running in this window", count),
+			command: 'workbench.action.terminal.focus',
+		};
+		if (this._terminals.value) {
+			this._terminals.value.update(entry);
+		} else {
+			this._terminals.value = this._statusbarService.addEntry(entry, 'kingu.status.terminals', StatusbarAlignment.RIGHT, 95);
+		}
+	}
+
+	/**
+	 * What the app is holding, across every process.
+	 *
+	 * Asked of the main process because a window can only see its own heap, which
+	 * is a fraction of the answer once an agent host is running.
+	 */
+	private _updateMemory(): void {
+		void this._rateLimitService.readMemoryBytes().then(bytes => {
+			if (this._store.isDisposed || bytes === undefined || bytes <= 0) {
+				return;
+			}
+			const text = formatBytes(bytes);
+			const entry: IStatusbarEntry = {
+				name: localize('kingu.status.memory.name', "Memory"),
+				text: `$(dashboard) ${text}`,
+				ariaLabel: localize('kingu.status.memory.aria', "{0} of memory in use", text),
+				tooltip: localize('kingu.status.memory.tooltip', "{0} across every process this app runs", text),
+			};
+			if (this._memory.value) {
+				this._memory.value.update(entry);
+			} else {
+				this._memory.value = this._statusbarService.addEntry(entry, 'kingu.status.memory', StatusbarAlignment.RIGHT, 94);
+			}
+		});
 	}
 
 	/** Asks the provider on its own slower schedule than the bar redraws on. */
@@ -135,9 +244,12 @@ class KinguStatusBarContribution extends Disposable {
 		const text = windows.map(formatRateLimit).join(' · ');
 		const entry: IStatusbarEntry = {
 			name: localize('kingu.status.quota.name', "{0} quota", label),
-			text: `$(pulse) ${text}`,
+			// `text` is the fallback for surfaces that cannot take an element, and the
+			// accessible name comes from `ariaLabel` either way.
+			text: `$(${PROVIDER_ICONS[provider].id}) ${renderGauge(windows, text)}`,
 			ariaLabel: localize('kingu.status.quota.aria', "{0} quota: {1}", label, text),
 			tooltip: this._quotaTooltip(label, windows),
+			command: KINGU_REFRESH_QUOTAS_COMMAND_ID,
 		};
 		if (existing) {
 			existing.update(entry);
@@ -266,3 +378,28 @@ class KinguStatusBarContribution extends Disposable {
 }
 
 registerWorkbenchContribution2(KinguStatusBarContribution.ID, KinguStatusBarContribution, WorkbenchPhase.AfterRestored);
+
+/**
+ * Reads every provider again now.
+ *
+ * The gauges refresh on their own slow schedule, which is right for a number
+ * that moves over hours — but a person who has just finished a long run wants
+ * to see the cost of it without waiting, so clicking a gauge asks again.
+ */
+class RefreshKinguQuotasAction extends Action2 {
+
+	constructor() {
+		super({
+			id: KINGU_REFRESH_QUOTAS_COMMAND_ID,
+			title: localize2('kingu.status.refreshQuotas', "Kingu: Refresh Agent Quotas"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IKinguRateLimitService).refresh();
+	}
+}
+
+registerAction2(RefreshKinguQuotasAction);
