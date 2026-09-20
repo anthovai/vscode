@@ -156,6 +156,9 @@ export default defineConfig(
 	{
 		files: [
 			'src/vs/**/kingu/**/*.ts',
+			// Kingu code that is a platform service rather than a `kingu/` contrib —
+			// the directory is named for what it does, not for who owns it.
+			'src/vs/**/kingu*/**/*.ts',
 		],
 		rules: {
 			'header/header': [

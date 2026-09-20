@@ -7,16 +7,31 @@ import './media/kinguStatusBar.css';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
 import { IAgentHostService } from '../../../../platform/agentHost/common/agentService.js';
 import { readCodexAccountInfo } from '../../../../platform/agentHost/common/meta/codexAccount.js';
 import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus } from '../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { IKinguRateLimitService, KinguQuotaProblem } from '../../../../platform/kinguRateLimits/common/kinguRateLimits.js';
+import { KinguRateLimitService } from './kinguRateLimitService.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
 import { formatRateLimit, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 
+registerSingleton(IKinguRateLimitService, KinguRateLimitService, InstantiationType.Delayed);
+
 /** How often the bar re-reads what it shows. */
 const REFRESH_INTERVAL_MS = 30_000;
+
+/**
+ * How often the provider is actually asked.
+ *
+ * Far less often than the bar redraws: a five-hour window does not move in
+ * thirty seconds, and this is a request against the user's account rather than
+ * a local read.
+ */
+const QUOTA_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 /**
  * The strip along the bottom of the Agents window.
@@ -38,12 +53,16 @@ class KinguStatusBarContribution extends Disposable {
 	private readonly _rateLimit = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _remote = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _vault = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly _claude = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private _lastQuotaRefresh = 0;
 
 	constructor(
 		@IStatusbarService private readonly _statusbarService: IStatusbarService,
+		@ILogService private readonly _logService: ILogService,
 		@IAgentHostService private readonly _agentHostService: IAgentHostService,
 		@IRemoteAgentHostService private readonly _remoteAgentHostService: IRemoteAgentHostService,
 		@IKinguVaultService private readonly _vaultService: IKinguVaultService,
+		@IKinguRateLimitService private readonly _rateLimitService: IKinguRateLimitService,
 	) {
 		super();
 
@@ -54,6 +73,7 @@ class KinguStatusBarContribution extends Disposable {
 		this._register(this._agentHostService.rootState.onDidChange(() => this._updateRateLimit()));
 		this._register(this._remoteAgentHostService.onDidChangeConnections(() => this._updateRemote()));
 		this._register(this._vaultService.onDidChangeSessions(() => this._updateVault()));
+		this._register(this._rateLimitService.onDidChange(() => this._updateClaude()));
 		const timer = mainWindow.setInterval(() => this._update(), REFRESH_INTERVAL_MS);
 		this._register({ dispose: () => mainWindow.clearInterval(timer) });
 	}
@@ -62,6 +82,82 @@ class KinguStatusBarContribution extends Disposable {
 		this._updateRateLimit();
 		this._updateRemote();
 		this._updateVault();
+		this._updateClaude();
+		this._maybeRefreshQuota();
+	}
+
+	/** Asks the provider on its own slower schedule than the bar redraws on. */
+	private _maybeRefreshQuota(): void {
+		const now = Date.now();
+		if (now - this._lastQuotaRefresh < QUOTA_REFRESH_INTERVAL_MS) {
+			return;
+		}
+		this._lastQuotaRefresh = now;
+		void this._rateLimitService.refresh();
+	}
+
+	/**
+	 * Claude's quota, from the account this machine is already signed into.
+	 *
+	 * Both windows on one entry, as the ADE shows them: half of five hours and
+	 * half of a week are different news and a person reads them together.
+	 *
+	 * A failure shows nothing rather than an error chip. The bar is glanced at,
+	 * not read, and a machine that never ran the Claude CLI is not in a fault
+	 * state — it simply has no quota to report.
+	 */
+	private _updateClaude(): void {
+		const result = this._rateLimitService.claude;
+		if (!result?.ok) {
+			this._claude.clear();
+			if (result) {
+				this._logProblemOnce(result.problem);
+			}
+			return;
+		}
+		const windows = [result.quota.session, result.quota.weekly].filter(limit => limit !== undefined);
+		if (windows.length === 0) {
+			this._claude.clear();
+			return;
+		}
+		const text = windows.map(formatRateLimit).join(' · ');
+		const entry: IStatusbarEntry = {
+			name: localize('kingu.status.claude.name', "Claude quota"),
+			text: `$(flame) ${text}`,
+			ariaLabel: localize('kingu.status.claude.aria', "Claude quota: {0}", text),
+			tooltip: this._claudeTooltip(result.quota.session, result.quota.weekly),
+		};
+		if (this._claude.value) {
+			this._claude.value.update(entry);
+		} else {
+			this._claude.value = this._statusbarService.addEntry(entry, 'kingu.status.claude', StatusbarAlignment.LEFT, 110);
+		}
+	}
+
+	private _claudeTooltip(session: IKinguRateLimit | undefined, weekly: IKinguRateLimit | undefined): string {
+		const lines: string[] = [];
+		if (session) {
+			lines.push(session.resetsAt
+				? localize('kingu.status.claude.sessionReset', "Session window: {0}% used, resets {1}", Math.round(session.usedPercent), new Date(session.resetsAt).toLocaleString())
+				: localize('kingu.status.claude.session', "Session window: {0}% used", Math.round(session.usedPercent)));
+		}
+		if (weekly) {
+			lines.push(weekly.resetsAt
+				? localize('kingu.status.claude.weeklyReset', "Weekly window: {0}% used, resets {1}", Math.round(weekly.usedPercent), new Date(weekly.resetsAt).toLocaleString())
+				: localize('kingu.status.claude.weekly', "Weekly window: {0}% used", Math.round(weekly.usedPercent)));
+		}
+		return lines.join('\n');
+	}
+
+	private _loggedProblem: KinguQuotaProblem | undefined;
+
+	/** Logged once per distinct reason: this runs on a timer and would otherwise repeat forever. */
+	private _logProblemOnce(problem: KinguQuotaProblem): void {
+		if (this._loggedProblem === problem) {
+			return;
+		}
+		this._loggedProblem = problem;
+		this._logService.trace(`[Kingu] no Claude quota to show: ${problem}`);
 	}
 
 	/**
