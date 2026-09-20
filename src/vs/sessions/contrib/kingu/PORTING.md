@@ -450,7 +450,69 @@ different thing:
 The test's Notepad was closed and its text discarded, and the permission was
 returned to off.
 
-What is still not here: an agent cannot reach any of this. Both commands are
-driven by a person. Wiring it to `IAgentServerToolHost` — where the fork
-already has per-invocation confirmation — is the next step, and it is the step
-where "an agent can use my keyboard" actually becomes true.
+An agent reaches this through `IAgentServerToolHost`; see *One group, every
+agent*.
+
+## One group, every agent
+
+Computer use is contributed as a single server-tool group, and the fork's own
+builder says what that buys: *"Adding a group here makes its tools available to
+all providers (Copilot, Claude, Codex, …)"*. One integration, every agent.
+
+This is the sharpest contrast in the whole port. The ADE reaches the same end
+by writing a hook or a plugin into each agent's own configuration — 722 files
+across sixteen per-agent directories, one integration per agent, because a CLI
+running in a PTY cannot be asked anything. Here the protocol already exists, so
+the desktop becomes six tool definitions and the providers need no changes at
+all.
+
+Three gates, because this is the capability where being wrong means an agent
+used somebody's keyboard:
+
+1. **Advertisement.** With the permission off, the acting tools are not
+   enabled, so they are never advertised and the agent is not told they exist.
+   That is stronger than refusing a call: an agent cannot be talked into using
+   a tool it has never heard of.
+2. **Confirmation.** When they are advertised, each declares
+   `canRequireConfirmation`, which stops providers auto-approving it and routes
+   every call through the user. Its display string is the same sentence the
+   confirmation shows, so the dialog and the transcript cannot describe the
+   same action differently.
+3. **The runtime**, which refuses regardless of both.
+
+The permission travels by the fork's own declarative mirror — a `agentHost`
+key on the setting's registration — so no plumbing was written for it.
+Verified live in the agent host's config log, following a change without a
+restart:
+
+```
+"kinguComputerUseAllowInput":false
+"kinguComputerUseAllowInput":true
+```
+
+### Verified, and not
+
+The group's behaviour is covered by tests: what is advertised with the
+permission on and off, that every acting tool declares confirmation and no
+reading tool does, that acting is refused again at the moment of use, that a
+runtime refusal reaches the agent as a failure, and that the display quotes
+what the confirmation quotes.
+
+Not verified: an agent actually calling one. That needs a real session
+completing a turn, which spends the user's quota. What was checked against the
+running host is that it starts clean with the group contributed and that the
+permission reaches it.
+
+### "Multiple AI", in two different senses
+
+For *this* feature the fork is already the more multi-agent of the two: one
+group, and Copilot, Claude and Codex all get it.
+
+For *running* agents it is the other way round, and by a lot. This window
+registers three providers — `CopilotAgent`, `ClaudeAgent`, `CodexAgent` in
+`agentHostMain.ts` — all of them SDK-backed, speaking a real protocol. The ADE
+runs around eighteen, because a PTY plus an injected hook works for any CLI
+that exists. Adding a fourth here is not configuration; it is an
+`IAgentProvider` implementation, and for a CLI with no SDK it is the PTY-and-
+hook approach this port declined. That trade is deliberate and it is the one
+place where "like the ADE" would mean giving something up.

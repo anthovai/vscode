@@ -557,6 +557,16 @@ export const AgentHostMarkdownPlanRichLinksEnabledConfigKey = 'markdownPlanRichL
 /** Root config key forwarded from the renderer for the artifact tools and their instruction. */
 export const AgentHostArtifactToolsConfigKey = 'artifactTools';
 
+/**
+ * Root config key forwarded from the renderer: whether an agent may click and
+ * type on the user's desktop.
+ *
+ * Mirrored here rather than read as a window setting because the tools are
+ * advertised from this process, and a capability the agent is never told about
+ * is a stronger gate than one it is told about and refused.
+ */
+export const AgentHostComputerUseAllowInputConfigKey = 'kinguComputerUseAllowInput';
+
 /** Root config key selecting compact artifact-tool prompt wording independently of tool deferral. */
 export const AgentHostArtifactToolsCompactPromptsConfigKey = 'artifactToolsCompactPrompts';
 
@@ -885,6 +895,12 @@ export const platformRootSchema = createSchema({
 		type: 'boolean',
 		title: localize('agentHost.config.markdownPlanRichLinks.title', "Markdown Plan Rich Links"),
 		description: localize('agentHost.config.markdownPlanRichLinks.description', "Whether agents receive guidance for using rich links and running task markers in Markdown plan documents."),
+		default: false,
+	}),
+	[AgentHostComputerUseAllowInputConfigKey]: schemaProperty<boolean>({
+		type: 'boolean',
+		title: localize('agentHost.config.kinguComputerUseAllowInput.title', "Allow Desktop Input"),
+		description: localize('agentHost.config.kinguComputerUseAllowInput.description', "Whether agents may click and type into other applications on this computer."),
 		default: false,
 	}),
 	[AgentHostArtifactToolsConfigKey]: schemaProperty<boolean>({

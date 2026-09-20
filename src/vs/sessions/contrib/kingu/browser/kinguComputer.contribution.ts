@@ -14,6 +14,7 @@ import { describeComputerAction, KINGU_ALLOW_INPUT_SETTING, KinguComputerResult 
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { AgentHostComputerUseAllowInputConfigKey } from '../../../../platform/agentHost/common/agentHostSchema.js';
 
 /**
  * What an application's window list looks like once the runtime has answered.
@@ -137,7 +138,9 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			type: 'boolean',
 			default: false,
 			markdownDescription: localize('kingu.computerUse.allowInput.description', "Allow Kingu to click, type and paste into other applications on this computer. Reading which windows are open does not need this. Off by default: anything that can use your keyboard can accept a dialog or send a message, and every action still asks first."),
-			tags: ['usesOnlineServices'],
+			// Mirrored into the agent host, which is where the tools are advertised.
+			// Off, the acting tools are never offered to an agent at all.
+			agentHost: { key: AgentHostComputerUseAllowInputConfigKey },
 		},
 	},
 });

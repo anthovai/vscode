@@ -36,6 +36,9 @@ import { AgentMergeController } from './agentMergeController.js';
 import { AgentMergeTools } from './agentMergeTools.js';
 import { AgentServerToolHost, IAgentHostServerToolService } from './shared/agentServerToolHost.js';
 import { buildServerToolGroups } from './shared/serverToolGroups.js';
+import type { IKinguComputerToolAccessor } from './shared/kingu/computerServerTools.js';
+import { KinguComputerSidecar } from '../../kinguComputer/node/kinguComputerSidecar.js';
+import { AgentHostComputerUseAllowInputConfigKey, platformRootSchema } from '../common/agentHostSchema.js';
 import type { ISessionServerToolAccessor } from './shared/sessionServerTools.js';
 import { type IAgentServiceFoundation } from './agentServiceFoundation.js';
 import { IAgentHostProviderService } from './agentHostProviderService.js';
@@ -160,9 +163,19 @@ export function createAgentServiceComposition(
 				workspaceConversionService.value.requestSessionWorkspaceUpdate(chat, turnId, workspaceFolder, isolation, initiatingClientId);
 			},
 		};
+		// The desktop runtime, owned here so it is started by the first agent that
+		// asks and retired when none is asking. `allowsInput` is read per call
+		// rather than captured, so withdrawing the permission stops the next
+		// action instead of the next restart.
+		const computerSidecar = owned.add(new KinguComputerSidecar(logService));
+		const computerAccessor: IKinguComputerToolAccessor = {
+			isSupported: () => KinguComputerSidecar.supported,
+			allowsInput: () => configurationService.getRootValue(platformRootSchema, AgentHostComputerUseAllowInputConfigKey) === true,
+			request: request => computerSidecar.request(request, configurationService.getRootValue(platformRootSchema, AgentHostComputerUseAllowInputConfigKey) === true),
+		};
 		const serverToolHost = new AgentServerToolHost(
 			stateManager,
-			buildServerToolGroups(sessionServerToolAccessor, agentMergeTools, callbackAdapter.artifactServerToolAccessor),
+			buildServerToolGroups(sessionServerToolAccessor, agentMergeTools, callbackAdapter.artifactServerToolAccessor, computerAccessor),
 		);
 		services.set(IAgentHostServerToolService, serverToolHost);
 		workspaceConversionService.value = owned.add(instantiationService.createInstance(SessionWorkspaceConversionService));
