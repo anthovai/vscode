@@ -26,6 +26,7 @@ it is a cost we do not want), **open** (a real gap, not yet done).
 | `claude-usage`, `codex-usage` pricing | `common/kinguPricing.ts` | Both price lists, each with its own token semantics — see *Pricing* below. |
 | `usage/` worktree attribution | `common/kinguVaultAttribution.ts` | Resolved from git itself rather than from a worktree registry the ADE keeps. |
 | `preflight/agent-detection` | `platform/kinguHost/common/kinguAgentCommands.ts` | Which agent CLIs are installed, using the fork's own shell-environment resolver for PATH. |
+| `stats` | `common/kinguStats.ts` | Counters rather than an event log, fed from each session's own status observable. |
 | `ssh`, `wsl`, `runtime` | — | Satisfied by the fork's own `IRemoteAgentHostService`; see below. |
 
 ## Already here, and better
@@ -73,10 +74,10 @@ onto it. Porting the ADE's version would mean running two of each.
 
 Real gaps, in the order they seem worth closing.
 
-1. **`stats`.** The ADE keeps an event log — `agent_start`, `agent_stop`,
-   `pr_created` — and aggregates it into "how many agents have I spawned, how
-   long do they run". Nothing here corresponds. Whether it is worth having is a
-   product question rather than a porting one.
+1. **PR counting.** The ADE's stats include `pr_created`, deduplicated by URL
+   across restarts. Not ported: it needs a hook on pull-request creation that
+   this window does not have yet, and inventing a weaker signal would produce a
+   number that is quietly wrong rather than absent.
 2. **An actual Windows remote host.** The Windows *path* handling is fixed and
    tested — see below — but no test has connected to a machine running Windows,
    because standing one up here needs an elevated install of OpenSSH Server.
@@ -245,3 +246,42 @@ Both "not found" rows are correct, and both are the interesting case: Codex was
 used fifty times and its CLI is gone, while Cursor's ninety-seven sessions came
 from the editor, which is installed — `cursor-agent`, its CLI, is not. Naming
 the command is what lets a reader tell those apart.
+
+## Agent statistics
+
+The one question the vault cannot answer. It reads transcripts other agents
+left behind, so it knows what was said and never how long anything took or how
+often a run happened — that is only observable while it happens.
+
+Counters, not an event log. The ADE keeps every event and derives its
+aggregates from them, bounded at ten thousand entries, with a schema version, a
+loader, a snapshot writer and a field that exists solely because trimming the
+log would otherwise move the "tracking since" date. Two numbers and a date
+answer what the feature is for, cannot be trimmed into being wrong, and go
+through `IStorageService` — so none of that machinery is written here.
+
+The boundaries come from each session's own `status` observable, which is the
+same value the list and the icons read, so a number here cannot disagree with
+what the user is looking at. Only `InProgress` is counted: `NeedsInput` is the
+session waiting on a person, and counting it would turn "three hours of agent
+work" into "three hours with a tab open".
+
+What did need writing is the mirror. A status observable re-fires for things
+that are not transitions — a re-render, a reconnect replaying the last state, a
+title change — so `KinguRunTracker` holds the last state per session and treats
+a repeat as nothing. Without it every number inflates. The ADE has the same
+component for the same reason, against its agent-hook stream.
+
+A session that goes away closes its run rather than losing it, and a window
+that is closing counts what is still open at its length so far.
+
+### Verified, and not
+
+The tracker's contract is covered: repeats, restarts, independent sessions, a
+session first seen already finished, a clock that went backwards, eviction, and
+the persistence round trip including a stored shape that does not parse.
+
+The live wiring is not. Seeing a run counted end to end means an agent
+completing a turn, which spends the user's quota, so what was checked against
+the running window is the empty state — "nothing counted yet" — and that the
+service loads and watches without error.

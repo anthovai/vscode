@@ -25,6 +25,8 @@ import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHo
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
 import { KinguVaultService } from './kinguVaultService.js';
+import { IKinguStatsService, KinguStatsService } from './kinguStatsService.js';
+import { formatDuration } from '../common/kinguStats.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -37,6 +39,10 @@ import { continueVaultSession } from './kinguVaultContinue.js';
 import { KINGU_VAULT_VIEW_ID, KinguVaultView } from './kinguVaultView.js';
 
 registerSingleton(IKinguVaultService, KinguVaultService, InstantiationType.Delayed);
+// Eager: it counts what happens whether or not anybody has asked for the
+// number, and a service created when the report is first opened would have
+// watched nothing.
+registerSingleton(IKinguStatsService, KinguStatsService, InstantiationType.Eager);
 
 /** Publishes the vault as a full-surface view of the Agents window. */
 class KinguVaultViewContribution extends Disposable {
@@ -355,6 +361,74 @@ class RefreshKinguVaultAction extends Action2 {
 }
 
 /**
+ * What the agents on this machine have actually done.
+ *
+ * The vault reads transcripts other agents left behind, so it knows what was
+ * said and never how long anything took. That is only observable while it
+ * happens, and this is where it was observed.
+ */
+class KinguStatsAction extends Action2 {
+
+	static readonly ID = 'kingu.stats';
+
+	constructor() {
+		super({
+			id: KinguStatsAction.ID,
+			title: localize2('kingu.stats', "Kingu: Agent Statistics"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const statsService = accessor.get(IKinguStatsService);
+		const quickInputService = accessor.get(IQuickInputService);
+		const state = statsService.state;
+
+		if (state.totals.runs === 0) {
+			await quickInputService.pick([], {
+				title: localize('kingu.stats.title', "Agent statistics"),
+				placeHolder: localize('kingu.stats.empty', "Nothing counted yet. A run is one stretch of an agent working, and counting starts the first time one does."),
+			});
+			return;
+		}
+
+		const rows: (IQuickPickItem | IQuickPickSeparator)[] = [{
+			label: localize('kingu.stats.total', "All agents"),
+			description: localize('kingu.stats.totalDescription', "{0} · {1} working", runsLabel(state.totals.runs), formatDuration(state.totals.workingMs)),
+			detail: localize('kingu.stats.average', "{0} a run on average", formatDuration(state.totals.workingMs / state.totals.runs)),
+		}];
+
+		const byType = Object.entries(state.byType).sort((left, right) => right[1].workingMs - left[1].workingMs);
+		if (byType.length > 0) {
+			rows.push({ label: localize('kingu.stats.byType', "By session type"), type: 'separator' });
+			for (const [type, totals] of byType) {
+				rows.push({
+					label: type,
+					description: localize('kingu.stats.typeDescription', "{0} · {1} working", runsLabel(totals.runs), formatDuration(totals.workingMs)),
+				});
+			}
+		}
+
+		await quickInputService.pick(rows, {
+			title: state.firstRunAt
+				? localize('kingu.stats.titleSince', "Agent statistics — since {0}", new Date(state.firstRunAt).toLocaleDateString())
+				: localize('kingu.stats.title', "Agent statistics"),
+			// Said plainly because the number invites a comparison it cannot support:
+			// it is this profile on this machine, and only while this window was open
+			// to watch.
+			placeHolder: localize('kingu.stats.placeholder', "Time an agent spent working, counted in this window. Waiting for you is not counted. {0} running now.", statsService.working),
+		});
+	}
+}
+
+function runsLabel(runs: number): string {
+	return runs === 1
+		? localize('kingu.stats.oneRun', "1 run")
+		: localize('kingu.stats.manyRuns', "{0} runs", runs);
+}
+
+/**
  * What agents this machine actually has.
  *
  * The vault answers "what have I run"; this answers "what could I run", and
@@ -637,3 +711,4 @@ registerAction2(BrowseKinguVaultAction);
 registerAction2(SearchKinguVaultAction);
 registerAction2(RefreshKinguVaultAction);
 registerAction2(KinguAgentsAction);
+registerAction2(KinguStatsAction);
