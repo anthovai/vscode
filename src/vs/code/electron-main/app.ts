@@ -23,6 +23,7 @@ import { URI } from '../../base/common/uri.js';
 import { generateUuid } from '../../base/common/uuid.js';
 import { registerContextMenuListener } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
 import { KinguHostChannel, KINGU_HOST_CHANNEL_NAME } from '../../platform/kinguHost/electron-main/kinguHostChannel.js';
+import { KINGU_ALLOW_INPUT_SETTING } from '../../platform/kinguComputer/common/kinguComputerProtocol.js';
 import { getDelayedChannel, ProxyChannel, StaticRouter } from '../../base/parts/ipc/common/ipc.js';
 import { Server as ElectronIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { Client as MessagePortClient } from '../../base/parts/ipc/electron-main/ipc.mp.js';
@@ -1359,7 +1360,8 @@ export class CodeApplication extends Disposable {
 		// already used for the same reason elsewhere.
 		mainProcessElectronServer.registerChannel(KINGU_HOST_CHANNEL_NAME, new KinguHostChannel(
 			this.logService,
-			() => this.resolveShellEnvironment(this.environmentMainService.args, process.env, false)));
+			() => this.resolveShellEnvironment(this.environmentMainService.args, process.env, false),
+			() => this.configurationService.getValue(KINGU_ALLOW_INPUT_SETTING) === true));
 
 		// Policies (main & shared process)
 		const policyChannel = disposables.add(new PolicyChannel(accessor.get(IPolicyService)));

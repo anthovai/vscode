@@ -12,7 +12,9 @@ import {
 	decodeComputerReply,
 	encodeComputerRequest,
 	IKinguComputerRequest,
-	isReadOnlyComputerTool,
+	isComputerToolAllowed,
+	isInputComputerTool,
+	KINGU_ALLOW_INPUT_SETTING,
 	KinguComputerLineReader,
 	KinguComputerResult,
 } from '../common/kinguComputerProtocol.js';
@@ -31,17 +33,17 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const IDLE_SHUTDOWN_MS = 120_000;
 
 /**
- * Reads the desktop, through the ADE's own Windows runtime.
+ * Reads and drives the desktop, through the ADE's own Windows runtime.
  *
  * The runtime is that project's `runtime.ps1`, brought across whole rather than
  * reimplemented: it is thirteen hundred lines of UI Automation with the corners
  * already found, and a hand-trimmed copy would be a second thing to maintain
  * and a new place for bugs.
  *
- * It can also click, type and paste. This host cannot reach any of that —
- * {@link isReadOnlyComputerTool} is checked before anything is written to the
- * process — because reading the desktop and acting on it are different
- * decisions, and only the first has been made.
+ * Reading is always allowed; acting is not. The two lists are separate and the
+ * acting one is refused unless the caller says it was permitted, which is what
+ * makes "an agent can see my screen" and "an agent can use my keyboard" two
+ * decisions rather than one.
  *
  * Windows only so far. The ADE has a Swift package for macOS and a Python
  * script for Linux; neither is here, and a host that claimed to support them
@@ -65,14 +67,25 @@ export class KinguComputerSidecar extends Disposable {
 		return platform() === 'win32';
 	}
 
-	async request(request: IKinguComputerRequest): Promise<KinguComputerResult> {
+	/**
+	 * @param allowInput whether the caller has permission for the acting tools.
+	 * Decided by the caller and passed per request rather than held here, so the
+	 * permission is read at the moment it is used and a setting turned off takes
+	 * effect on the next action rather than the next restart.
+	 */
+	async request(request: IKinguComputerRequest, allowInput: boolean): Promise<KinguComputerResult> {
 		if (!KinguComputerSidecar.supported) {
-			return { ok: false, error: 'Reading the desktop is only supported on Windows so far.' };
+			return { ok: false, error: 'Driving the desktop is only supported on Windows so far.' };
 		}
-		if (!isReadOnlyComputerTool(request.tool)) {
-			// Not reachable through the public shape, and checked anyway: this is the
-			// boundary between reading the desktop and acting on it.
-			return { ok: false, error: `Refusing ${request.tool}: this host only reads the desktop.` };
+		if (!isComputerToolAllowed(request.tool, allowInput)) {
+			return {
+				ok: false,
+				error: isInputComputerTool(request.tool)
+					// Named precisely, because the fix is a setting the user owns and a
+					// vague refusal would send them looking for a bug instead.
+					? `Refusing ${request.tool}: acting on the desktop is off. Turn on "${KINGU_ALLOW_INPUT_SETTING}" to allow it.`
+					: `Refusing ${request.tool}: it is not a desktop tool this host knows.`,
+			};
 		}
 		const child = this._ensureStarted();
 		if (!child?.stdin) {

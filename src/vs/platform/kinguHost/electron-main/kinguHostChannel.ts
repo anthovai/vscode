@@ -85,6 +85,7 @@ export class KinguHostChannel implements IServerChannel {
 	constructor(
 		private readonly _logService: ILogService,
 		private readonly _resolveShellEnv?: () => Promise<IProcessEnvironment>,
+		private readonly _allowDesktopInput?: () => boolean,
 	) { }
 
 	listen<T>(): Event<T> {
@@ -238,16 +239,19 @@ export class KinguHostChannel implements IServerChannel {
 	/**
 	 * What is on the desktop right now.
 	 *
-	 * Reads only. The runtime behind this can also act, and the host in front of
-	 * it refuses anything that is not one of the four reading tools — see
-	 * `KinguComputerSidecar`.
+	 * Reading is always allowed. Acting is refused unless the user has turned it
+	 * on, which is checked here — in the process that owns the runtime — rather
+	 * than in the window that asked, because a window is the thing an agent can
+	 * reach and a permission it could talk its way past is not one.
 	 */
 	private async _readDesktop(request: IKinguComputerRequest | undefined): Promise<KinguComputerResult> {
 		if (!request?.tool) {
 			return { ok: false, error: 'No desktop request was given.' };
 		}
 		this._computer ??= new KinguComputerSidecar(this._logService);
-		return this._computer.request(request);
+		// Read now rather than cached: a permission the user has just withdrawn
+		// should stop the next action, not the next restart.
+		return this._computer.request(request, this._allowDesktopInput?.() ?? false);
 	}
 
 	/** Every listening TCP socket the platform will name a process for. */

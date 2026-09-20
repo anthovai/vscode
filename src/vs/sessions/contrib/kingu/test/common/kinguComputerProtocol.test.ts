@@ -7,8 +7,11 @@ import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import {
 	decodeComputerReply,
+	describeComputerAction,
 	encodeComputerRequest,
+	isComputerToolAllowed,
 	isReadOnlyComputerTool,
+	KINGU_COMPUTER_INPUT_TOOLS,
 	KINGU_COMPUTER_READ_TOOLS,
 	KinguComputerLineReader,
 } from '../../../../../platform/kinguComputer/common/kinguComputerProtocol.js';
@@ -23,12 +26,62 @@ suite('Kingu desktop protocol', () => {
 			assert.deepStrictEqual([...KINGU_COMPUTER_READ_TOOLS], ['handshake', 'list_apps', 'list_windows', 'get_app_state']);
 		});
 
-		test('nothing that acts', () => {
-			// The runtime can do all of these. This host is the reason it cannot be
-			// asked to, so the refusal is the contract and not an oversight.
-			for (const tool of ['click', 'type_text', 'press_key', 'hotkey', 'paste_text', 'drag', 'scroll', 'set_value']) {
+		test('nothing that acts is a read', () => {
+			for (const tool of KINGU_COMPUTER_INPUT_TOOLS) {
 				assert.ok(!isReadOnlyComputerTool(tool), tool);
 			}
+		});
+
+		test('the two lists do not overlap, which is the whole safety property', () => {
+			const reads = new Set<string>(KINGU_COMPUTER_READ_TOOLS);
+			for (const tool of KINGU_COMPUTER_INPUT_TOOLS) {
+				assert.ok(!reads.has(tool), tool);
+			}
+		});
+	});
+
+	suite('the gate', () => {
+
+		test('reading needs no permission', () => {
+			for (const tool of KINGU_COMPUTER_READ_TOOLS) {
+				assert.ok(isComputerToolAllowed(tool, false), tool);
+			}
+		});
+
+		test('acting is refused until it is permitted', () => {
+			for (const tool of KINGU_COMPUTER_INPUT_TOOLS) {
+				assert.ok(!isComputerToolAllowed(tool, false), tool);
+				assert.ok(isComputerToolAllowed(tool, true), tool);
+			}
+		});
+
+		test('a tool in neither list is refused even when acting is permitted', () => {
+			// The runtime accepts names this host has never heard of; forwarding one
+			// would mean the gate only covers what it happens to know about.
+			assert.ok(!isComputerToolAllowed('run_script', true));
+			assert.ok(!isComputerToolAllowed('', true));
+		});
+	});
+
+	suite('what a confirmation says', () => {
+
+		test('quotes the text in full, because that is the thing worth seeing', () => {
+			const text = describeComputerAction({ tool: 'type_text', app: 'Notepad', text: 'rm -rf /' });
+			assert.ok(text.includes('"rm -rf /"'), text);
+			assert.ok(text.includes('Notepad'), text);
+		});
+
+		test('says that a paste goes through the clipboard, which a type does not', () => {
+			assert.ok(describeComputerAction({ tool: 'paste_text', app: 'Notepad', text: 'x' }).includes('clipboard'));
+			assert.ok(!describeComputerAction({ tool: 'type_text', app: 'Notepad', text: 'x' }).includes('clipboard'));
+		});
+
+		test('names the key a keystroke will send', () => {
+			assert.ok(describeComputerAction({ tool: 'press_key', app: 'Notepad', key: 'enter' }).includes('enter'));
+		});
+
+		test('a read describes itself as one', () => {
+			assert.ok(describeComputerAction({ tool: 'list_apps' }).startsWith('Read'));
 		});
 	});
 
@@ -50,6 +103,12 @@ suite('Kingu desktop protocol', () => {
 		test('an absent field is absent rather than null', () => {
 			const line = JSON.parse(encodeComputerRequest(1, { tool: 'list_apps' })) as Record<string, unknown>;
 			assert.deepStrictEqual(Object.keys(line).sort(), ['noScreenshot', 'requestId', 'tool']);
+		});
+
+		test('an action carries what it needs, under the runtime spellings', () => {
+			const line = JSON.parse(encodeComputerRequest(1, { tool: 'click', app: 'Notepad', mouseButton: 'right', clickCount: 2 }));
+			assert.strictEqual(line.mouse_button, 'right');
+			assert.strictEqual(line.click_count, 2);
 		});
 	});
 
