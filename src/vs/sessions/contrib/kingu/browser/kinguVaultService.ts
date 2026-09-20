@@ -38,7 +38,7 @@ import {
 } from '../common/kinguVaultSubagents.js';
 import { getKinguVaultEnvironmentSource, IKinguVaultEnvironment } from '../common/kinguVaultEnvironment.js';
 import { IKinguVaultHost, remoteVaultHosts } from '../common/kinguVaultRemote.js';
-import { IKinguVaultFileStamp, KinguVaultDescriptionCache } from '../common/kinguVaultCache.js';
+import { createScanTally, IKinguVaultFileStamp, IKinguVaultScanTally, KinguVaultDescriptionCache } from '../common/kinguVaultCache.js';
 import { groupSearchByHost, KinguSearchLedger, searchBudgetFor } from '../common/kinguVaultSearchBudget.js';
 import { IRemoteAgentHostService } from '../../../../platform/agentHost/common/remoteAgentHostService.js';
 
@@ -211,7 +211,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 	}
 
 	private async _scan(token: CancellationToken): Promise<readonly IKinguVaultSession[]> {
-		this._descriptions.resetStats();
+		const tally = createScanTally();
 		const [home, environment] = await Promise.all([
 			this._pathService.userHome(),
 			this._environment(),
@@ -231,7 +231,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 				break;
 			}
 			try {
-				for (const session of await this._scanSource(hosts, environment, source, token)) {
+				for (const session of await this._scanSource(hosts, environment, source, tally, token)) {
 					// A root reached both by default and by an override is one directory,
 					// and its sessions must not be listed twice.
 					if (!seen.has(session.id)) {
@@ -246,8 +246,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		// Logged because the reuse rate is the whole reason a rescan over a remote
 		// host is affordable, and a cache that silently stopped working would look
 		// like nothing more than a slow window.
-		const { reused, read } = this._descriptions.stats;
-		this._logService.trace(`[Kingu] vault scan: ${sessions.length} sessions, ${reused} reused, ${read} read, ${hosts.length} hosts`);
+		this._logService.trace(`[Kingu] vault scan: ${sessions.length} sessions, ${tally.reused} reused, ${tally.read} read, ${hosts.length} hosts`);
 		return sessions.sort((a, b) => b.modified - a.modified);
 	}
 
@@ -266,6 +265,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		hosts: readonly IKinguVaultHost[],
 		environment: IKinguVaultEnvironment | undefined,
 		source: IKinguVaultSourceDefinition,
+		tally: IKinguVaultScanTally,
 		token: CancellationToken,
 	): Promise<IKinguVaultSession[]> {
 		const roots: { resource: URI; hostLabel: string | undefined }[] = [];
@@ -288,7 +288,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 				if (token.isCancellationRequested) {
 					return;
 				}
-				const session = await this._describe(file.resource, source, file.relativeSegments, root.hostLabel);
+				const session = await this._describe(file.resource, source, file.relativeSegments, root.hostLabel, tally);
 				if (session) {
 					sessions.push(session);
 				}
@@ -325,7 +325,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		return found;
 	}
 
-	private async _describe(resource: URI, source: IKinguVaultSourceDefinition, relativeSegments: readonly string[], hostLabel?: string): Promise<IKinguVaultSession | undefined> {
+	private async _describe(resource: URI, source: IKinguVaultSourceDefinition, relativeSegments: readonly string[], hostLabel?: string, tally?: IKinguVaultScanTally): Promise<IKinguVaultSession | undefined> {
 		let modified: number;
 		let stamp: IKinguVaultFileStamp;
 		try {
@@ -338,7 +338,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		// The stat is the whole cost of a session that has not changed since the
 		// last scan, which is nearly all of them on nearly every scan.
 		const key = resource.toString();
-		const cached = this._descriptions.get(key, stamp);
+		const cached = this._descriptions.get(key, stamp, tally);
 		if (cached) {
 			return cached;
 		}
@@ -382,7 +382,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			modified,
 			hostLabel,
 		};
-		this._descriptions.set(key, stamp, session);
+		this._descriptions.set(key, stamp, session, tally);
 		return session;
 	}
 

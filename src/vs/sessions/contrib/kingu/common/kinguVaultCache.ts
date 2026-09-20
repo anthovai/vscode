@@ -23,12 +23,23 @@ export interface IKinguVaultFileStamp {
 	readonly size: number | undefined;
 }
 
-/** What the cache saved and what it cost, for a scan that wants to say so. */
-export interface IKinguVaultCacheStats {
+/**
+ * What one scan saved and what it cost.
+ *
+ * Owned by the scan rather than by the cache. Several scans overlap routinely —
+ * the window invalidates as WSL homes resolve and again as a host connects —
+ * and a counter on the cache would be the sum of whichever of them happened to
+ * be running, which is a number that means nothing.
+ */
+export interface IKinguVaultScanTally {
 	/** Descriptions answered without opening the transcript. */
-	readonly reused: number;
+	reused: number;
 	/** Transcripts actually read. */
-	readonly read: number;
+	read: number;
+}
+
+export function createScanTally(): IKinguVaultScanTally {
+	return { reused: 0, read: 0 };
 }
 
 /**
@@ -57,17 +68,11 @@ export interface IKinguVaultCacheStats {
 export class KinguVaultDescriptionCache {
 
 	private readonly _entries = new Map<string, { stamp: IKinguVaultFileStamp; session: IKinguVaultSession }>();
-	private _reused = 0;
-	private _read = 0;
 
 	constructor(private readonly _maxEntries = MAX_ENTRIES) { }
 
-	get stats(): IKinguVaultCacheStats {
-		return { reused: this._reused, read: this._read };
-	}
-
 	/** The description of `key`, if the file is provably the one it was read from. */
-	get(key: string, stamp: IKinguVaultFileStamp): IKinguVaultSession | undefined {
+	get(key: string, stamp: IKinguVaultFileStamp, tally?: IKinguVaultScanTally): IKinguVaultSession | undefined {
 		const entry = this._entries.get(key);
 		if (!entry || !isUnchanged(entry.stamp, stamp)) {
 			return undefined;
@@ -76,12 +81,16 @@ export class KinguVaultDescriptionCache {
 		// takes the transcripts nobody has looked at.
 		this._entries.delete(key);
 		this._entries.set(key, entry);
-		this._reused++;
+		if (tally) {
+			tally.reused++;
+		}
 		return entry.session;
 	}
 
-	set(key: string, stamp: IKinguVaultFileStamp, session: IKinguVaultSession): void {
-		this._read++;
+	set(key: string, stamp: IKinguVaultFileStamp, session: IKinguVaultSession, tally?: IKinguVaultScanTally): void {
+		if (tally) {
+			tally.read++;
+		}
 		this._entries.delete(key);
 		this._entries.set(key, { stamp, session });
 		if (this._entries.size > this._maxEntries) {
@@ -99,14 +108,6 @@ export class KinguVaultDescriptionCache {
 
 	clear(): void {
 		this._entries.clear();
-		this._reused = 0;
-		this._read = 0;
-	}
-
-	/** Resets the counters without discarding the work, between scans. */
-	resetStats(): void {
-		this._reused = 0;
-		this._read = 0;
 	}
 
 	get size(): number {

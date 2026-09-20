@@ -7,7 +7,7 @@ import assert from 'assert';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IKinguVaultSession, KinguVaultSource } from '../../common/kinguVault.js';
-import { KinguVaultDescriptionCache } from '../../common/kinguVaultCache.js';
+import { createScanTally, KinguVaultDescriptionCache } from '../../common/kinguVaultCache.js';
 
 function session(title: string): IKinguVaultSession {
 	return {
@@ -65,16 +65,32 @@ suite('Kingu vault description cache', () => {
 		assert.strictEqual(cache.get('file:///home/dev/s.jsonl', stamp), undefined);
 	});
 
-	test('counts what it saved, which is what a scan reports', () => {
+	test('counts into the tally the caller brought, which is what a scan reports', () => {
+		const cache = new KinguVaultDescriptionCache();
+		const tally = createScanTally();
+		cache.set('a', { mtime: 1, size: 1 }, session('a'), tally);
+		cache.set('b', { mtime: 1, size: 1 }, session('b'), tally);
+		cache.get('a', { mtime: 1, size: 1 }, tally);
+		cache.get('b', { mtime: 2, size: 1 }, tally);
+		assert.deepStrictEqual(tally, { reused: 1, read: 2 });
+	});
+
+	test('two overlapping scans each count only their own work', () => {
+		// Which is why the tally is the caller's: the window invalidates several
+		// times in a row while WSL homes resolve and a host connects, and a counter
+		// on the cache would report the sum of whichever scans were in flight.
+		const cache = new KinguVaultDescriptionCache();
+		const first = createScanTally();
+		const second = createScanTally();
+		cache.set('a', { mtime: 1, size: 1 }, session('a'), first);
+		cache.get('a', { mtime: 1, size: 1 }, second);
+		assert.deepStrictEqual(first, { reused: 0, read: 1 });
+		assert.deepStrictEqual(second, { reused: 1, read: 0 });
+	});
+
+	test('a lookup without a tally still works, for a caller that is not a scan', () => {
 		const cache = new KinguVaultDescriptionCache();
 		cache.set('a', { mtime: 1, size: 1 }, session('a'));
-		cache.set('b', { mtime: 1, size: 1 }, session('b'));
-		cache.get('a', { mtime: 1, size: 1 });
-		cache.get('b', { mtime: 2, size: 1 });
-		assert.deepStrictEqual(cache.stats, { reused: 1, read: 2 });
-		cache.resetStats();
-		assert.deepStrictEqual(cache.stats, { reused: 0, read: 0 });
-		// Resetting the counters must not throw away the work they counted.
 		assert.strictEqual(cache.get('a', { mtime: 1, size: 1 })?.title, 'a');
 	});
 

@@ -339,7 +339,7 @@ class KinguStatusBarContribution extends Disposable {
 			if (this._vault.value) {
 				this._vault.value.update(entry);
 			} else {
-				this._vault.value = this._statusbarService.addEntry(entry, 'kingu.status.vault', StatusbarAlignment.RIGHT, 90);
+				this._vault.value = this._statusbarService.addEntry(entry, 'kingu.status.vault', StatusbarAlignment.RIGHT, 97);
 			}
 		}, () => { /* a vault that cannot be read gets no entry */ });
 	}
