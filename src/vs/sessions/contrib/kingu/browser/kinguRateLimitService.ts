@@ -8,15 +8,16 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguRateLimits/common/kinguQuotaProviders.js';
 import { IKinguRateLimitService, KinguQuotaResult } from '../../../../platform/kinguRateLimits/common/kinguRateLimits.js';
 import { KINGU_RATE_LIMIT_CHANNEL_NAME } from '../../../../platform/kinguRateLimits/common/kinguRateLimitTypes.js';
 
 /**
  * The window's view of the quota on accounts this machine is signed into.
  *
- * A thin client on purpose. The credential read and the call to the provider
+ * A thin client on purpose. Reading each provider's credential and calling it
  * both happen in the main process — a renderer's `vscode-file://` origin cannot
- * reach the provider, and keeping it there means the token never crosses into a
+ * reach these endpoints, and keeping it there means no token crosses into a
  * window. What comes back is percentages and reset times.
  */
 export class KinguRateLimitService extends Disposable implements IKinguRateLimitService {
@@ -27,11 +28,11 @@ export class KinguRateLimitService extends Disposable implements IKinguRateLimit
 	readonly onDidChange = this._onDidChange.event;
 
 	private readonly _channel: IChannel;
-	private _claude: KinguQuotaResult | undefined;
+	private readonly _quotas = new Map<KinguQuotaProvider, KinguQuotaResult>();
 	private _inFlight: Promise<void> | undefined;
 
-	get claude(): KinguQuotaResult | undefined {
-		return this._claude;
+	get quotas(): ReadonlyMap<KinguQuotaProvider, KinguQuotaResult> {
+		return this._quotas;
 	}
 
 	constructor(
@@ -43,22 +44,32 @@ export class KinguRateLimitService extends Disposable implements IKinguRateLimit
 	}
 
 	refresh(): Promise<void> {
-		// Shared rather than queued: two callers wanting the current number want the
-		// same request, not two of them against the provider.
+		// Shared rather than queued: two callers wanting the current numbers want
+		// the same round of requests, not two of them against each provider.
 		this._inFlight ??= this._refresh().finally(() => { this._inFlight = undefined; });
 		return this._inFlight;
 	}
 
 	private async _refresh(): Promise<void> {
-		let next: KinguQuotaResult;
-		try {
-			next = await this._channel.call<KinguQuotaResult>('getClaudeQuota');
-		} catch (error) {
-			this._logService.warn('[Kingu] the quota channel did not answer');
-			next = { ok: false, problem: 'unavailable' };
+		// In parallel because they are separate providers: one being slow or down
+		// must not delay the others' gauges.
+		const readings = await Promise.all(KINGU_QUOTA_PROVIDERS.map(async provider => {
+			try {
+				return [provider, await this._channel.call<KinguQuotaResult>('getQuota', provider)] as const;
+			} catch {
+				this._logService.warn(`[Kingu] the quota channel did not answer for ${provider}`);
+				const unavailable: KinguQuotaResult = { ok: false, problem: 'unavailable' };
+				return [provider, unavailable] as const;
+			}
+		}));
+
+		let changed = false;
+		for (const [provider, result] of readings) {
+			if (JSON.stringify(this._quotas.get(provider)) !== JSON.stringify(result)) {
+				changed = true;
+			}
+			this._quotas.set(provider, result);
 		}
-		const changed = JSON.stringify(next) !== JSON.stringify(this._claude);
-		this._claude = next;
 		if (changed) {
 			this._onDidChange.fire();
 		}

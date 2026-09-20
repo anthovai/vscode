@@ -14,10 +14,11 @@ import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus } from '../../
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguRateLimits/common/kinguQuotaProviders.js';
 import { IKinguRateLimitService, KinguQuotaProblem } from '../../../../platform/kinguRateLimits/common/kinguRateLimits.js';
 import { KinguRateLimitService } from './kinguRateLimitService.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
-import { formatRateLimit, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
+import { formatRateLimit, formatWindow, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 
 registerSingleton(IKinguRateLimitService, KinguRateLimitService, InstantiationType.Delayed);
 
@@ -53,7 +54,7 @@ class KinguStatusBarContribution extends Disposable {
 	private readonly _rateLimit = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _remote = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _vault = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
-	private readonly _claude = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly _providers = new Map<KinguQuotaProvider, IStatusbarEntryAccessor>();
 	private _lastQuotaRefresh = 0;
 
 	constructor(
@@ -73,7 +74,8 @@ class KinguStatusBarContribution extends Disposable {
 		this._register(this._agentHostService.rootState.onDidChange(() => this._updateRateLimit()));
 		this._register(this._remoteAgentHostService.onDidChangeConnections(() => this._updateRemote()));
 		this._register(this._vaultService.onDidChangeSessions(() => this._updateVault()));
-		this._register(this._rateLimitService.onDidChange(() => this._updateClaude()));
+		this._register(this._rateLimitService.onDidChange(() => this._updateProviders()));
+		this._register({ dispose: () => { for (const entry of this._providers.values()) { entry.dispose(); } this._providers.clear(); } });
 		const timer = mainWindow.setInterval(() => this._update(), REFRESH_INTERVAL_MS);
 		this._register({ dispose: () => mainWindow.clearInterval(timer) });
 	}
@@ -82,7 +84,7 @@ class KinguStatusBarContribution extends Disposable {
 		this._updateRateLimit();
 		this._updateRemote();
 		this._updateVault();
-		this._updateClaude();
+		this._updateProviders();
 		this._maybeRefreshQuota();
 	}
 
@@ -97,67 +99,72 @@ class KinguStatusBarContribution extends Disposable {
 	}
 
 	/**
-	 * Claude's quota, from the account this machine is already signed into.
+	 * A gauge per provider that reports one.
 	 *
 	 * Both windows on one entry, as the ADE shows them: half of five hours and
 	 * half of a week are different news and a person reads them together.
 	 *
-	 * A failure shows nothing rather than an error chip. The bar is glanced at,
-	 * not read, and a machine that never ran the Claude CLI is not in a fault
-	 * state — it simply has no quota to report.
+	 * A provider that reports nothing gets no entry rather than an error chip.
+	 * The bar is glanced at, not read, and a machine that never ran an agent's
+	 * CLI is not in a fault state — it simply has no quota to report.
 	 */
-	private _updateClaude(): void {
-		const result = this._rateLimitService.claude;
-		if (!result?.ok) {
-			this._claude.clear();
-			if (result) {
-				this._logProblemOnce(result.problem);
+	private _updateProviders(): void {
+		// Ordered so a provider appearing later does not shuffle the ones before it.
+		let priority = 110;
+		for (const provider of KINGU_QUOTA_PROVIDERS) {
+			this._updateProvider(provider, priority--);
+		}
+	}
+
+	private _updateProvider(provider: KinguQuotaProvider, priority: number): void {
+		const existing = this._providers.get(provider);
+		const result = this._rateLimitService.quotas.get(provider);
+		const windows = result?.ok
+			? [result.quota.session, result.quota.weekly].filter(limit => limit !== undefined)
+			: [];
+		if (windows.length === 0) {
+			existing?.dispose();
+			this._providers.delete(provider);
+			if (result && !result.ok) {
+				this._logProblemOnce(provider, result.problem);
 			}
 			return;
 		}
-		const windows = [result.quota.session, result.quota.weekly].filter(limit => limit !== undefined);
-		if (windows.length === 0) {
-			this._claude.clear();
-			return;
-		}
+
+		const label = KINGU_QUOTA_PROVIDER_LABELS[provider];
 		const text = windows.map(formatRateLimit).join(' · ');
 		const entry: IStatusbarEntry = {
-			name: localize('kingu.status.claude.name', "Claude quota"),
-			text: `$(flame) ${text}`,
-			ariaLabel: localize('kingu.status.claude.aria', "Claude quota: {0}", text),
-			tooltip: this._claudeTooltip(result.quota.session, result.quota.weekly),
+			name: localize('kingu.status.quota.name', "{0} quota", label),
+			text: `$(pulse) ${text}`,
+			ariaLabel: localize('kingu.status.quota.aria', "{0} quota: {1}", label, text),
+			tooltip: this._quotaTooltip(label, windows),
 		};
-		if (this._claude.value) {
-			this._claude.value.update(entry);
+		if (existing) {
+			existing.update(entry);
 		} else {
-			this._claude.value = this._statusbarService.addEntry(entry, 'kingu.status.claude', StatusbarAlignment.LEFT, 110);
+			this._providers.set(provider, this._statusbarService.addEntry(entry, `kingu.status.quota.${provider}`, StatusbarAlignment.LEFT, priority));
 		}
 	}
 
-	private _claudeTooltip(session: IKinguRateLimit | undefined, weekly: IKinguRateLimit | undefined): string {
-		const lines: string[] = [];
-		if (session) {
-			lines.push(session.resetsAt
-				? localize('kingu.status.claude.sessionReset', "Session window: {0}% used, resets {1}", Math.round(session.usedPercent), new Date(session.resetsAt).toLocaleString())
-				: localize('kingu.status.claude.session', "Session window: {0}% used", Math.round(session.usedPercent)));
-		}
-		if (weekly) {
-			lines.push(weekly.resetsAt
-				? localize('kingu.status.claude.weeklyReset', "Weekly window: {0}% used, resets {1}", Math.round(weekly.usedPercent), new Date(weekly.resetsAt).toLocaleString())
-				: localize('kingu.status.claude.weekly', "Weekly window: {0}% used", Math.round(weekly.usedPercent)));
-		}
-		return lines.join('\n');
+	private _quotaTooltip(label: string, windows: readonly IKinguRateLimit[]): string {
+		return windows.map(limit => {
+			const used = Math.round(limit.usedPercent);
+			const window = limit.windowDurationMins === undefined ? '' : ' ' + formatWindow(limit.windowDurationMins);
+			return limit.resetsAt
+				? localize('kingu.status.quota.windowReset', "{0}{1}: {2}% used, resets {3}", label, window, used, new Date(limit.resetsAt).toLocaleString())
+				: localize('kingu.status.quota.window', "{0}{1}: {2}% used", label, window, used);
+		}).join('\n');
 	}
 
-	private _loggedProblem: KinguQuotaProblem | undefined;
+	private readonly _loggedProblems = new Map<KinguQuotaProvider, KinguQuotaProblem>();
 
-	/** Logged once per distinct reason: this runs on a timer and would otherwise repeat forever. */
-	private _logProblemOnce(problem: KinguQuotaProblem): void {
-		if (this._loggedProblem === problem) {
+	/** Logged once per provider and reason: this runs on a timer and would otherwise repeat forever. */
+	private _logProblemOnce(provider: KinguQuotaProvider, problem: KinguQuotaProblem): void {
+		if (this._loggedProblems.get(provider) === problem) {
 			return;
 		}
-		this._loggedProblem = problem;
-		this._logService.trace(`[Kingu] no Claude quota to show: ${problem}`);
+		this._loggedProblems.set(provider, problem);
+		this._logService.trace(`[Kingu] no ${provider} quota to show: ${problem}`);
 	}
 
 	/**

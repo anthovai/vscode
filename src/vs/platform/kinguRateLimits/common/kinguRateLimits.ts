@@ -6,6 +6,7 @@
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { Event } from '../../../base/common/event.js';
 import { IKinguRateLimit } from './kinguRateLimitTypes.js';
+import { KinguQuotaProvider } from './kinguQuotaProviders.js';
 
 /**
  * Where Anthropic reports what is left of an OAuth account's quota.
@@ -62,8 +63,8 @@ export interface IKinguRateLimitService {
 	/** Fires when a refresh changes what {@link claude} returns. */
 	readonly onDidChange: Event<void>;
 
-	/** The last reading for Claude, or `undefined` before the first one. */
-	readonly claude: KinguQuotaResult | undefined;
+	/** The last reading per provider; absent until one has been taken. */
+	readonly quotas: ReadonlyMap<KinguQuotaProvider, KinguQuotaResult>;
 
 	/** Reads again now. Safe to call often; concurrent calls share one request. */
 	refresh(): Promise<void>;
