@@ -1,0 +1,232 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/* The Usage page. Every colour comes from a theme variable: this page sits
+   where the editor sits and has to belong to whatever theme is loaded. */
+.kingu-usage-page {
+	max-width: 880px;
+	margin: 0 auto;
+	padding: 28px 24px 48px;
+	color: var(--vscode-foreground);
+	font-size: 13px;
+}
+
+.kingu-usage-page-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.kingu-usage-page-title {
+	margin: 0;
+	font-size: 22px;
+	font-weight: 600;
+}
+
+.kingu-usage-page-refresh {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	padding: 4px 10px;
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
+	background: none;
+	border: 1px solid var(--vscode-widget-border, transparent);
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.kingu-usage-page-refresh:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Reading the whole vault takes seconds, so the page says what it is doing
+   rather than showing an empty frame that looks broken. */
+.kingu-usage-page-status {
+	padding: 32px 0;
+	opacity: 0.7;
+}
+
+.kingu-usage-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 12px;
+}
+
+.kingu-usage-card {
+	padding: 12px 14px;
+	border: 1px solid var(--vscode-widget-border, transparent);
+	border-radius: 7px;
+	background: var(--vscode-editorWidget-background);
+}
+
+.kingu-usage-card-label {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	opacity: 0.7;
+}
+
+.kingu-usage-card-value {
+	margin: 4px 0 2px;
+	font-size: 24px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.kingu-usage-card-detail {
+	font-size: 11px;
+	opacity: 0.7;
+}
+
+.kingu-usage-section {
+	margin-top: 32px;
+}
+
+.kingu-usage-section-title {
+	margin: 0 0 10px;
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	opacity: 0.8;
+}
+
+/* The mix bar: three bands to scale. Cache gets its own because it is usually
+   most of the total and costs a fraction as much — folded into the input it
+   would claim the work was an order of magnitude bigger than it was. */
+.kingu-usage-mix {
+	display: flex;
+	height: 10px;
+	overflow: hidden;
+	border-radius: 5px;
+	background: rgba(127, 127, 127, 0.25);
+}
+
+.kingu-usage-mix-band {
+	display: block;
+	height: 100%;
+}
+
+.kingu-usage-mix-band.input,
+.kingu-usage-legend-swatch.input {
+	background: var(--vscode-charts-blue);
+}
+
+.kingu-usage-mix-band.output,
+.kingu-usage-legend-swatch.output {
+	background: var(--vscode-charts-green);
+}
+
+.kingu-usage-mix-band.cache,
+.kingu-usage-legend-swatch.cache {
+	background: var(--vscode-charts-purple);
+}
+
+.kingu-usage-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 18px;
+	margin-top: 8px;
+	font-size: 11px;
+	opacity: 0.85;
+}
+
+.kingu-usage-legend-entry {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.kingu-usage-legend-swatch {
+	width: 9px;
+	height: 9px;
+	border-radius: 2px;
+}
+
+.kingu-usage-provider + .kingu-usage-provider {
+	margin-top: 14px;
+}
+
+.kingu-usage-provider-head {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+}
+
+.kingu-usage-provider-name {
+	font-weight: 500;
+}
+
+.kingu-usage-provider-sessions {
+	font-size: 11px;
+	opacity: 0.7;
+}
+
+.kingu-usage-provider-cost {
+	margin-left: auto;
+	font-variant-numeric: tabular-nums;
+}
+
+.kingu-usage-provider-track {
+	height: 6px;
+	margin: 5px 0 3px;
+	overflow: hidden;
+	border-radius: 3px;
+	/* Flat translucency, not `opacity`: opacity applies to the subtree and would
+	   dim the fill inside to nothing. */
+	background: rgba(127, 127, 127, 0.25);
+}
+
+.kingu-usage-provider-fill {
+	height: 100%;
+	border-radius: 3px;
+	background: var(--vscode-charts-blue);
+}
+
+.kingu-usage-provider-detail {
+	font-size: 11px;
+	opacity: 0.7;
+}
+
+/* Six weeks of days, laid out in weeks down the columns. Empty days are drawn
+   too — a gap has to be visible as a gap. */
+.kingu-usage-grid {
+	display: grid;
+	grid-template-rows: repeat(7, 12px);
+	grid-auto-flow: column;
+	grid-auto-columns: 12px;
+	gap: 3px;
+}
+
+.kingu-usage-grid-cell {
+	border-radius: 2px;
+	background: rgba(127, 127, 127, 0.18);
+}
+
+.kingu-usage-grid-cell.step-1 {
+	background: color-mix(in srgb, var(--vscode-charts-blue) 30%, transparent);
+}
+
+.kingu-usage-grid-cell.step-2 {
+	background: color-mix(in srgb, var(--vscode-charts-blue) 50%, transparent);
+}
+
+.kingu-usage-grid-cell.step-3 {
+	background: color-mix(in srgb, var(--vscode-charts-blue) 75%, transparent);
+}
+
+.kingu-usage-grid-cell.step-4 {
+	background: var(--vscode-charts-blue);
+}
+
+.kingu-usage-grid-caption {
+	margin-top: 10px;
+	font-size: 11px;
+	opacity: 0.7;
+}

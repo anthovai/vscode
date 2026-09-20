@@ -36,6 +36,7 @@ import { describeListeningPort } from '../../../../platform/kinguHost/common/kin
 import { formatRateLimit, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 import { IKinguUsageSource, KinguUsageDetail, usageRows } from '../common/kinguUsageRoster.js';
 import { IKinguUsageRosterOptions, PROVIDER_ICONS, renderKinguUsageRoster, updateKinguUsageRoster } from './kinguUsageRosterPanel.js';
+import { KINGU_SHOW_USAGE_COMMAND_ID } from './kinguUsagePage.contribution.js';
 
 registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed);
 // Eager, unlike the rest: it has to be listening to the terminals before a dev
@@ -46,7 +47,7 @@ registerSingleton(IKinguAdvertisedUrlService, KinguAdvertisedUrlService, Instant
 
 export const KINGU_REFRESH_QUOTAS_COMMAND_ID = 'kingu.status.refreshQuotas';
 /** Where "Usage details & history" at the foot of the panel goes. */
-const KINGU_STATS_COMMAND_ID = 'kingu.stats';
+const KINGU_STATS_COMMAND_ID = KINGU_SHOW_USAGE_COMMAND_ID;
 const USAGE_DETAIL_STORAGE_KEY = 'kingu.usage.detail';
 export const KINGU_OPEN_PORT_COMMAND_ID = 'kingu.status.openPort';
 

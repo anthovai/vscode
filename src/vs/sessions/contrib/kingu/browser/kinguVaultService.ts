@@ -27,6 +27,7 @@ import {
 	readWorkingDirectory,
 	sessionTitle,
 } from '../common/kinguVault.js';
+import { buildKinguUsageOverview, IKinguOverviewSession, IKinguUsageOverview, IKinguUsageOverviewOptions } from '../common/kinguUsageOverview.js';
 import { IKinguVaultSourceDefinition, isDiscoverable, KINGU_VAULT_SOURCES, pathSegments, vaultSource } from '../common/kinguVaultSources.js';
 import { addUsage, EMPTY_USAGE, IKinguUsage, readTranscriptUsage, uncachedTokens } from '../common/kinguVaultUsage.js';
 import { ancestorDirectories, IKinguProject, projectFor, readWorktreeRepository, toUriPath, unattributedProject } from '../common/kinguVaultAttribution.js';
@@ -507,6 +508,28 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 			sessionsRead,
 			sessionsTotal: sessions.length,
 		};
+	}
+
+	async getUsageOverview(options: IKinguUsageOverviewOptions, token = CancellationToken.None, onProgress?: (done: number, total: number) => void): Promise<IKinguUsageOverview> {
+		const sessions = await this.getSessions(token);
+		const rows: IKinguOverviewSession[] = [];
+		let done = 0;
+		await forEachLimited(sessions, SCAN_CONCURRENCY, async session => {
+			if (token.isCancellationRequested) {
+				return;
+			}
+			const usage = await this.getUsage(session, token);
+			done++;
+			onProgress?.(done, sessions.length);
+			// Sessions that spent nothing are dropped here rather than in the model:
+			// they would count towards the session totals and the active-day grid
+			// while contributing no tokens, which reads as work that did not happen.
+			if (usage === EMPTY_USAGE) {
+				return;
+			}
+			rows.push({ source: session.source, sourceLabel: session.sourceLabel, usage, modified: session.modified });
+		});
+		return buildKinguUsageOverview(rows, options);
 	}
 
 	/**

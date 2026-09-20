@@ -8,6 +8,7 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Event } from '../../../../base/common/event.js';
 import { IKinguUsage } from './kinguVaultUsage.js';
+import { IKinguUsageOverview, IKinguUsageOverviewOptions } from './kinguUsageOverview.js';
 import { IKinguProject } from './kinguVaultAttribution.js';
 
 /**
@@ -194,6 +195,17 @@ export interface IKinguVaultService {
 	 * cancelled.
 	 */
 	getUsageSummary(token?: CancellationToken, onProgress?: (done: number, total: number) => void): Promise<IKinguUsageSummary>;
+
+	/**
+	 * The same full pass, shaped for the usage page: provider rows, a token mix
+	 * and a daily series.
+	 *
+	 * Separate from {@link getUsageSummary} rather than folded into it because
+	 * the two answer different questions — that one is "what did each project
+	 * cost", this one is "what have my agents been doing" — and a single result
+	 * carrying both would make every caller pay for the half it does not use.
+	 */
+	getUsageOverview(options: IKinguUsageOverviewOptions, token?: CancellationToken, onProgress?: (done: number, total: number) => void): Promise<IKinguUsageOverview>;
 
 	/**
 	 * Removes a session's files from disk. Irreversible.
