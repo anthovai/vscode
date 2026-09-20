@@ -29,7 +29,7 @@ import {
 } from '../common/kinguVault.js';
 import { IKinguVaultSourceDefinition, isDiscoverable, KINGU_VAULT_SOURCES, pathSegments, vaultSource } from '../common/kinguVaultSources.js';
 import { addUsage, EMPTY_USAGE, IKinguUsage, readTranscriptUsage, uncachedTokens } from '../common/kinguVaultUsage.js';
-import { ancestorDirectories, IKinguProject, projectFor, readWorktreeRepository, unattributedProject } from '../common/kinguVaultAttribution.js';
+import { ancestorDirectories, IKinguProject, projectFor, readWorktreeRepository, toUriPath, unattributedProject } from '../common/kinguVaultAttribution.js';
 import {
 	isSubagentTranscriptName,
 	readSubagentMeta,
@@ -525,7 +525,14 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		const key = `${session.resource.authority}\u0000${directory}`;
 		let pending = this._projects.get(key);
 		if (!pending) {
-			pending = this._resolveProject(session, directory);
+			// Caught here rather than left to the caller: this runs for every session
+			// in a report, inside a bounded fan-out, so one unresolvable directory
+			// rejecting would take the whole report down with it. A directory whose
+			// repository cannot be determined is still a directory.
+			pending = this._resolveProject(session, directory).catch(error => {
+				this._logService.warn(`[Kingu] could not attribute ${directory}`, error);
+				return projectFor({ workingDirectory: directory, hostLabel: session.hostLabel, repositoryRoot: undefined, worktreeOf: undefined });
+			});
 			this._projects.set(key, pending);
 		}
 		return pending;
@@ -533,7 +540,7 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 
 	private async _resolveProject(session: IKinguVaultSession, directory: string): Promise<IKinguProject> {
 		for (const ancestor of ancestorDirectories(directory, MAX_REPOSITORY_SEARCH_DEPTH)) {
-			const git = session.resource.with({ path: `${ancestor}/.git` });
+			const git = session.resource.with({ path: toUriPath(`${ancestor}/.git`) });
 			let stat;
 			try {
 				stat = await this._fileService.stat(git);

@@ -152,3 +152,18 @@ export function ancestorDirectories(path: string, maxDepth: number): string[] {
 	}
 	return ancestors;
 }
+
+/**
+ * A path as the machine writes it, as the path half of a URI.
+ *
+ * A URI whose authority is set — which is every remote resource — is *required*
+ * to have a path beginning with a slash, and `URI.with` throws when it does
+ * not. A Windows host's `C:\code\app` satisfies neither half of that, so a
+ * remote Windows session turned every attempt to build a sibling resource into
+ * a `UriError`. Local `file:` URIs happen to tolerate the bare form, which is
+ * why this only ever showed up against a host.
+ */
+export function toUriPath(hostPath: string): string {
+	const slashed = hostPath.replace(/\\/g, '/');
+	return slashed.startsWith('/') ? slashed : `/${slashed}`;
+}

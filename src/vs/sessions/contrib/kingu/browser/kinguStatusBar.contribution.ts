@@ -24,6 +24,7 @@ import { KinguQuotaProblem } from '../../../../platform/kinguHost/common/kinguRa
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
 import { KinguHostService } from './kinguHostService.js';
 import { IKinguAdvertisedUrlService, KinguAdvertisedUrlService } from './kinguAdvertisedUrlService.js';
+import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
 import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -533,8 +534,17 @@ class OpenKinguPortAction extends Action2 {
 			// own scheme, hostname and path, and none of those can be read off the
 			// socket. Failing that, loopback — a server on `0.0.0.0` is reached from
 			// this machine at localhost, and this machine is the one doing the asking.
-			const url = picked.advertised?.url ?? `http://localhost:${picked.port.port}`;
-			await openerService.open(URI.parse(url), { openExternal: true });
+			const fallback = `http://localhost:${picked.port.port}`;
+			const candidate = picked.advertised?.url ?? fallback;
+			// Checked again here even though nothing that is not this machine is
+			// recorded. This is the line that actually navigates, and it is one
+			// refactor away from being handed a URL that came from terminal output
+			// without passing that filter; the check is cheap and the failure is a
+			// person being sent to somebody else's site by a control labelled
+			// "open this port".
+			const url = URI.parse(candidate);
+			const safe = (url.scheme === 'http' || url.scheme === 'https') && isLocalhostEquivalent(url.authority.replace(/^.*@/, '').replace(/:\d+$/, ''));
+			await openerService.open(URI.parse(safe ? candidate : fallback), { openExternal: true });
 		}
 	}
 }

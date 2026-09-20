@@ -11,6 +11,7 @@ import {
 	KinguProjectKind,
 	projectFor,
 	readWorktreeRepository,
+	toUriPath,
 	unattributedProject,
 } from '../../common/kinguVaultAttribution.js';
 
@@ -115,6 +116,23 @@ suite('Kingu vault attribution', () => {
 
 		test('a trailing separator is not a level of its own', () => {
 			assert.deepStrictEqual(ancestorDirectories('/a/b/', 10), ['/a/b', '/a']);
+		});
+	});
+
+	suite('turning a host path into a URI path', () => {
+
+		test('a Windows path gains the leading slash a URI with an authority requires', () => {
+			// Without this, building a sibling resource on a remote Windows host threw
+			// `UriError` — and it threw for every session, taking the report with it.
+			assert.strictEqual(toUriPath('C:\\Users\\me\\app'), '/C:/Users/me/app');
+		});
+
+		test('a posix path is already one and is left alone', () => {
+			assert.strictEqual(toUriPath('/home/dev/app'), '/home/dev/app');
+		});
+
+		test('a UNC-shaped path keeps its shape rather than gaining a third slash', () => {
+			assert.strictEqual(toUriPath('\\\\wsl.localhost\\Ubuntu\\home'), '//wsl.localhost/Ubuntu/home');
 		});
 	});
 

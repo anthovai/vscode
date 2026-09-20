@@ -72,7 +72,22 @@ export function readAdvertisedUrls(line: string, now: number): IKinguAdvertisedU
 	return found;
 }
 
-/** One candidate, validated and normalized, or `undefined` when it is not a URL we can open. */
+/**
+ * One candidate, validated and normalized, or `undefined` when it is not an
+ * address this may open.
+ *
+ * The input is terminal output, which is whatever any process an agent ran
+ * chose to print — a build script, a dependency's postinstall, a compromised
+ * package. So this is a trust boundary, and the rule is narrow: the address is
+ * only used when it names *this machine*, because the only claim being made is
+ * "the port you can see listening here is reached like this".
+ *
+ * A non-loopback host is therefore refused rather than ranked lower. Ranking it
+ * lower would still open it whenever a server announced nothing else, and the
+ * whole attack is one line of output. What a refused announcement costs is a
+ * path and a scheme; what accepting it would cost is sending the user to
+ * somebody else's site from a control that says "open this port".
+ */
 export function readAdvertisedUrl(candidate: string, now: number): IKinguAdvertisedUrl | undefined {
 	let url: URL;
 	try {
@@ -80,8 +95,15 @@ export function readAdvertisedUrl(candidate: string, now: number): IKinguAdverti
 	} catch {
 		return undefined;
 	}
+	// Only the two web schemes. `file:`, `javascript:` and the rest are not
+	// addresses for a listening port and must never reach an opener.
 	const protocol = url.protocol === 'https:' ? 'https' : url.protocol === 'http:' ? 'http' : undefined;
 	if (!protocol || !url.hostname) {
+		return undefined;
+	}
+	// Credentials in the authority are a phishing device — `http://localhost@evil`
+	// reads as localhost and resolves to `evil` — and no dev server prints them.
+	if (url.username || url.password) {
 		return undefined;
 	}
 	const port = url.port ? Number.parseInt(url.port, 10) : protocol === 'https' ? 443 : 80;
@@ -94,6 +116,9 @@ export function readAdvertisedUrl(candidate: string, now: number): IKinguAdverti
 		// the address it should use is loopback.
 		url.hostname = 'localhost';
 	}
+	if (!isLocalhostEquivalent(url.hostname)) {
+		return undefined;
+	}
 	return {
 		url: url.toString(),
 		port,
@@ -101,6 +126,26 @@ export function readAdvertisedUrl(candidate: string, now: number): IKinguAdverti
 		hostKind: classifyHost(url.hostname),
 		seenAt: now,
 	};
+}
+
+/**
+ * Whether a hostname is guaranteed to be this machine.
+ *
+ * The literals, and any name under `.localhost` — which RFC 6761 reserves for
+ * loopback, so `app.localhost` cannot be pointed anywhere else. Every other
+ * name is excluded even though some of them are genuinely local (`myapp.test`
+ * through a local resolver): this cannot tell those apart from a name a
+ * malicious line invented, and the safe answer is the one that does not
+ * navigate.
+ */
+export function isLocalhostEquivalent(hostname: string): boolean {
+	const bare = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+	if (bare === 'localhost' || bare === '::1' || bare.endsWith('.localhost')) {
+		return true;
+	}
+	// The whole 127.0.0.0/8 block, not just 127.0.0.1: a dev server bound to
+	// 127.0.0.2 is still only reachable from here.
+	return isIpv4(bare) && bare.startsWith('127.');
 }
 
 /** Whether a hostname is a bind-everything placeholder rather than somewhere to go. */
@@ -128,10 +173,14 @@ export function classifyHost(hostname: string): KinguHostKind {
 /**
  * How much a kind of address is preferred, highest first.
  *
- * A name beats loopback because a project that printed one arranged for it, and
- * its certificates and cookies are issued against it. Loopback beats a LAN
- * address because this machine is the one asking. A public address comes last:
- * a dev server printing one is usually reporting an interface, not an intent.
+ * Only two of these can occur, because {@link readAdvertisedUrl} admits nothing
+ * that is not this machine: a `.localhost` name, which classifies as a name,
+ * and the loopback literals. The name wins because a project that arranged one
+ * did so deliberately and its cookies are issued against it.
+ *
+ * The other two remain so the ranking is total if the admission rule is ever
+ * widened — but widening it is what the rule exists to prevent, so they should
+ * stay unreachable.
  */
 function hostKindRank(kind: KinguHostKind): number {
 	switch (kind) {

@@ -72,9 +72,11 @@ onto it. Porting the ADE's version would mean running two of each.
 
 Real gaps, in the order they seem worth closing.
 
-1. **A Windows remote host.** Remote roots are built from the host's own
-   `defaultDirectory` and joined with forward slashes, which a Windows host
-   accepts — but every remote test so far has been against Linux.
+1. **An actual Windows remote host.** The Windows *path* handling is fixed and
+   tested — see below — but no test has connected to a machine running Windows,
+   because standing one up here needs an elevated install of OpenSSH Server.
+   What is untested is the fork's own SSH transport and CLI bootstrap against a
+   Windows sshd, not the vault code that runs on top of it.
 
 ## Search
 
@@ -178,3 +180,29 @@ terminal of this window:
 
 — the Local address chosen over the Network one it printed beside it, the path
 kept, and the whole entry gone once the server was killed.
+
+## Windows paths on a remote host
+
+A URI with an authority — which is every remote resource — must have a path
+beginning with a slash, and `URI.with` throws when it does not. A Windows
+host's `C:\code\app` satisfies neither half of that, so every attempt to build
+a sibling resource from a Windows working directory raised `UriError`. Local
+`file:` URIs happen to tolerate the bare form, which is why it never showed up
+until attribution started resolving `.git` beside a session's directory.
+
+It would not have been one broken row. The throw happened inside the bounded
+fan-out that reads every session, so one Windows-recorded session anywhere in
+the vault would have rejected the whole usage report. Two changes: host paths
+are converted to URI paths before a resource is built, and an unresolvable
+directory is caught and reported as a plain directory rather than taking the
+report with it.
+
+Verified with a session recorded under `C:\code\ledger-win`, read over the SSH
+host:
+
+```
+ledger-win  $0.06 · 3.0k  directory · kingu-remote-test:C:\code\ledger-win · 1 session
+```
+
+The report completed, the path is shown the way the machine that owns it writes
+it, and nothing was logged as unattributable.

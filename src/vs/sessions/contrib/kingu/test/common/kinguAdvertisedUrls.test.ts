@@ -8,6 +8,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import {
 	classifyHost,
 	isBetterAdvertisedUrl,
+	isLocalhostEquivalent,
 	isUnspecifiedHost,
 	KinguAdvertisedUrlCache,
 	KinguHostKind,
@@ -41,9 +42,10 @@ suite('Kingu advertised URLs', () => {
 			assert.strictEqual(url.port, 8443);
 		});
 
-		test('a line naming several addresses yields each of them', () => {
+		test('the Network address a server prints beside Local is not one this opens', () => {
+			// Only this machine's own addresses are admitted; see the refusal suite.
 			const urls = readAdvertisedUrls('Local: http://localhost:3000/  Network: http://192.168.1.5:3000/', NOW);
-			assert.deepStrictEqual(urls.map(url => url.hostKind), [KinguHostKind.Loopback, KinguHostKind.PrivateIp]);
+			assert.deepStrictEqual(urls.map(url => url.url), ['http://localhost:3000/']);
 		});
 
 		test('a bind-everything address is rewritten to somewhere that can be opened', () => {
@@ -58,8 +60,8 @@ suite('Kingu advertised URLs', () => {
 		});
 
 		test('a default port is implied when the address states none', () => {
-			assert.strictEqual(readAdvertisedUrls('See http://example.test/', NOW)[0].port, 80);
-			assert.strictEqual(readAdvertisedUrls('See https://example.test/', NOW)[0].port, 443);
+			assert.strictEqual(readAdvertisedUrls('See http://localhost/', NOW)[0].port, 80);
+			assert.strictEqual(readAdvertisedUrls('See https://localhost/', NOW)[0].port, 443);
 		});
 
 		test('a line with no address costs nothing and yields nothing', () => {
@@ -76,6 +78,52 @@ suite('Kingu advertised URLs', () => {
 			assert.strictEqual(readAdvertisedUrl('ws://localhost:3000', NOW), undefined);
 			assert.strictEqual(readAdvertisedUrl('postgres://localhost:5432/db', NOW), undefined);
 			assert.strictEqual(readAdvertisedUrl('not a url', NOW), undefined);
+		});
+	});
+
+	suite('what a line of output is not allowed to make this open', () => {
+
+		// Terminal output is whatever a process an agent ran chose to print: a
+		// build script, a dependency's postinstall, a compromised package. One line
+		// is the whole attack, so the rule is that an address is used only when it
+		// names this machine.
+
+		test('a host that is not this machine is refused, not merely ranked lower', () => {
+			// Ranked lower it would still be opened whenever nothing else was
+			// announced, which a single printed line arranges.
+			assert.strictEqual(readAdvertisedUrl('http://evil.example.com:3000/', NOW), undefined);
+			assert.strictEqual(readAdvertisedUrl('http://192.168.1.5:3000/', NOW), undefined);
+			assert.strictEqual(readAdvertisedUrl('http://8.8.8.8:3000/', NOW), undefined);
+		});
+
+		test('a planted line cannot outrank the real server on the same port', () => {
+			const cache = new KinguAdvertisedUrlCache();
+			cache.record(readAdvertisedUrls('  ➜  Local:   http://localhost:3000/', NOW));
+			cache.record(readAdvertisedUrls('  ➜  Local:   http://evil.example.com:3000/', NOW + 1000));
+			assert.strictEqual(cache.get(3000)?.url, 'http://localhost:3000/');
+		});
+
+		test('credentials in the authority are a disguise, not an address', () => {
+			// `http://localhost@evil.example.com/` reads as localhost and resolves to
+			// `evil.example.com`.
+			assert.strictEqual(readAdvertisedUrl('http://localhost@evil.example.com:3000/', NOW), undefined);
+			assert.strictEqual(readAdvertisedUrl('http://user:pass@localhost:3000/', NOW), undefined);
+		});
+
+		test('a name that merely contains localhost is not localhost', () => {
+			assert.strictEqual(readAdvertisedUrl('http://localhost.evil.example.com:3000/', NOW), undefined);
+			assert.strictEqual(readAdvertisedUrl('http://notlocalhost:3000/', NOW), undefined);
+		});
+
+		test('a name reserved for loopback is this machine, and is admitted', () => {
+			// RFC 6761 reserves `.localhost`; it cannot be pointed anywhere else.
+			assert.strictEqual(readAdvertisedUrl('http://app.localhost:3000/', NOW)?.url, 'http://app.localhost:3000/');
+		});
+
+		test('the whole loopback block is this machine, not just 127.0.0.1', () => {
+			assert.ok(isLocalhostEquivalent('127.0.0.2'));
+			assert.ok(isLocalhostEquivalent('::1'));
+			assert.ok(!isLocalhostEquivalent('128.0.0.1'));
 		});
 	});
 
@@ -120,8 +168,11 @@ suite('Kingu advertised URLs', () => {
 			assert.ok(!isBetterAdvertisedUrl(at('http://app.localhost:3000'), at('http://localhost:3000')));
 		});
 
-		test('loopback beats a LAN address, because this machine is the one asking', () => {
-			assert.ok(isBetterAdvertisedUrl(at('http://192.168.1.5:3000'), at('http://localhost:3000')));
+		test('ranking still prefers loopback over a LAN address, though one cannot occur', () => {
+			// Constructed directly: `readAdvertisedUrl` refuses a LAN host outright,
+			// so this only checks the ranking would hold if admission were widened.
+			const lan = { url: 'http://192.168.1.5:3000/', port: 3000, protocol: 'http' as const, hostKind: KinguHostKind.PrivateIp, seenAt: NOW };
+			assert.ok(isBetterAdvertisedUrl(lan, at('http://localhost:3000')));
 		});
 
 		test('https beats http when the server announced both', () => {
