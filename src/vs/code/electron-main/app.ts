@@ -22,7 +22,7 @@ import { assertType } from '../../base/common/types.js';
 import { URI } from '../../base/common/uri.js';
 import { generateUuid } from '../../base/common/uuid.js';
 import { registerContextMenuListener } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
-import { KinguRateLimitChannel, KINGU_RATE_LIMIT_CHANNEL_NAME } from '../../platform/kinguRateLimits/electron-main/kinguRateLimitChannel.js';
+import { KinguHostChannel, KINGU_HOST_CHANNEL_NAME } from '../../platform/kinguHost/electron-main/kinguHostChannel.js';
 import { getDelayedChannel, ProxyChannel, StaticRouter } from '../../base/parts/ipc/common/ipc.js';
 import { Server as ElectronIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { Client as MessagePortClient } from '../../base/parts/ipc/electron-main/ipc.mp.js';
@@ -1352,7 +1352,7 @@ export class CodeApplication extends Disposable {
 		// Kingu: the quota a window shows for an agent account. Served here because a
 		// renderer's origin cannot reach the provider, and because the credential then
 		// never has to cross into a window.
-		mainProcessElectronServer.registerChannel(KINGU_RATE_LIMIT_CHANNEL_NAME, new KinguRateLimitChannel());
+		mainProcessElectronServer.registerChannel(KINGU_HOST_CHANNEL_NAME, new KinguHostChannel());
 
 		// Policies (main & shared process)
 		const policyChannel = disposables.add(new PolicyChannel(accessor.get(IPolicyService)));

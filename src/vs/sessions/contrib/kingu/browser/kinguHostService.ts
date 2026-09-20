@@ -10,7 +10,7 @@ import { IMainProcessService } from '../../../../platform/ipc/common/mainProcess
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
 import { KinguQuotaResult } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
-import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
+import { IKinguHostService, IKinguMemoryReading } from '../../../../platform/kinguHost/common/kinguHostService.js';
 import { IKinguListeningPort } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
 import { KINGU_HOST_CHANNEL_NAME } from '../../../../platform/kinguHost/common/kinguHostTypes.js';
 
@@ -53,9 +53,9 @@ export class KinguHostService extends Disposable implements IKinguHostService {
 		return this._inFlight;
 	}
 
-	async readMemoryBytes(): Promise<number | undefined> {
+	async readMemory(): Promise<IKinguMemoryReading | undefined> {
 		try {
-			return await this._channel.call<number | undefined>('getMemoryBytes');
+			return await this._channel.call<IKinguMemoryReading | undefined>('getMemoryBytes');
 		} catch {
 			return undefined;
 		}

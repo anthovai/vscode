@@ -14,9 +14,9 @@ export interface IKinguRateLimit {
 }
 
 /**
- * The main-process channel serving agent quota reads.
+ * The main-process channel answering what only the main process can see.
  *
  * Named in common so a window can address it without importing the module that
  * serves it, which pulls in `electron`.
  */
-export const KINGU_RATE_LIMIT_CHANNEL_NAME = 'kinguRateLimits';
+export const KINGU_HOST_CHANNEL_NAME = 'kinguHost';

@@ -29,3 +29,33 @@
 #kingu\.status\.remote .codicon-server {
 	color: var(--vscode-charts-green);
 }
+
+/* Each gauge's icon carries its provider's colour, which is what lets two
+   gauges be told apart without reading either. Taken from the theme's own chart
+   palette rather than from a brand's hex, so the strip stays legible on a light
+   theme and ships no one else's colour. */
+#kingu\.status\.quota\.claude .codicon-flame {
+	color: var(--vscode-charts-orange);
+}
+
+#kingu\.status\.quota\.grok .codicon-zap {
+	color: var(--vscode-charts-blue);
+}
+
+#kingu\.status\.quota\.kimi .codicon-circle-filled {
+	color: var(--vscode-charts-purple);
+}
+
+#kingu\.status\.quota\.gemini .codicon-sparkle {
+	color: var(--vscode-charts-blue);
+}
+
+/* The refresh button reads as a control rather than a reading, so it stays at
+   the strip's own weight until it is pointed at. */
+#kingu\.status\.refresh .codicon-refresh {
+	opacity: 0.7;
+}
+
+#kingu\.status\.refresh:hover .codicon-refresh {
+	opacity: 1;
+}

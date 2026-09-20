@@ -84,6 +84,18 @@ function usageDetail(usage: IKinguUsage): string {
 		formatTokens(totalTokens(usage)));
 }
 
+/**
+ * The path as the machine holding the file writes it.
+ *
+ * `fsPath` is this desktop's idea of a path, so a Linux host's
+ * `/home/dev/.claude/…` came back with backslashes — a path that exists
+ * nowhere, shown at the moment a person is deciding whether the thing they are
+ * about to delete is the thing they meant.
+ */
+function sessionPath(session: IKinguVaultSession): string {
+	return session.hostLabel ? session.resource.path : session.resource.fsPath;
+}
+
 function toPick(session: IKinguVaultSession, detail?: string): IVaultPick {
 	return {
 		session,
@@ -346,7 +358,7 @@ class DeleteKinguVaultSessionAction extends Action2 {
 			vaultService.getSessions().then(sessions => sessions.map(candidate => toPick(candidate))),
 			{
 				title: localize('kingu.vault.delete.pickTitle', "Delete a Session"),
-				placeHolder: localize('kingu.vault.delete.pickPlaceholder', "The transcript is moved to the recycle bin"),
+				placeHolder: localize('kingu.vault.delete.pickPlaceholder', "The transcript is deleted from the machine it is on"),
 				matchOnDescription: true,
 			}))?.session;
 		if (!chosen) {
@@ -355,8 +367,17 @@ class DeleteKinguVaultSessionAction extends Action2 {
 
 		const { confirmed } = await dialogService.confirm({
 			type: 'warning',
-			message: localize('kingu.vault.delete.confirm', "Delete this {0} session?", chosen.sourceLabel),
-			detail: localize('kingu.vault.delete.detail', "{0}\n\n{1}\n\nThe transcript and any worker transcripts go to the recycle bin. {2} keeps its own copy of nothing — this is the only one.", chosen.title, chosen.resource.fsPath, chosen.sourceLabel),
+			message: chosen.hostLabel
+				? localize('kingu.vault.delete.confirmRemote', "Delete this {0} session on {1}?", chosen.sourceLabel, chosen.hostLabel)
+				: localize('kingu.vault.delete.confirm', "Delete this {0} session?", chosen.sourceLabel),
+			// A remote session says so twice — in the question and in the warning —
+			// because the one thing a person must not do here is delete a file on a
+			// machine they thought was this one. The promise differs by machine too:
+			// a recycle bin belongs to this desktop, and a host reached over the
+			// agent connection has none, so the file is simply gone.
+			detail: chosen.hostLabel
+				? localize('kingu.vault.delete.detailRemote', "{0}\n\n{1}\n\nThis file is on {2}, which has no recycle bin: it and any worker transcripts are deleted outright and cannot be recovered.", chosen.title, sessionPath(chosen), chosen.hostLabel)
+				: localize('kingu.vault.delete.detail', "{0}\n\n{1}\n\nThe transcript and any worker transcripts go to the recycle bin. {2} keeps its own copy of nothing — this is the only one.", chosen.title, sessionPath(chosen), chosen.sourceLabel),
 			primaryButton: localize('kingu.vault.delete.confirmButton', "Delete"),
 		});
 		if (!confirmed) {

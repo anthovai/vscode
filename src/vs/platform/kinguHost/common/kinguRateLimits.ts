@@ -3,10 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import { createDecorator } from '../../instantiation/common/instantiation.js';
-import { Event } from '../../../base/common/event.js';
-import { IKinguRateLimit } from './kinguRateLimitTypes.js';
-import { KinguQuotaProvider } from './kinguQuotaProviders.js';
+import { IKinguRateLimit } from './kinguHostTypes.js';
 
 /**
  * Where Anthropic reports what is left of an OAuth account's quota.
@@ -46,32 +43,6 @@ export type KinguQuotaProblem =
 export type KinguQuotaResult =
 	| { readonly ok: true; readonly quota: IKinguProviderQuota }
 	| { readonly ok: false; readonly problem: KinguQuotaProblem };
-
-export const IKinguRateLimitService = createDecorator<IKinguRateLimitService>('kinguRateLimitService');
-
-/**
- * Reads what is left of the quota on accounts this machine is already signed
- * into.
- *
- * Only for providers whose own CLI stores a token on disk and whose backend
- * exposes a usage endpoint. Nothing here signs anything in, refreshes a token,
- * or writes to a credential store: it reads what is there and asks the issuer.
- */
-export interface IKinguRateLimitService {
-	readonly _serviceBrand: undefined;
-
-	/** Fires when a refresh changes what {@link claude} returns. */
-	readonly onDidChange: Event<void>;
-
-	/** The last reading per provider; absent until one has been taken. */
-	readonly quotas: ReadonlyMap<KinguQuotaProvider, KinguQuotaResult>;
-
-	/** Reads again now. Safe to call often; concurrent calls share one request. */
-	refresh(): Promise<void>;
-
-	/** What the app is holding across all of its processes, when that is knowable. */
-	readMemoryBytes(): Promise<number | undefined>;
-}
 
 // #region Credentials
 

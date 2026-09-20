@@ -19,12 +19,16 @@ import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus } from '../../
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
+import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_STATUS_BAR_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
 import { KinguQuotaProblem } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
 import { KinguHostService } from './kinguHostService.js';
 import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { URI } from '../../../../base/common/uri.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
+import { describeListeningPort } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
 import { formatRateLimit, formatWindow, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 
 registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed);
@@ -38,12 +42,17 @@ registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed
  */
 const PROVIDER_ICONS: Readonly<Record<KinguQuotaProvider, ThemeIcon>> = {
 	[KinguQuotaProvider.Claude]: Codicon.flame,
+	[KinguQuotaProvider.Codex]: Codicon.circleLargeOutline,
 	[KinguQuotaProvider.Grok]: Codicon.zap,
 	[KinguQuotaProvider.Kimi]: Codicon.circleFilled,
 	[KinguQuotaProvider.Gemini]: Codicon.sparkle,
 };
 
 export const KINGU_REFRESH_QUOTAS_COMMAND_ID = 'kingu.status.refreshQuotas';
+export const KINGU_OPEN_PORT_COMMAND_ID = 'kingu.status.openPort';
+
+/** How many kinds of process the memory tooltip names before it becomes a list. */
+const MEMORY_KINDS_SHOWN = 5;
 
 /** A byte count as the unit a person would say: `1.2 GB`, `840 MB`. */
 function formatBytes(bytes: number): string {
@@ -103,7 +112,7 @@ class KinguStatusBarContribution extends Disposable {
 
 	static readonly ID = 'kingu.contrib.statusBar';
 
-	private readonly _rateLimit = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly _refresh = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _remote = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _vault = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _terminals = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
@@ -127,7 +136,7 @@ class KinguStatusBarContribution extends Disposable {
 
 		// Both sources push, so the poll is only a backstop for the parts of the
 		// quota that change with time rather than with an event (a window resetting).
-		this._register(this._agentHostService.rootState.onDidChange(() => this._updateRateLimit()));
+		this._register(this._agentHostService.rootState.onDidChange(() => this._updateProviders()));
 		this._register(this._remoteAgentHostService.onDidChangeConnections(() => this._updateRemote()));
 		this._register(this._vaultService.onDidChangeSessions(() => this._updateVault()));
 		this._register(this._hostService.onDidChange(() => this._updateProviders()));
@@ -138,7 +147,6 @@ class KinguStatusBarContribution extends Disposable {
 	}
 
 	private _update(): void {
-		this._updateRateLimit();
 		this._updateRemote();
 		this._updateVault();
 		this._updateProviders();
@@ -164,12 +172,14 @@ class KinguStatusBarContribution extends Disposable {
 				this._ports.clear();
 				return;
 			}
-			const numbers = ports.map(port => port.port);
+			// Named, because a port number alone cannot be told from another window's.
+			const rows = ports.map(describeListeningPort).join('\n');
 			const entry: IStatusbarEntry = {
 				name: localize('kingu.status.ports.name', "Listening ports"),
 				text: `$(plug) ${ports.length}`,
 				ariaLabel: localize('kingu.status.ports.aria', "{0} ports listening", ports.length),
-				tooltip: localize('kingu.status.ports.tooltip', "Listening on {0}", numbers.join(', ')),
+				tooltip: localize('kingu.status.ports.tooltip', "Ports this app's processes are serving\n\n{0}\n\nClick to open one.", rows),
+				command: KINGU_OPEN_PORT_COMMAND_ID,
 			};
 			if (this._ports.value) {
 				this._ports.value.update(entry);
@@ -212,16 +222,22 @@ class KinguStatusBarContribution extends Disposable {
 	 * is a fraction of the answer once an agent host is running.
 	 */
 	private _updateMemory(): void {
-		void this._hostService.readMemoryBytes().then(bytes => {
-			if (this._store.isDisposed || bytes === undefined || bytes <= 0) {
+		void this._hostService.readMemory().then(reading => {
+			if (this._store.isDisposed || reading === undefined || reading.total <= 0) {
 				return;
 			}
-			const text = formatBytes(bytes);
+			const text = formatBytes(reading.total);
+			// The breakdown answers the question the total provokes. Only the few
+			// largest: a list of every helper process is a process explorer, and the
+			// strip is not one.
+			const breakdown = reading.byKind.slice(0, MEMORY_KINDS_SHOWN)
+				.map(part => `${part.kind}: ${formatBytes(part.bytes)}`)
+				.join('\n');
 			const entry: IStatusbarEntry = {
 				name: localize('kingu.status.memory.name', "Memory"),
 				text: `$(dashboard) ${text}`,
 				ariaLabel: localize('kingu.status.memory.aria', "{0} of memory in use", text),
-				tooltip: localize('kingu.status.memory.tooltip', "{0} across every process this app runs", text),
+				tooltip: localize('kingu.status.memory.tooltip', "{0} across every process this app runs\n\n{1}", text, breakdown),
 			};
 			if (this._memory.value) {
 				this._memory.value.update(entry);
@@ -254,17 +270,34 @@ class KinguStatusBarContribution extends Disposable {
 	private _updateProviders(): void {
 		// Ordered so a provider appearing later does not shuffle the ones before it.
 		let priority = 110;
-		for (const provider of KINGU_QUOTA_PROVIDERS) {
+		for (const provider of KINGU_STATUS_BAR_PROVIDERS) {
 			this._updateProvider(provider, priority--);
 		}
+		this._updateRefreshButton(priority - 1);
+	}
+
+	/**
+	 * What Codex reports about itself.
+	 *
+	 * Not a request: the agent host publishes the signed-in account's window with
+	 * its own state, so this is read rather than asked for. It is folded into the
+	 * same gauge as the providers that are asked, because where a number came
+	 * from is this code's problem and not the reader's.
+	 */
+	private _codexWindows(): readonly IKinguRateLimit[] {
+		const state = this._agentHostService.rootState.value;
+		const limit = readRateLimitFromAccount(readCodexAccountInfo(state instanceof Error ? undefined : state));
+		return limit ? [limit] : [];
 	}
 
 	private _updateProvider(provider: KinguQuotaProvider, priority: number): void {
 		const existing = this._providers.get(provider);
-		const result = this._hostService.quotas.get(provider);
-		const windows = result?.ok
-			? [result.quota.session, result.quota.weekly].filter(limit => limit !== undefined)
-			: [];
+		const result = provider === KinguQuotaProvider.Codex ? undefined : this._hostService.quotas.get(provider);
+		const windows = provider === KinguQuotaProvider.Codex
+			? this._codexWindows()
+			: result?.ok
+				? [result.quota.session, result.quota.weekly].filter(limit => limit !== undefined)
+				: [];
 		if (windows.length === 0) {
 			existing?.dispose();
 			this._providers.delete(provider);
@@ -289,6 +322,33 @@ class KinguStatusBarContribution extends Disposable {
 			existing.update(entry);
 		} else {
 			this._providers.set(provider, this._statusbarService.addEntry(entry, `kingu.status.quota.${provider}`, StatusbarAlignment.LEFT, priority));
+		}
+	}
+
+	/**
+	 * The button that reads every gauge again.
+	 *
+	 * Beside the gauges rather than hidden in the palette, and only when there is
+	 * a gauge to refresh: a lone refresh arrow next to nothing is a control with
+	 * no subject. Clicking a gauge does the same thing; this is the affordance
+	 * that says so.
+	 */
+	private _updateRefreshButton(priority: number): void {
+		if (this._providers.size === 0) {
+			this._refresh.clear();
+			return;
+		}
+		const entry: IStatusbarEntry = {
+			name: localize('kingu.status.refresh.name', "Refresh agent quotas"),
+			text: '$(refresh)',
+			ariaLabel: localize('kingu.status.refresh.aria', "Refresh agent quotas"),
+			tooltip: localize('kingu.status.refresh.tooltip', "Read every agent's quota again"),
+			command: KINGU_REFRESH_QUOTAS_COMMAND_ID,
+		};
+		if (this._refresh.value) {
+			this._refresh.value.update(entry);
+		} else {
+			this._refresh.value = this._statusbarService.addEntry(entry, 'kingu.status.refresh', StatusbarAlignment.LEFT, priority);
 		}
 	}
 
@@ -342,40 +402,6 @@ class KinguStatusBarContribution extends Disposable {
 				this._vault.value = this._statusbarService.addEntry(entry, 'kingu.status.vault', StatusbarAlignment.RIGHT, 97);
 			}
 		}, () => { /* a vault that cannot be read gets no entry */ });
-	}
-
-	/**
-	 * The quota gauge, from what the agent host already reports about the account.
-	 *
-	 * Only Codex publishes this today. The others get no gauge rather than a
-	 * guessed one; when a host starts reporting theirs, it appears here.
-	 */
-	private _updateRateLimit(): void {
-		const state = this._agentHostService.rootState.value;
-		const account = readCodexAccountInfo(state instanceof Error ? undefined : state);
-		const limit = readRateLimitFromAccount(account);
-		if (!limit) {
-			this._rateLimit.clear();
-			return;
-		}
-		const entry = this._rateLimitEntry(limit);
-		if (this._rateLimit.value) {
-			this._rateLimit.value.update(entry);
-		} else {
-			this._rateLimit.value = this._statusbarService.addEntry(entry, 'kingu.status.rateLimit', StatusbarAlignment.LEFT, 100);
-		}
-	}
-
-	private _rateLimitEntry(limit: IKinguRateLimit): IStatusbarEntry {
-		const text = formatRateLimit(limit);
-		return {
-			name: localize('kingu.status.rateLimit.name', "Agent quota"),
-			text: `$(pulse) ${text}`,
-			ariaLabel: localize('kingu.status.rateLimit.aria', "Codex quota: {0}", text),
-			tooltip: limit.resetsAt
-				? localize('kingu.status.rateLimit.tooltipReset', "Codex: {0} of the window used. Resets {1}.", `${Math.round(limit.usedPercent)}%`, new Date(limit.resetsAt).toLocaleString())
-				: localize('kingu.status.rateLimit.tooltip', "Codex: {0} of the window used.", `${Math.round(limit.usedPercent)}%`),
-		};
 	}
 
 	/**
@@ -440,3 +466,44 @@ class RefreshKinguQuotasAction extends Action2 {
 }
 
 registerAction2(RefreshKinguQuotasAction);
+
+/**
+ * Opens one of the ports this app is serving.
+ *
+ * The number in the strip is where a person notices their dev server came up;
+ * this is the step they take next, and without it they would read the number
+ * and then type it into a browser themselves.
+ */
+class OpenKinguPortAction extends Action2 {
+
+	constructor() {
+		super({
+			id: KINGU_OPEN_PORT_COMMAND_ID,
+			title: localize2('kingu.status.openPort', "Kingu: Open a Listening Port"),
+			category: Categories.View,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		// Taken before the first await: the accessor is only valid synchronously.
+		const hostService = accessor.get(IKinguHostService);
+		const quickInputService = accessor.get(IQuickInputService);
+		const openerService = accessor.get(IOpenerService);
+
+		const ports = await hostService.readListeningPorts();
+		if (ports.length === 0) {
+			return;
+		}
+		const picked = await quickInputService.pick(
+			ports.map(port => ({ label: String(port.port), description: port.process, port })),
+			{ title: localize('kingu.status.openPort.title', "Open a listening port"), placeHolder: localize('kingu.status.openPort.placeholder', "Ports this app's processes are serving") });
+		if (picked) {
+			// Loopback rather than the bind address: a server on `0.0.0.0` is reached
+			// from this machine at localhost, and that is the machine doing the asking.
+			await openerService.open(URI.parse(`http://localhost:${picked.port.port}`), { openExternal: true });
+		}
+	}
+}
+
+registerAction2(OpenKinguPortAction);

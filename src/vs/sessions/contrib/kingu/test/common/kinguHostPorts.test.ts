@@ -6,7 +6,9 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import {
+	describeListeningPort,
 	isInterestingPort,
+	nameListeningPorts,
 	normalizeListeningPorts,
 	parseLsofPorts,
 	parseNetstatPorts,
@@ -124,6 +126,21 @@ suite('Kingu listening ports', () => {
 
 		test('drops what is not worth showing rather than counting it', () => {
 			assert.deepStrictEqual(normalizeListeningPorts([{ port: 3000, address: '10.0.0.4', pid: 77 }], ours), []);
+		});
+	});
+
+	suite('naming', () => {
+
+		test('attaches the owner the process tree knows', () => {
+			const named = nameListeningPorts([{ port: 3000, address: '0.0.0.0', pid: 77 }], new Map([[77, 'node']]));
+			assert.strictEqual(named[0].process, 'node');
+			assert.strictEqual(describeListeningPort(named[0]), '3000 node');
+		});
+
+		test('a port whose owner is not in the tree keeps its number and nothing else', () => {
+			const named = nameListeningPorts([{ port: 3000, address: '0.0.0.0', pid: 77 }], new Map());
+			assert.strictEqual(named[0].process, undefined);
+			assert.strictEqual(describeListeningPort(named[0]), '3000');
 		});
 	});
 });

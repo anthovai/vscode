@@ -3,12 +3,19 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import { IKinguRateLimit } from './kinguRateLimitTypes.js';
+import { IKinguRateLimit } from './kinguHostTypes.js';
 import { IKinguProviderQuota, KinguQuotaProblem } from './kinguRateLimits.js';
 
-/** An agent whose own CLI leaves a token on disk and whose issuer reports quota. */
+/** An agent whose quota the bar can show, whether it is asked for or arrives on its own. */
 export const enum KinguQuotaProvider {
 	Claude = 'claude',
+	/**
+	 * Read from what the agent host already publishes about the signed-in
+	 * account, not from a request. Codex is in this enum anyway so that it draws
+	 * the same gauge as the rest: a person reading the strip should not have to
+	 * learn that one of the numbers came from somewhere else.
+	 */
+	Codex = 'codex',
 	Grok = 'grok',
 	Kimi = 'kimi',
 	Gemini = 'gemini',
@@ -17,13 +24,30 @@ export const enum KinguQuotaProvider {
 /** What to call each one in the bar. */
 export const KINGU_QUOTA_PROVIDER_LABELS: Readonly<Record<KinguQuotaProvider, string>> = {
 	[KinguQuotaProvider.Claude]: 'Claude',
+	[KinguQuotaProvider.Codex]: 'Codex',
 	[KinguQuotaProvider.Grok]: 'Grok',
 	[KinguQuotaProvider.Kimi]: 'Kimi',
 	[KinguQuotaProvider.Gemini]: 'Gemini',
 };
 
+/**
+ * The providers the main process is asked about.
+ *
+ * Codex is absent on purpose: its quota arrives with the agent host's own state
+ * and asking for it over the channel would be a round trip for something the
+ * window already has.
+ */
 export const KINGU_QUOTA_PROVIDERS: readonly KinguQuotaProvider[] = [
 	KinguQuotaProvider.Claude,
+	KinguQuotaProvider.Grok,
+	KinguQuotaProvider.Kimi,
+	KinguQuotaProvider.Gemini,
+];
+
+/** The providers the bar draws a gauge for, in the order they appear. */
+export const KINGU_STATUS_BAR_PROVIDERS: readonly KinguQuotaProvider[] = [
+	KinguQuotaProvider.Claude,
+	KinguQuotaProvider.Codex,
 	KinguQuotaProvider.Grok,
 	KinguQuotaProvider.Kimi,
 	KinguQuotaProvider.Gemini,

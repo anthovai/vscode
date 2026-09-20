@@ -489,10 +489,16 @@ export class KinguVaultService extends Disposable implements IKinguVaultService 
 		if (subagents) {
 			alsoDelete.push(session.resource.with({ path: subagents }));
 		}
-		await this._fileService.del(session.resource, { useTrash: true });
+		// The recycle bin is this desktop's. A host reached over the agent
+		// connection has no such thing, and asking for one there would either fail
+		// or be quietly ignored — so a remote delete is an outright delete, and the
+		// dialog that asked for it says so rather than promising a bin that is not
+		// there.
+		const useTrash = session.hostLabel === undefined;
+		await this._fileService.del(session.resource, { useTrash });
 		for (const resource of alsoDelete) {
 			try {
-				await this._fileService.del(resource, { useTrash: true, recursive: true });
+				await this._fileService.del(resource, { useTrash, recursive: true });
 			} catch {
 				// Absent for most sessions; the one that mattered is already gone.
 			}
