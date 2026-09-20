@@ -96,3 +96,213 @@
 #kingu\.status\.refresh:hover .codicon-refresh {
 	opacity: 1;
 }
+
+/* ---------------------------------------------------------------------------
+   The Usage panel: every agent's quota, opened from any gauge.
+
+   Drawn inside a hover, so it owns its own padding and sizes itself; the hover
+   only positions it. Colours come from the theme's variables throughout — this
+   panel appears over the editor and over settings and has to belong to both.
+   --------------------------------------------------------------------------- */
+.kingu-usage-roster {
+	width: 320px;
+	font-size: 12px;
+	color: var(--vscode-foreground);
+}
+
+.kingu-usage-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 12px 6px;
+}
+
+.kingu-usage-title {
+	font-size: 13px;
+	font-weight: 600;
+}
+
+/* Says what the panel covers, quietly — the answer to "whose usage is this"
+   before the question is asked. */
+.kingu-usage-scope {
+	margin-left: auto;
+	opacity: 0.7;
+}
+
+.kingu-usage-refresh,
+.kingu-usage-mode,
+.kingu-usage-footer {
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
+	background: none;
+	border: none;
+	cursor: pointer;
+}
+
+.kingu-usage-refresh {
+	display: inline-flex;
+	padding: 2px;
+	border-radius: 4px;
+	opacity: 0.7;
+}
+
+.kingu-usage-refresh:hover {
+	opacity: 1;
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+/* One turn, not a loop: the reading either arrives or the row says why, and a
+   spinner that never stops would outlive both answers. */
+.kingu-usage-refresh .spinning {
+	animation: kingu-usage-spin 1s linear;
+}
+
+@keyframes kingu-usage-spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+.kingu-usage-modes {
+	display: flex;
+	gap: 2px;
+	margin: 0 12px 8px;
+	padding: 2px;
+	border-radius: 5px;
+	background: var(--vscode-editorWidget-background);
+}
+
+.kingu-usage-mode {
+	flex: 1;
+	padding: 3px 0;
+	border-radius: 4px;
+	opacity: 0.7;
+}
+
+.kingu-usage-mode:hover {
+	opacity: 1;
+}
+
+.kingu-usage-mode.checked {
+	opacity: 1;
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+.kingu-usage-rows {
+	border-top: 1px solid var(--vscode-widget-border, transparent);
+}
+
+.kingu-usage-row {
+	padding: 7px 12px;
+}
+
+.kingu-usage-row + .kingu-usage-row {
+	border-top: 1px solid var(--vscode-widget-border, transparent);
+}
+
+.kingu-usage-row-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.kingu-usage-row-icon {
+	font-size: 13px;
+	opacity: 0.85;
+}
+
+.kingu-usage-row-name {
+	font-weight: 500;
+}
+
+/* Why a row has no bars, in the row's own line rather than in a tooltip: it is
+   the whole content of that row, and content does not hide behind a hover. */
+.kingu-usage-row-status,
+.kingu-usage-row-reset {
+	margin-left: auto;
+	opacity: 0.7;
+}
+
+.kingu-usage-row-trailing {
+	margin-left: auto;
+}
+
+/* Indented to the name rather than the icon, so the bars read as belonging to
+   the agent above them. */
+.kingu-usage-row-windows {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	padding: 5px 0 1px 21px;
+}
+
+.kingu-usage-metric {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.kingu-usage-metric-label {
+	font-size: 10px;
+	opacity: 0.7;
+}
+
+.kingu-usage-track {
+	width: 34px;
+	height: 5px;
+	border-radius: 3px;
+	overflow: hidden;
+	/* Flat translucency rather than `opacity`, for the same reason the strip's
+	   gauge uses it: opacity applies to the subtree and would dim the fill. */
+	background: rgba(127, 127, 127, 0.3);
+}
+
+.kingu-usage-fill {
+	display: block;
+	height: 100%;
+	border-radius: 3px;
+	background: var(--vscode-foreground);
+}
+
+.kingu-usage-metric-value {
+	font-variant-numeric: tabular-nums;
+}
+
+/* The thresholds are shared with the model, so a bar and its number can never
+   disagree about whether something is urgent. Below the first threshold both
+   stay at the foreground colour: colour is reserved for state here, and chrome
+   that is always coloured says nothing when something is actually wrong. */
+.kingu-usage-fill.warning {
+	background: var(--vscode-editorWarning-foreground);
+}
+
+.kingu-usage-fill.critical {
+	background: var(--vscode-editorError-foreground);
+}
+
+.kingu-usage-metric-value.warning {
+	color: var(--vscode-editorWarning-foreground);
+}
+
+.kingu-usage-metric-value.critical {
+	color: var(--vscode-editorError-foreground);
+}
+
+.kingu-usage-empty {
+	padding: 10px 12px;
+	opacity: 0.7;
+}
+
+.kingu-usage-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 8px 12px;
+	border-top: 1px solid var(--vscode-widget-border, transparent);
+	text-align: left;
+}
+
+.kingu-usage-footer:hover {
+	background: var(--vscode-list-hoverBackground);
+}

@@ -516,3 +516,52 @@ that exists. Adding a fourth here is not configuration; it is an
 `IAgentProvider` implementation, and for a CLI with no SDK it is the PTY-and-
 hook approach this port declined. That trade is deliberate and it is the one
 place where "like the ADE" would mean giving something up.
+
+## The Usage panel, and how its UI was ported
+
+The first UI taken from the ADE rather than reinvented. Running the two side by
+side made the gap concrete: the strip showed `11% 5h · 69% wk` and clicking it
+refreshed the reading. There was no way to see what was behind the number, and
+nothing at all about the agents that report none.
+
+The ADE's own panel is 347 lines of React. What was worth taking was not any of
+that. Underneath it sit four small modules of pure logic — which row is worst,
+what a row says when it has no number, where a bar changes colour, how a
+percentage is rounded — and those carry the decisions. They were ported to
+`kinguUsageRoster.ts` and the drawing was rewritten against the fork's own DOM
+helpers. One of them came with a note worth keeping verbatim: round *before*
+taking the "remaining" complement, or `round(100 - 20.5)` and
+`100 - round(20.5)` disagree by one and the same window reads differently
+depending on which caller got there first.
+
+The panel hangs off the fork's own seam rather than a new one. A status bar
+entry's `tooltip` accepts `{ element: () => HTMLElement }` — a factory, so the
+panel is built from the readings that exist at the moment it opens and there is
+no stale element to reconcile — and `ToggleTooltipCommand` pins it so the
+controls inside are reachable. No popover framework was added.
+
+Two differences from the ADE, both deliberate:
+
+- **Providers with nothing to report are kept.** The strip drops them, because
+  a bar of placeholders is worse than a shorter bar. The panel keeps them and
+  says why — "not signed in", "no usage reported" — because it was opened by
+  someone asking about all of their agents, and an absent row is silence rather
+  than an answer. Expired credentials read as signed out, not as an error: it
+  is the one case the user can fix.
+- **No "Manage Accounts…".** The ADE's footer routes there; this fork has no
+  accounts page to route to, and a row that opens nothing is worse than a row
+  that is not there. "Usage details & history" points at `kingu.stats`, which
+  exists.
+
+### Verified
+
+Seventeen tests cover the model: the ordering, each reason a row has no
+numbers, the rounding in both directions, and the countdown's edges.
+
+In the running window, over CDP: opening the panel gives
+`Claude · resets in 2h 40m · 5h 12% · wk 69%` with two bars, pressing
+**Compact** redraws it in place to `Claude · wk 69%` with none, and the panel
+stays open across the change. That last part is the whole reason the callback
+redraws the element instead of updating the status bar entry — updating an
+entry rebuilds its hover, so the first version made the panel vanish when a
+control inside it was pressed.

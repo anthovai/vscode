@@ -6,7 +6,6 @@
 import './media/kinguStatusBar.css';
 import { $ } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
-import { Codicon } from '../../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
@@ -18,7 +17,8 @@ import { IAgentHostService } from '../../../../platform/agentHost/common/agentSe
 import { readCodexAccountInfo } from '../../../../platform/agentHost/common/meta/codexAccount.js';
 import { IRemoteAgentHostService, RemoteAgentHostConnectionStatus } from '../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment, ToggleTooltipCommand } from '../../../../workbench/services/statusbar/browser/statusbar.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { KINGU_QUOTA_PROVIDER_LABELS, KINGU_STATUS_BAR_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
 import { KinguQuotaProblem } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
@@ -28,11 +28,14 @@ import { IKinguAdvertisedUrlService, KinguAdvertisedUrlService } from './kinguAd
 import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
 import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
 import { describeListeningPort } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
-import { formatRateLimit, formatWindow, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
+import { formatRateLimit, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
+import { IKinguUsageSource, KinguUsageDetail, usageRows } from '../common/kinguUsageRoster.js';
+import { IKinguUsageRosterOptions, PROVIDER_ICONS, renderKinguUsageRoster, updateKinguUsageRoster } from './kinguUsageRosterPanel.js';
 
 registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed);
 // Eager, unlike the rest: it has to be listening to the terminals before a dev
@@ -41,22 +44,10 @@ registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed
 // before that — which is all of them.
 registerSingleton(IKinguAdvertisedUrlService, KinguAdvertisedUrlService, InstantiationType.Eager);
 
-/**
- * A codicon per provider.
- *
- * Not their logos: shipping a brand's mark means shipping its asset and its
- * terms, and a shape that merely resembles one is worse than an honest generic.
- * Distinct enough to tell two gauges apart at a glance, which is the job.
- */
-const PROVIDER_ICONS: Readonly<Record<KinguQuotaProvider, ThemeIcon>> = {
-	[KinguQuotaProvider.Claude]: Codicon.flame,
-	[KinguQuotaProvider.Codex]: Codicon.circleLargeOutline,
-	[KinguQuotaProvider.Grok]: Codicon.zap,
-	[KinguQuotaProvider.Kimi]: Codicon.circleFilled,
-	[KinguQuotaProvider.Gemini]: Codicon.sparkle,
-};
-
 export const KINGU_REFRESH_QUOTAS_COMMAND_ID = 'kingu.status.refreshQuotas';
+/** Where "Usage details & history" at the foot of the panel goes. */
+const KINGU_STATS_COMMAND_ID = 'kingu.stats';
+const USAGE_DETAIL_STORAGE_KEY = 'kingu.usage.detail';
 export const KINGU_OPEN_PORT_COMMAND_ID = 'kingu.status.openPort';
 
 /** How many kinds of process the memory tooltip names before it becomes a list. */
@@ -149,6 +140,14 @@ class KinguStatusBarContribution extends Disposable {
 	 */
 	private readonly _gauges = new Map<KinguQuotaProvider, KinguGauge>();
 	private _lastQuotaRefresh = 0;
+	/**
+	 * Whether the panel draws every window or only the tightest.
+	 *
+	 * Stored rather than settled by a setting: the control lives inside the panel
+	 * it changes, so this is a view state the user has adjusted in passing, not a
+	 * preference they went looking for.
+	 */
+	private _detail: KinguUsageDetail;
 
 	constructor(
 		@IStatusbarService private readonly _statusbarService: IStatusbarService,
@@ -159,8 +158,12 @@ class KinguStatusBarContribution extends Disposable {
 		@IKinguHostService private readonly _hostService: IKinguHostService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@IKinguAdvertisedUrlService private readonly _advertisedUrls: IKinguAdvertisedUrlService,
+		@IStorageService private readonly _storageService: IStorageService,
+		@ICommandService private readonly _commandService: ICommandService,
 	) {
 		super();
+
+		this._detail = this._storageService.get(USAGE_DETAIL_STORAGE_KEY, StorageScope.PROFILE) === 'compact' ? 'compact' : 'detailed';
 
 		this._update();
 
@@ -331,6 +334,74 @@ class KinguStatusBarContribution extends Disposable {
 		return limit ? [limit] : [];
 	}
 
+	/**
+	 * Every provider's reading, including the ones with nothing to report.
+	 *
+	 * The strip drops a provider that reports nothing, because a bar of
+	 * placeholders is worse than a shorter bar. The panel keeps it and says why:
+	 * it was opened by someone asking a question about all of their agents, and
+	 * "Grok is not signed in" is an answer to that question where an absent row
+	 * is silence.
+	 */
+	private _usageSources(): IKinguUsageSource[] {
+		return KINGU_STATUS_BAR_PROVIDERS.map(provider => {
+			if (provider === KinguQuotaProvider.Codex) {
+				// Not asked for: the agent host publishes it with its own state.
+				const limits = this._codexWindows();
+				return { provider, limits, problem: undefined, pending: false };
+			}
+			const result = this._hostService.quotas.get(provider);
+			if (result === undefined) {
+				return { provider, limits: [], problem: undefined, pending: true };
+			}
+			return result.ok
+				? { provider, limits: [result.quota.session, result.quota.weekly].filter(limit => limit !== undefined), problem: undefined, pending: false }
+				: { provider, limits: [], problem: result.problem, pending: false };
+		});
+	}
+
+	/**
+	 * The panel behind every gauge.
+	 *
+	 * Built on open rather than kept and updated, because a hover asks for its
+	 * content at the moment it is shown — so what appears is drawn from the
+	 * readings that exist then, and there is no stale element to reconcile.
+	 *
+	 * Every gauge opens the same panel. A person who clicks the Claude gauge is
+	 * asking how much they have left, and the answer is rarely about one agent.
+	 */
+	private _rosterPanel(): HTMLElement {
+		// Redrawn in place rather than by updating the status bar entries. Updating
+		// an entry rebuilds its managed hover, which closes the panel — so pressing
+		// a control inside it would make it vanish instead of answer.
+		let root!: HTMLElement;
+		const options = (): IKinguUsageRosterOptions => ({
+			rows: usageRows(this._usageSources()),
+			detail: this._detail,
+			// One direction for now, and it is the one the gauge already draws:
+			// two readings of the same window that count opposite ways is a choice
+			// worth offering only once there is somewhere to offer it.
+			display: 'used',
+			refreshing: false,
+			onDetailChange: detail => {
+				this._detail = detail;
+				this._storageService.store(USAGE_DETAIL_STORAGE_KEY, detail, StorageScope.PROFILE, StorageTarget.USER);
+				updateKinguUsageRoster(root, options());
+			},
+			onRefresh: async () => {
+				await this._commandService.executeCommand(KINGU_REFRESH_QUOTAS_COMMAND_ID);
+				// The panel the user is looking at answers the refresh they asked
+				// for; the entries behind it catch up on their own event.
+				if (!this._store.isDisposed) {
+					updateKinguUsageRoster(root, options());
+				}
+			},
+			onDetails: () => void this._commandService.executeCommand(KINGU_STATS_COMMAND_ID),
+		});
+		root = renderKinguUsageRoster(options());
+		return root;
+	}
+
 	private _updateProvider(provider: KinguQuotaProvider, priority: number): void {
 		const existing = this._providers.get(provider);
 		const result = provider === KinguQuotaProvider.Codex ? undefined : this._hostService.quotas.get(provider);
@@ -366,8 +437,13 @@ class KinguStatusBarContribution extends Disposable {
 			text: '',
 			content: gauge.element,
 			ariaLabel: localize('kingu.status.quota.aria', "{0} quota: {1}", label, text),
-			tooltip: this._quotaTooltip(label, windows),
-			command: KINGU_REFRESH_QUOTAS_COMMAND_ID,
+			// The panel, not a sentence. Earlier this was a string and clicking the
+			// gauge refreshed it — which meant the strip could show a reading and
+			// offer no way to see what was behind it.
+			tooltip: { element: () => this._rosterPanel(), contentOwnsPadding: true },
+			// Toggling pins the hover, which is what makes the controls inside it
+			// reachable: an unpinned hover closes on the way to the button.
+			command: ToggleTooltipCommand,
 		};
 		if (existing) {
 			existing.update(entry);
@@ -401,16 +477,6 @@ class KinguStatusBarContribution extends Disposable {
 		} else {
 			this._refresh.value = this._statusbarService.addEntry(entry, 'kingu.status.refresh', StatusbarAlignment.LEFT, priority);
 		}
-	}
-
-	private _quotaTooltip(label: string, windows: readonly IKinguRateLimit[]): string {
-		return windows.map(limit => {
-			const used = Math.round(limit.usedPercent);
-			const window = limit.windowDurationMins === undefined ? '' : ' ' + formatWindow(limit.windowDurationMins);
-			return limit.resetsAt
-				? localize('kingu.status.quota.windowReset', "{0}{1}: {2}% used, resets {3}", label, window, used, new Date(limit.resetsAt).toLocaleString())
-				: localize('kingu.status.quota.window', "{0}{1}: {2}% used", label, window, used);
-		}).join('\n');
 	}
 
 	private readonly _loggedProblems = new Map<KinguQuotaProvider, KinguQuotaProblem>();
