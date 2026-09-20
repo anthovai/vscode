@@ -18,6 +18,8 @@ import { type IChangesetOperationHandler } from '../common/agentHostChangesetOpe
 import { type AutoMergeMethod, type CreatedPullRequest, type GitHubRepositoryMergeCapabilities, IAgentHostOctoKitService } from './shared/agentHostOctoKitService.js';
 import type { InvokeChangesetOperationParams, InvokeChangesetOperationResult } from '../common/state/protocol/channels-changeset/commands.js';
 import { ICopilotApiService, type ICopilotUtilityChatMessage } from './shared/copilotApiService.js';
+import { IByokLmBridgeRegistry } from './byokLmBridgeRegistry.js';
+import { pickUtilityModel, readByokText, toByokInput } from '../common/kingu/byokUtilityChat.js';
 import { buildConversationContext } from '../common/agentHostConversationContext.js';
 import { IAgentBranchNameGenerator } from './shared/agentBranchNameGenerator.js';
 import { SessionConfigKey } from '../common/sessionConfigKeys.js';
@@ -94,6 +96,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		@IAgentHostOctoKitService private readonly _octoKitService: IAgentHostOctoKitService,
 		@IAgentHostGitHubEndpointService private readonly _gitHubEndpointService: IAgentHostGitHubEndpointService,
 		@ICopilotApiService private readonly _copilotApiService: ICopilotApiService,
+		@IByokLmBridgeRegistry private readonly _byokLmBridgeRegistry: IByokLmBridgeRegistry,
 		@IAgentBranchNameGenerator private readonly _branchNameGenerator: IAgentBranchNameGenerator,
 		@IAgentConfigurationService private readonly _configurationService: IAgentConfigurationService,
 		@ILogService private readonly _logService: ILogService,
@@ -584,25 +587,58 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 			resource: copilotResource.resource,
 			scopes: copilotResource.scopes_supported,
 		});
-		if (!authToken) {
-			throw new Error(localize('agentHost.changeset.pr.generationAuthRequired', "Sign in to Copilot to generate a pull request title and description, or enter them manually."));
-		}
 
 		const conversation = buildConversationContext(sessionState.turns, { maxChars: MAX_PR_CONVERSATION_CONTEXT_CHARS });
 		const changeSummary = this._summarizeDiffsForPrompt(branchChanges);
 		if (!conversation && !changeSummary) {
 			throw new Error(localize('agentHost.changeset.pr.generationNoContext', "There is no conversation or change context to generate a pull request title and description."));
 		}
+		const messages = this._buildTitleAndDescriptionPrompt(branchName, base, conversation, changeSummary);
 
-		const raw = await this._copilotApiService.utilityChatCompletion(authToken, {
-			messages: this._buildTitleAndDescriptionPrompt(branchName, base, conversation, changeSummary),
-		}, { signal });
+		// Copilot when the user has it, because that is what this was built
+		// against and it costs them nothing extra. Otherwise the window's own
+		// models, over the bridge the agent SDK already uses: a person running
+		// Claude or Codex here has a perfectly good model, and telling them to
+		// sign into a third one to get a sentence written is not an answer.
+		const raw = authToken
+			? await this._copilotApiService.utilityChatCompletion(authToken, { messages }, { signal })
+			: await this._generateWithWindowModel(messages, token);
 		this._throwIfCancelled(token);
 		const generated = this._parseTitleAndDescription(raw);
 		if (!generated) {
 			throw new Error(localize('agentHost.changeset.pr.generationInvalidResponse', "The model did not return a pull request title and description. Enter them manually."));
 		}
 		return generated;
+	}
+
+	/**
+	 * The same prompt, asked of whatever model the window has.
+	 *
+	 * The bridge serves one window's models; which window does not matter,
+	 * because they all expose the same set. A window with no models at all is
+	 * reported as that rather than as a Copilot problem, since signing into
+	 * Copilot is only one of the ways to fix it.
+	 */
+	private async _generateWithWindowModel(messages: ICopilotUtilityChatMessage[], token: CancellationToken): Promise<string> {
+		const connection = this._byokLmBridgeRegistry.getServingConnection();
+		const model = connection && pickUtilityModel(this._byokLmBridgeRegistry.getModels());
+		if (!connection || !model) {
+			throw new Error(localize('agentHost.changeset.pr.generationNoModel', "No model is available to write a pull request title and description. Sign in to Copilot, or configure a model, or enter them manually."));
+		}
+		const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n');
+		const user = messages.filter(message => message.role !== 'system').map(message => message.content).join('\n\n');
+		const result = await connection.chat({
+			vendor: model.vendor,
+			modelId: model.id,
+			instructions: system,
+			input: toByokInput({ instructions: system, prompt: user }),
+		});
+		this._throwIfCancelled(token);
+		const text = readByokText(result);
+		if (!text) {
+			throw new Error(localize('agentHost.changeset.pr.generationInvalidResponse', "The model did not return a pull request title and description. Enter them manually."));
+		}
+		return text;
 	}
 
 	private _reportGenerationError(error: unknown): string {

@@ -20,6 +20,7 @@ import { createTestGitHubEndpointService } from './testGitHubEndpointService.js'
 import { AgentHostStateManager } from '../../node/agentHostStateManager.js';
 import { AgentHostOctoKitService, type AutoMergeMethod, type CreatedPullRequest, type GitHubIssueOrPullRequest, type GitHubRepositoryMergeCapabilities, type IAgentHostOctoKitService } from '../../node/shared/agentHostOctoKitService.js';
 import type { ICopilotApiService, ICopilotApiServiceRequestOptions, ICopilotUtilityChatCompletionRequest } from '../../node/shared/copilotApiService.js';
+import { IByokLmBridgeRegistry, NullByokLmBridgeRegistry } from '../../node/byokLmBridgeRegistry.js';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { CCAModel } from '@vscode/copilot-api';
 import type { IAgentHostAuthenticationService } from '../../node/agentHostAuthenticationService.js';
@@ -231,7 +232,7 @@ function createAuthenticationService(withCopilotToken = false): IAgentHostAuthen
 	};
 }
 
-function setup(disposables: Pick<DisposableStore, 'add'>, gitService: TestGitService, octoKitService: IAgentHostOctoKitService, options?: { copilotApiService?: TestCopilotApiService; withCopilotToken?: boolean; turns?: Turn[]; draft?: boolean; autoMergeMethod?: AutoMergeMethod; enableAgentMerge?: boolean; agentMergeAvailable?: boolean; sessionAgentMergeEnabled?: boolean; agentMergeDefaults?: Partial<AgentMergeConfiguration>; agentMergeOverrides?: AgentMergeSessionOverrides; agentMergeControllerState?: AgentMergeControllerState; baseBranch?: string; branchPrefix?: string; workingDirectory?: string; logService?: ILogService }): { handler: AgentHostPullRequestOperationHandler; session: URI; createdEvents: string[]; createdBranches: string[]; sessionConfigUpdates: Record<string, unknown>[]; sessionConfigValues: Record<string, unknown>; copilotApiService: TestCopilotApiService; branchNameGenerator: TestBranchNameGenerator } {
+function setup(disposables: Pick<DisposableStore, 'add'>, gitService: TestGitService, octoKitService: IAgentHostOctoKitService, options?: { copilotApiService?: TestCopilotApiService; withCopilotToken?: boolean; turns?: Turn[]; draft?: boolean; autoMergeMethod?: AutoMergeMethod; enableAgentMerge?: boolean; agentMergeAvailable?: boolean; sessionAgentMergeEnabled?: boolean; agentMergeDefaults?: Partial<AgentMergeConfiguration>; agentMergeOverrides?: AgentMergeSessionOverrides; agentMergeControllerState?: AgentMergeControllerState; baseBranch?: string; branchPrefix?: string; workingDirectory?: string; logService?: ILogService; byokLmBridgeRegistry?: IByokLmBridgeRegistry }): { handler: AgentHostPullRequestOperationHandler; session: URI; createdEvents: string[]; createdBranches: string[]; sessionConfigUpdates: Record<string, unknown>[]; sessionConfigValues: Record<string, unknown>; copilotApiService: TestCopilotApiService; branchNameGenerator: TestBranchNameGenerator } {
 	const stateManager = disposables.add(new AgentHostStateManager(new NullLogService()));
 	const session = URI.parse('agent:/session');
 	const createdEvents: string[] = [];
@@ -317,7 +318,11 @@ function setup(disposables: Pick<DisposableStore, 'add'>, gitService: TestGitSer
 				createdEvents.push(`${event.sessionKey}:${event.pullRequestUrl}`);
 				createdBranches.push(event.branchName);
 			},
-			createAuthenticationService(options?.withCopilotToken), gitService, octoKitService, createTestGitHubEndpointService(), copilotApiService, branchNameGenerator, configurationService, options?.logService ?? new NullLogService()),
+			createAuthenticationService(options?.withCopilotToken), gitService, octoKitService, createTestGitHubEndpointService(), copilotApiService,
+			// No window is serving models in these tests, so the Copilot path is the
+			// only one; the fallback's own behaviour is covered in its own suite.
+			options?.byokLmBridgeRegistry ?? new NullByokLmBridgeRegistry(),
+			branchNameGenerator, configurationService, options?.logService ?? new NullLogService()),
 		session,
 		createdEvents,
 		createdBranches,
