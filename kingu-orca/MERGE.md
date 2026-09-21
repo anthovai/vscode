@@ -39,9 +39,18 @@ The React renderer was not copied. Its UI is the part being replaced.
 `npm run build-kingu-orca` → `out-kingu-orca/main.cjs`, 27.9 MB from 6,209
 inputs in about three seconds.
 
-`src/tsconfig.json` includes only `./vs/**`, so nothing here is type-checked,
-layering-linted or touched by the fork's own build. That is the point: vendored
-code held to the fork's rules is code you have to edit.
+Nothing here is type-checked, layering-linted or touched by the fork's own
+build. That is the point: vendored code held to the fork's rules is code you
+have to edit.
+
+**It has to live beside `src/`, not inside it.** The first attempt put it at
+`src/kingu-orca` on the reasoning that `src/tsconfig.json` includes only
+`./vs/**`. That much was true, and it was not enough: the gulp build streams
+`gulp.src('src/**')` — every file under `src/`, tsconfig or no tsconfig — and
+hands each to the transpiler, which asks tsc for an output name for a file that
+is not in its program and fails the whole build with `Expected fileName to be
+present in command line`. Type-checking was never the only thing that walks a
+directory.
 
 Three things the build has to handle, and nothing else:
 

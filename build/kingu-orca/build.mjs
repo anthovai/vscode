@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Bundles the vendored ADE backend (`src/kingu-orca`) into a single CommonJS file
+ * Bundles the vendored ADE backend (`kingu-orca/`) into a single CommonJS file
  * the fork's main process can require.
  *
  * Why a separate bundle rather than `src/vs`: that tree is 11k files written
@@ -13,9 +13,14 @@
  * the ADE moves. Bundling it whole keeps it as it is — the fork calls into it
  * across one seam instead of absorbing it.
  *
- * `src/tsconfig.json` includes only `./vs/**`, so nothing here is type-checked or
- * layering-linted by the fork's own build. That is deliberate: this is vendored
- * code, and holding it to the fork's rules would mean editing all of it.
+ * **Why it sits beside `src/` rather than inside it.** It lived at
+ * `src/kingu-orca` first, on the reasoning that `src/tsconfig.json` includes
+ * only `./vs/**` so nothing there would be type-checked. That was true and it
+ * was not enough: `compileTask` streams `gulp.src('src/**')`, every file under
+ * `src/` regardless of the tsconfig, and hands each to the transpiler — which
+ * then asks tsc for an output name for a file that is not in its program and
+ * fails the whole build with `Expected fileName to be present in command line`.
+ * Out of `src/` entirely, no upstream build file has to learn about it.
  */
 
 import * as esbuild from 'esbuild';
@@ -35,24 +40,26 @@ const assetDir = path.join(outDir, 'assets');
  * file is copied next to the bundle and the import becomes that path. The
  * `&asarUnpack` variant means the same thing to us — we do not ship an asar.
  */
-const vendored = path.join(root, 'src/kingu-orca');
+const vendored = path.join(root, 'kingu-orca');
 
 /**
  * Where an asset import actually points.
  *
- * The ADE reaches its `resources/` from the repository root, so a file at
- * `src/main/ipc/x.ts` writes `../../../resources/…`. Vendored one directory
- * deeper, that same relative path lands on the fork's `src/` instead. Rather
- * than editing 11k files, the escape is caught here and re-rooted into the
- * vendored tree — which is why `resources/` was copied to sit beside `main/`.
+ * The ADE reaches its `resources/` from its own repository root, so a file at
+ * `main/ipc/x.ts` writes `../../../resources/…`. Vendored here that climbs one
+ * level too far and lands on the *fork's* root — which has a `resources/` of
+ * its own. So the rule is positional, not "whichever file happens to exist":
+ * anything that escapes the vendored tree is re-rooted back into it, and an
+ * asset is only ever read from `kingu-orca/`. Preferring an existing file would
+ * mean a name the fork also uses silently resolving to the fork's copy.
  */
 function locateAsset(resolveDir, request) {
 	const direct = path.resolve(resolveDir, request);
-	if (fs.existsSync(direct)) {
+	const inside = path.relative(vendored, direct);
+	if (inside && !inside.startsWith('..') && !path.isAbsolute(inside)) {
 		return direct;
 	}
-	const escaped = path.relative(path.join(root, 'src'), direct);
-	return path.join(vendored, escaped);
+	return path.join(vendored, path.relative(root, direct));
 }
 
 const assetPlugin = {
@@ -90,7 +97,7 @@ const external = [
 ];
 
 const result = await esbuild.build({
-	entryPoints: [path.join(root, 'src/kingu-orca/main/index.ts')],
+	entryPoints: [path.join(root, 'kingu-orca/main/index.ts')],
 	bundle: true,
 	platform: 'node',
 	format: 'cjs',
