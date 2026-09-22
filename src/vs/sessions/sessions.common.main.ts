@@ -507,6 +507,9 @@ import './contrib/kingu/browser/kinguVault.contribution.js';
 import './contrib/kingu/browser/kinguStatusBar.contribution.js';
 import './contrib/kingu/browser/kinguComputer.contribution.js';
 import './contrib/kingu/browser/kinguUsagePage.contribution.js';
+import './contrib/kingu/browser/kinguSkillsPage.contribution.js';
+import './contrib/kingu/browser/kinguActivityPage.contribution.js';
+import './contrib/kingu/browser/kinguAgents.contribution.js';
 
 // Onboarding: the engine + spotlight presentation (from the workbench layer) and
 // the Agents window scenario data.

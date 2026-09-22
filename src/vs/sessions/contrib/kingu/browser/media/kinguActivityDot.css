@@ -1,0 +1,40 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/* The status dot, in its own file because two surfaces draw it: the Activity
+   page and the Agents sidebar view. One copy, so the two can never end up
+   saying the same state in two different colours.
+
+   Colour carries urgency, but never alone — both surfaces also spell the status
+   out in text, so the dot is a shorthand rather than the only signal. */
+.kingu-activity-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--vscode-descriptionForeground);
+}
+
+.kingu-activity-dot.needsInput {
+	background: var(--vscode-editorWarning-foreground);
+}
+
+.kingu-activity-dot.working {
+	background: var(--vscode-progressBar-background);
+}
+
+.kingu-activity-dot.failed {
+	background: var(--vscode-editorError-foreground);
+}
+
+.kingu-activity-dot.done {
+	background: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.kingu-activity-dot.draft,
+.kingu-activity-dot.archived {
+	background: var(--vscode-descriptionForeground);
+	opacity: 0.6;
+}

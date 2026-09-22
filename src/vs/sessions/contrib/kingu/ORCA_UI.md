@@ -79,11 +79,13 @@ titles*. This window gets the same states from the protocol, for free.
 
 1. **Whole pages this window does not have.** Stats & Usage, Tasks, Artifacts,
    Skills, Mobile, Activity. Each is self-contained and each has its data
-   already present here. *Stats & Usage is now built — see below.*
+   already present here. *Stats & Usage is now built — see below. Skills is now
+   built, read-only — see below. Activity is now built — see below.*
 2. **The Agents sidebar body.** The ADE's sidebar switches between `workspaces`
    and `agents`; the second aggregates live agent rows across every worktree
    with read/unread, grouping and filtering. This window has the sessions list,
-   which is most of it, grouped differently.
+   which is most of it, grouped differently. *Now built as a second sidebar view
+   — see below.*
 3. **Inline agent rows on the worktree card** (`WorktreeCardAgents`) — a
    worktree's live agents as child rows under it.
 4. **The per-worktree workbench.** The structural difference above. Not a port.
@@ -104,8 +106,86 @@ method:
   session on the machine, so the page opens on numbers: 554 transcripts, live
   progress, then cards, a token mix, a row per agent and six weeks of days.
 
-The lesson both times: **take the model, leave the React.** The React is the
-cheapest part to rewrite and the least worth keeping.
+- **The Skills page.** The ADE's `skills/` is 85 files and 9,840 lines, and only
+  a fifth of it is the page: the rest installs, shares, bundles and
+  version-checks skills against its cloud. What ported is the part that answers
+  the question the page exists for — *is this skill installed, and which agent
+  can see it* — as the roots table (`kinguSkillSources.ts`), the front-matter
+  reader (`kinguSkillMetadata.ts`) and the filter (`kinguSkillFilter.ts`), with
+  the walk rewritten onto `IFileService`. The ADE's second discovery path, a
+  `find -maxdepth` run inside a WSL distro, is not here: its renderer cannot see
+  that filesystem and this one can, through the same file service.
+
+  Deliberately not ported yet: install, share, bundle and freshness. Those are
+  cloud-backed, and a button that looked like it worked would be worse than its
+  absence.
+
+- **The Activity page.** 6,231 lines in the ADE, and the ratio is the most
+  extreme of any of these: almost none of it is the page. `activity-portal-*`,
+  `activity-terminal-portal-*`, `activity-event-builder*`, `activity-event-cap`
+  and the retained-snapshot machinery exist because an agent running as a CLI in
+  a PTY cannot be asked what it is doing. The ADE fans in hook snapshots per
+  pane, caps them per pane so one noisy pane cannot hide another, retains them
+  across restarts, and reconciles portals against readiness. Every one of those
+  problems is created by the PTY, and this window does not have it: a session
+  reports its own status over the protocol.
+
+  What ported is the part that makes Activity a *different surface from a list
+  of sessions* — `ACTIVITY_STATUS_GROUP_RANK`, the attention-first ordering — plus
+  group-by, the search-text cache keyed on row identity, and the query cap. The
+  sessions list groups by workspace, date, pins and custom groups; none of those
+  put "needs input" above "done". That is the whole of what this page adds.
+
+  Deliberately not ported: **clear completed**. In the ADE it stamps a per-pane
+  cutoff over retained snapshots and offers an undo, because those rows live
+  only in its own memory. The equivalent act here is archiving a session, which
+  the sessions list already owns and which is real rather than a local hide.
+
+- **The Agents sidebar view.** `SidebarAgentsList.tsx` says in its own comment
+  what it is: "The Activity thread list, hosted in the sidebar as a navigator."
+  So it is not a second feature — it is the Activity model in a narrower frame,
+  and here it imports the same `common/kinguActivity.ts` the page does. One
+  ranking, one grouping, one search; the sidebar and the page cannot disagree
+  about what a session is doing. What it adds over the page is the ADE's
+  `ThreadReadFilter` (all / unread), compact rows, and mark-all-read.
+
+  Two things about where it is registered, both learned the hard way:
+
+  - **It has to live in the sessions container.** The first attempt gave it a
+    container of its own, which is what an ordinary VS Code window would want.
+    It was unreachable: this window omits the Activity Bar, so there was nothing
+    to click, and no `View:` command is generated for a container. `LAYOUT.md`
+    already said the answer — the sidebar is "Sessions list and Sessions-owned
+    sidebar views".
+  - **It declares no `order`.** An explicit order sorted it *above* the sessions
+    list, because the sessions view declares none and an unordered view sorts
+    after an ordered one. With both unordered it falls back to registration
+    order, and `sessions.contribution.js` is imported first.
+
+  **The one visible cost:** the sessions container is registered with
+  `mergeViewWithContainerWhenSingleView`, so it has no header today. A second
+  view stops that merge, and the sidebar now shows a `SESSIONS` header above the
+  list. That is VS Code behaving as designed, but it is a change to a surface
+  this port was not asked to touch, and it is the reason to keep the Agents view
+  collapsed by default.
+
+The lesson all four times: **take the model, leave the React.** The React is
+the cheapest part to rewrite and the least worth keeping — and on Activity, so
+is most of the logic under it.
+
+### What the ported skill reader got wrong twice
+
+Both were in the ADE's own logic, and both only showed up once there were tests
+on the port:
+
+- **A fenced block is not a description.** `firstParagraph` skipped the line
+  with the ``` on it and then took the next one, so a skill whose body opens on
+  a usage block was described to the user as `npm run deploy` — a shell command
+  presented as a sentence about what the skill does. The fence is now tracked,
+  not merely recognised.
+- **Empty front matter is still front matter.** The delimiter pattern required a
+  newline *inside* the block, so a `SKILL.md` opening `---\n---` fell through to
+  the body reader and the page described the skill as `--- ---`.
 
 ### Two things the real data corrected
 

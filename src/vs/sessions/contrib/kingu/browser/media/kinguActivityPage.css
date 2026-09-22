@@ -1,0 +1,165 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/* The Activity page. Every colour comes from a theme variable: this page sits
+   where the editor sits and has to belong to whatever theme is loaded. */
+.kingu-activity-page {
+	max-width: 880px;
+	margin: 0 auto;
+	padding: 28px 24px 48px;
+	color: var(--vscode-foreground);
+	font-size: 13px;
+}
+
+.kingu-activity-header {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.kingu-activity-title {
+	margin: 0;
+	font-size: 22px;
+	font-weight: 600;
+}
+
+.kingu-activity-unread {
+	padding: 1px 8px;
+	color: var(--vscode-badge-foreground);
+	background: var(--vscode-badge-background);
+	border-radius: 10px;
+	font-size: 11px;
+}
+
+.kingu-activity-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.kingu-activity-search {
+	flex: 1 1 200px;
+	min-width: 160px;
+	padding: 5px 8px;
+	font-family: inherit;
+	font-size: inherit;
+	color: var(--vscode-input-foreground);
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 5px;
+}
+
+.kingu-activity-search:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.kingu-activity-groupby-label {
+	opacity: 0.7;
+}
+
+.kingu-activity-groupby {
+	padding: 4px 8px;
+	font-family: inherit;
+	font-size: inherit;
+	color: var(--vscode-dropdown-foreground);
+	background: var(--vscode-dropdown-background);
+	border: 1px solid var(--vscode-dropdown-border, transparent);
+	border-radius: 5px;
+}
+
+.kingu-activity-summary {
+	margin-left: auto;
+	opacity: 0.7;
+}
+
+.kingu-activity-status {
+	padding: 32px 0;
+	opacity: 0.7;
+}
+
+.kingu-activity-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 18px 0 6px;
+	font-weight: 600;
+}
+
+.kingu-activity-group:first-child {
+	margin-top: 0;
+}
+
+.kingu-activity-group-count {
+	opacity: 0.6;
+	font-weight: normal;
+}
+
+.kingu-activity-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	margin-bottom: 2px;
+	padding: 7px 10px;
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
+	text-align: left;
+	background: none;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.kingu-activity-row:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.kingu-activity-row .kingu-activity-dot {
+	margin-top: 5px;
+}
+
+.kingu-activity-row-body {
+	min-width: 0;
+	flex: 1;
+}
+
+.kingu-activity-row-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.kingu-activity-row-title {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* Unread is weight, not colour: the dot already owns colour on this row, and a
+   second colour competing with it would make the status harder to read. */
+.kingu-activity-row.unread .kingu-activity-row-title {
+	font-weight: 600;
+}
+
+.kingu-activity-row-time {
+	margin-left: auto;
+	flex: none;
+	opacity: 0.6;
+	font-size: 11px;
+}
+
+.kingu-activity-row-meta {
+	overflow: hidden;
+	margin-top: 1px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	opacity: 0.7;
+	font-size: 12px;
+}
