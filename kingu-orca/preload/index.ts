@@ -98,6 +98,16 @@ const telemetryGetConsentStateApi: PreloadApi['telemetryGetConsentState'] = () =
   ipcRenderer.invoke('telemetry:getConsentState')
 
 const api = {
+  /**
+   * The host window, when Kingu is running inside one.
+   *
+   * Added by the fork, not by the ADE: standalone Kingu has no host, and no way
+   * back to one. The title bar draws the button only when the launch arguments
+   * say this window is hosted.
+   */
+  host: {
+    openIde: (): Promise<void> => ipcRenderer.invoke('kingu:openIde')
+  },
   app: appApi,
   kinguProfiles: kinguProfilesApi,
   platform: platformApi,
@@ -183,12 +193,24 @@ const api = {
   speech: speechApi
 } satisfies PreloadApi
 
+/**
+ * Whether a host window is drawing this window's chrome.
+ *
+ * Passed as a launch argument by `kinguOrcaHost` rather than asked over IPC, so
+ * the renderer knows before its first paint: an answer that arrived a frame
+ * later would draw the window buttons and then take them away. Standalone Kingu
+ * never receives the argument and the flag stays false.
+ */
+const isHosted = process.argv.includes('--kingu-hosted')
+
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('__KINGU_HOSTED__', isHosted)
   } catch (error) {
     console.error(error)
   }
 } else {
   window.api = api
+  ;(globalThis as { __KINGU_HOSTED__?: boolean }).__KINGU_HOSTED__ = isHosted
 }

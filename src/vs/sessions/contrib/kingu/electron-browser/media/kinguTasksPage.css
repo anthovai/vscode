@@ -1,0 +1,63 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+.kingu-tasks-page {
+	padding: 12px 16px;
+	overflow: auto;
+}
+
+.kingu-tasks-loading,
+.kingu-tasks-empty {
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-width: 640px;
+}
+
+.kingu-tasks-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 32px;
+	padding: 0 8px;
+	border-radius: var(--vscode-cornerRadius-medium);
+}
+
+.kingu-tasks-row:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+/* The name carries the row; the state is a qualifier, so it gives way. */
+.kingu-tasks-row-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-tasks-row-state {
+	flex: 0 0 auto;
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-row-icon {
+	flex: 0 0 auto;
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-row.connected .kingu-tasks-row-icon {
+	color: var(--vscode-charts-green);
+}
+
+/* Unavailable is dimmer than disconnected on purpose: there is nothing the
+   reader can do about it yet, so it should not invite a click. */
+.kingu-tasks-row.unavailable {
+	opacity: 0.6;
+}

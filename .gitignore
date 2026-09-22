@@ -11,6 +11,9 @@ node_modules
 extensions/**/dist/
 src/vs/base/browser/ui/codicons/codicon/codicon.ttf
 /out*/
+# The vendored ADE's sidecar entries, written by build/kingu-orca/build.mjs to
+# where the ADE's own path resolvers expect them
+/kingu-orca/out/
 /extensions/**/out/
 build/node_modules
 build/darwin/.dmgbuild

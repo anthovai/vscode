@@ -124,6 +124,8 @@ export const launchSourceSchema = z.enum([
   'sidebar',
   'quick_command',
   'tab_bar_quick_launch',
+  // Kingu fork: the Agents Window command centre in the title bar.
+  'titlebar_quick_launch',
   'task_page',
   'new_workspace_composer',
   'workspace_jump_palette',

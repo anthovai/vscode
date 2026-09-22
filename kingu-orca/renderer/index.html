@@ -1,0 +1,32 @@
+<!doctype html>
+<html class="native-shell">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kingu</title>
+    <script>
+      // `crypto.randomUUID` exists only in a secure context, and a custom
+      // scheme is not one — the host workbench's own `vscode-file:` origin is
+      // not either. The store calls it while it is still evaluating, so without
+      // this the module throws, React never mounts, and the window is blank with
+      // one line in the console.
+      //
+      // Only defined when missing, so a build that does run in a secure context
+      // keeps the platform's own implementation.
+      if (globalThis.crypto && typeof globalThis.crypto.randomUUID !== 'function') {
+        globalThis.crypto.randomUUID = function randomUUID() {
+          const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16))
+          bytes[6] = (bytes[6] & 0x0f) | 0x40
+          bytes[8] = (bytes[8] & 0x3f) | 0x80
+          const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+          return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+        }
+      }
+    </script>
+    <!-- CSP is relaxed during development; electron-vite injects a stricter policy for production builds -->
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

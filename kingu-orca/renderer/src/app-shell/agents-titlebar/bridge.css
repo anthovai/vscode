@@ -1,0 +1,216 @@
+/*
+ * What the fork's two stylesheets need from Kingu.
+ *
+ * `titlebarpart.css` and `sessionsTitleBarWidget.css` next to this file are the
+ * fork's own, copied byte for byte and never edited — re-copy them from
+ * `src/vs/sessions/**` when upstream moves. They already say everything about
+ * how this title bar is laid out, so nothing here repeats it. This file only
+ * supplies the two things they assume and Kingu does not have:
+ *
+ *   1. the `--vscode-*` theme variables they read, mapped to Kingu's tokens, so
+ *      one theme switch moves this with the rest of the app;
+ *   2. the pieces the workbench draws around them — the bar's own height and
+ *      background (which live in the workbench's base titlebar CSS, not in the
+ *      sessions ones) and plain buttons, because the fork's buttons are monaco
+ *      action-bar items and Kingu's are not. The glyphs inside them are the
+ *      fork's codicons, from the font vendored under `codicons/`.
+ */
+
+.agent-sessions-workbench {
+  /* Command center box. Kingu has no separate "command center" ramp, so it
+     borrows the same border/surface the rest of its chrome uses. */
+  --vscode-commandCenter-border: var(--border);
+  --vscode-commandCenter-foreground: var(--foreground);
+  --vscode-commandCenter-activeForeground: var(--accent-foreground);
+  --vscode-commandCenter-activeBackground: var(--accent);
+  --vscode-commandCenter-activeBorder: var(--border);
+
+  --vscode-focusBorder: var(--ring);
+  --vscode-icon-foreground: var(--muted-foreground);
+  --vscode-toolbar-activeBackground: var(--accent);
+  --vscode-toolbar-hoverBackground: var(--accent);
+
+  /* The fork's scales. Kingu's type and spacing are Tailwind's, so these are
+     the matching fixed values rather than a token indirection. */
+  --vscode-fontSize-label1: 12px;
+  --vscode-fontWeight-semiBold: 600;
+  --vscode-codiconFontSize-compact: 12px;
+  --vscode-cornerRadius-small: 4px;
+  --vscode-cornerRadius-medium: 6px;
+  --vscode-spacing-size40: 4px;
+  --vscode-spacing-size60: 6px;
+
+  /* Only reached by the approved/blocked states, which Kingu does not feed yet
+     (see MERGE.md) — mapped so they degrade to something sane if it ever does. */
+  --vscode-charts-green: var(--color-green-500, #22c55e);
+  --vscode-agentsUnreadBadge-background: var(--primary);
+  --vscode-agentsUnreadBadge-foreground: var(--primary-foreground);
+}
+
+/* The bar itself. The sessions stylesheets style what is *inside* `.part.titlebar`
+   and take its box for granted, because the workbench's own base titlebar CSS
+   provides it. This is that box, in Kingu's terms.
+
+   No border, no shadow, and the window's own background rather than a titlebar
+   surface. That is not a simplification — it is what the fork does:
+   `titlebarPart.ts` paints the bar with `agents.background`, which in dark
+   themes *is* `editorBackground`, and `titlebarpart.css` then sets
+   `box-shadow: none` on it. The bar is meant to be continuous with the window,
+   not a strip sitting on top of it. Giving it a card surface and a rule
+   underneath is what made it read as a separate, bolted-on band. */
+.agent-sessions-workbench .part.titlebar {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  height: 36px;
+  min-height: 36px;
+  background: var(--background);
+  box-shadow: none;
+  color: var(--foreground);
+  user-select: none;
+}
+
+.agent-sessions-workbench .part.titlebar > .titlebar-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 4px;
+}
+
+/* The three sections' own `display`. The sessions stylesheet only overrides
+   their order, width and flex, because the workbench's base titlebar CSS has
+   already made them flex rows — so `.titlebar-right` in particular arrives here
+   as a plain block and stacks its two toolbars vertically without this. */
+.agent-sessions-workbench .part.titlebar > .sessions-titlebar-container > .titlebar-right,
+.agent-sessions-workbench .part.titlebar > .sessions-titlebar-container > .titlebar-left {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.agent-sessions-workbench .part.titlebar > .sessions-titlebar-container > .window-title,
+.agent-sessions-workbench .part.titlebar .command-center {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Electron moves the window by this region. `z-index: -1` is the base CSS's own
+   answer to the obvious problem: the region covers the whole bar, so without it
+   every control underneath becomes unclickable. */
+.agent-sessions-workbench .titlebar-drag-region {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  -webkit-app-region: drag;
+}
+
+/* The icon font, under a name of its own.
+ *
+ * The fork's `codicon.css` is deliberately NOT vendored: it declares
+ * `font-family: "codicon"`, and the ADE's renderer already ships Monaco's copy
+ * of that font under exactly that name. Two `@font-face` rules for one family
+ * is a coin toss over which glyph set wins, and the losing side renders boxes.
+ * So the same font is declared here under its own name and used only inside the
+ * title bar; Monaco keeps "codicon" to itself.
+ */
+@font-face {
+  font-family: 'kingu-agents-codicon';
+  font-display: block;
+  src: url('./codicons/codicon.ttf') format('truetype');
+}
+
+.agent-sessions-workbench .codicon[class*='codicon-'] {
+  font: normal normal normal 16px/1 'kingu-agents-codicon';
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Kingu's buttons where the fork has monaco action-bar items. Sized to the
+   command center box beside them so the row reads as one line of controls. */
+.agent-sessions-workbench .agents-titlebar-button {
+  position: relative;
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 4px;
+  border: none;
+  border-radius: var(--vscode-cornerRadius-small);
+  background: none;
+  color: var(--vscode-icon-foreground);
+  cursor: pointer;
+}
+
+.agent-sessions-workbench .agents-titlebar-button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-commandCenter-activeForeground);
+}
+
+.agent-sessions-workbench .agents-titlebar-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The fork marks a toggled action with `.action-label.checked`; these buttons
+   carry the same idea on themselves. */
+.agent-sessions-workbench .agents-titlebar-button.checked,
+.agent-sessions-workbench .agents-titlebar-button[data-state='open'] {
+  background: var(--vscode-toolbar-activeBackground);
+  color: var(--vscode-commandCenter-activeForeground);
+}
+
+/* The action bar sizes its codicons; these buttons do the same. */
+.agent-sessions-workbench .agents-titlebar-button .codicon {
+  font-size: 16px;
+}
+
+/* Initials, because that is the only avatar a Kingu profile carries — the
+   fork's account widget shows a photo. */
+.agent-sessions-workbench .agents-titlebar-avatar {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: var(--vscode-spacing-size40);
+  border: 1px solid var(--vscode-commandCenter-border);
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--vscode-icon-foreground);
+  font-size: 10px;
+  font-weight: var(--vscode-fontWeight-semiBold);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.agent-sessions-workbench .agents-titlebar-avatar:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-commandCenter-activeForeground);
+}
+
+/* The fork reserves this with a measured spacer in `titlebarPart.ts`; Kingu
+   already publishes the same width as a variable for its own chrome. */
+.agent-sessions-workbench .part.titlebar .window-controls-container {
+  flex-shrink: 0;
+  width: var(--window-controls-width, 0px);
+  height: 100%;
+}
+
+/* The fork's pill is one clickable box; keep it out of the drag region so the
+   click lands rather than moving the window. */
+.agent-sessions-workbench .command-center .agent-sessions-titlebar-container {
+  position: relative;
+}

@@ -18,6 +18,7 @@ import * as perf from './vs/base/common/performance.js';
 import { resolveNLSConfiguration } from './vs/base/node/nls.js';
 import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
 import { INLSConfiguration } from './vs/nls.js';
+import { isOrcaBoot, ORCA_SCHEME, prepareOrcaBoot, startOrca } from './vs/platform/kinguOrca/electron-main/kinguOrcaHost.js';
 import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
 
 perf.mark('code/didStartMain');
@@ -110,6 +111,16 @@ if (portable.isPortable) {
 perf.mark('code/willRegisterSchemesAsPrivileged');
 protocol.registerSchemesAsPrivileged([
 	{
+		// The vendored ADE's renderer is served over its own scheme. It belongs in
+		// *this* array and nowhere else: Electron accepts
+		// `registerSchemesAsPrivileged` once, before ready, and a later second
+		// call is ignored — which leaves the scheme insecure, and an insecure
+		// origin has no `crypto.randomUUID`, which the ADE's store calls while it
+		// is still evaluating. The whole UI stays blank on one missing function.
+		scheme: ORCA_SCHEME,
+		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
+	},
+	{
 		scheme: 'vscode-webview',
 		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, allowServiceWorkers: true, codeCache: true }
 	},
@@ -175,6 +186,15 @@ if (process.platform === 'win32' || process.platform === 'linux') {
 
 // Load our code once ready
 perf.mark('code/willWaitForAppReady');
+// `--orca` boots the vendored ADE's UI instead of the workbench. Its pre-ready
+// startup has to run *here*, before the `ready` listener below: it initializes
+// the browser process user agent, which Electron refuses once it is ready, and
+// `vs/code/electron-main/main.js` is not imported until after ready — so a hook
+// there is always too late.
+if (isOrcaBoot()) {
+	prepareOrcaBoot();
+}
+
 app.once('ready', function () {
 	perf.mark('code/didWaitForAppReady');
 	if (args['trace']) {
@@ -223,7 +243,15 @@ async function onReady() {
 			resolveNlsConfiguration()
 		]);
 
-		await startup(codeCachePath, nlsConfig);
+		// The ADE owns the window in this mode, title bar included, so the
+		// workbench's own main bundle is never loaded — a second application
+		// would open a second window with a second set of window controls and a
+		// second theme. *Open IDE* loads it later, on demand.
+		if (isOrcaBoot()) {
+			await startOrca();
+		} else {
+			await startup(codeCachePath, nlsConfig);
+		}
 	} catch (error) {
 		console.error(error);
 	}

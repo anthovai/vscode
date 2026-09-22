@@ -15,7 +15,7 @@ import { parse } from '../../base/common/jsonc.js';
 import { getPathLabel } from '../../base/common/labels.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Schemas, VSCODE_AUTHORITY } from '../../base/common/network.js';
-import { join, posix } from '../../base/common/path.js';
+import { dirname, join, posix } from '../../base/common/path.js';
 import { mark } from '../../base/common/performance.js';
 import { IProcessEnvironment, isLinux, isLinuxSnap, isMacintosh, isWindows, OS } from '../../base/common/platform.js';
 import { assertType } from '../../base/common/types.js';
@@ -23,6 +23,9 @@ import { URI } from '../../base/common/uri.js';
 import { generateUuid } from '../../base/common/uuid.js';
 import { registerContextMenuListener } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
 import { KinguHostChannel, KINGU_HOST_CHANNEL_NAME } from '../../platform/kinguHost/electron-main/kinguHostChannel.js';
+import { KinguRuntimeChannel, KINGU_RUNTIME_CHANNEL_NAME } from '../../platform/kinguRuntime/electron-main/kinguRuntimeChannel.js';
+import { KinguTasksChannel, KINGU_TASKS_CHANNEL_NAME } from '../../platform/kinguTasks/electron-main/kinguTasksChannel.js';
+import { KINGU_RUNTIME_ENTRY_SETTING, KINGU_RUNTIME_WEB_ROOT_SETTING, KINGU_SIBLING_RUNTIME_ENTRY, KINGU_SIBLING_WEB_ROOT } from '../../platform/kinguRuntime/common/kinguRuntime.js';
 import { KINGU_ALLOW_INPUT_SETTING } from '../../platform/kinguComputer/common/kinguComputerProtocol.js';
 import { getDelayedChannel, ProxyChannel, StaticRouter } from '../../base/parts/ipc/common/ipc.js';
 import { Server as ElectronIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
@@ -1362,6 +1365,31 @@ export class CodeApplication extends Disposable {
 			this.logService,
 			() => this.resolveShellEnvironment(this.environmentMainService.args, process.env, false),
 			() => this.configurationService.getValue(KINGU_ALLOW_INPUT_SETTING) === true));
+
+		// The Kingu runtime: a child process and the loopback server that fronts
+		// its web client. Here rather than in a window because it is one runtime
+		// per application, and because a sandboxed renderer can own neither.
+		mainProcessElectronServer.registerChannel(KINGU_RUNTIME_CHANNEL_NAME, disposables.add(new KinguRuntimeChannel(
+			this.logService,
+			async () => {
+				const configured = (setting: string) => {
+					const value = this.configurationService.getValue(setting);
+					return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+				};
+				// Beside this checkout by default: the runtime and the web client
+				// are built out of the `kingu-intelligence` repository, and while
+				// the two move together a path beats a stale vendored copy.
+				const siblings = dirname(this.environmentMainService.appRoot);
+				return {
+					runtimeEntry: configured(KINGU_RUNTIME_ENTRY_SETTING) ?? join(siblings, ...KINGU_SIBLING_RUNTIME_ENTRY),
+					webRoot: configured(KINGU_RUNTIME_WEB_ROOT_SETTING) ?? join(siblings, ...KINGU_SIBLING_WEB_ROOT),
+				};
+			})));
+
+		// The ADE's task providers. No client, no tokens, no provider API here:
+		// the ADE's bundle is already required into this process and implements
+		// all four, so the window asks it rather than growing a second copy.
+		mainProcessElectronServer.registerChannel(KINGU_TASKS_CHANNEL_NAME, new KinguTasksChannel(this.logService));
 
 		// Policies (main & shared process)
 		const policyChannel = disposables.add(new PolicyChannel(accessor.get(IPolicyService)));
