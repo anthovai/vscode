@@ -68,4 +68,5 @@ export const KINGU_LUCIDE_ICONS: Readonly<Record<string, readonly KinguLucideEle
 	'search': [['path',{'d':'m21 21-4.34-4.34'}],['circle',{'cx':'11','cy':'11','r':'8'}]],
 	'hard-drive': [['path',{'d':'M10 16h.01'}],['path',{'d':'M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'}],['path',{'d':'M21.946 12.013H2.054'}],['path',{'d':'M6 16h.01'}]],
 	'check': [['path',{'d':'M20 6 9 17l-5-5'}]],
+	'plus': [['path',{'d':'M5 12h14'}],['path',{'d':'M12 5v14'}]],
 };

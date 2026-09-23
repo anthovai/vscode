@@ -16,7 +16,9 @@ import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -27,6 +29,7 @@ import { orcaKeyForSettingId, orcaSettingIdForKey } from '../common/kinguOrcaSet
 import { IKinguOpenSettingsTarget, KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
 import { IOrcaSettingsPane, IOrcaSettingsRow, IOrcaSettingsSection, ORCA_SETTINGS_NAV, ORCA_SETTINGS_PANES } from '../common/kinguOrcaSettingsScreen.js';
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
+import { OrcaAccountsPane } from './kinguOrcaSettingsAccounts.js';
 import './kinguOrcaService.js';
 
 // #region Values
@@ -177,6 +180,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 	}
 
 	private readonly _values: OrcaSettingsValues;
+	private readonly _accounts: OrcaAccountsPane;
 	private readonly _shown = this._register(new MutableDisposable<DisposableStore>());
 	private readonly _drawing = this._register(new MutableDisposable<DisposableStore>());
 	private _root: HTMLElement | undefined;
@@ -195,9 +199,20 @@ class KinguOrcaSettingsScreen extends Disposable {
 		@IWorkbenchLayoutService private readonly _layoutService: IWorkbenchLayoutService,
 		@IFileDialogService private readonly _fileDialogService: IFileDialogService,
 		@ICommandService private readonly _commandService: ICommandService,
+		@IDialogService private readonly _dialogService: IDialogService,
+		@INotificationService private readonly _notificationService: INotificationService,
+		@IOpenerService private readonly _openerService: IOpenerService,
 	) {
 		super();
 		this._values = this._register(new OrcaSettingsValues(orca, configurationService, logService));
+		this._accounts = new OrcaAccountsPane({
+			invoke: (channel, ...args) => orca.invoke(channel, ...args),
+			confirm: async (message, detail, primaryButton) => (await this._dialogService.confirm({ type: 'warning', message, detail, primaryButton })).confirmed,
+			notifyError: message => this._notificationService.error(message),
+			redraw: () => this._redrawContent(),
+			rateLimits: () => undefined,
+			openExternal: url => void this._openerService.open(URI.parse(url), { openExternal: true }),
+		});
 		this._register(this._values.onDidChange(() => this._redrawContent()));
 		KinguOrcaSettingsScreen._instance = this;
 		this._register(toDisposable(() => {
@@ -380,6 +395,9 @@ class KinguOrcaSettingsScreen extends Disposable {
 
 	/** `SettingsSection`: the title with its badge, the subtitle, then the body card. */
 	private _renderPane(parent: HTMLElement, pane: IOrcaSettingsPane, store: DisposableStore): void {
+		if (pane.id === 'accounts' && !this._accounts.loaded) {
+			void this._accounts.load();
+		}
 		const section = append(parent, $('section.kingu-orca-settings-pane'));
 		const header = append(section, $('.kingu-orca-settings-pane-header'));
 		const title = append(header, $('h2.kingu-orca-settings-pane-title'));
@@ -394,7 +412,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 		let first = true;
 		for (const subsection of pane.sections) {
 			const rows = subsection.rows.filter(row => !row.dynamic && rowMatches(this._query, pane, subsection, row) && this._isShown(row));
-			if (rows.length === 0) {
+			if (rows.length === 0 || (pane.id === 'accounts' && this._accounts.isHidden(subsection.title))) {
 				continue;
 			}
 			if (!first) {
@@ -403,6 +421,9 @@ class KinguOrcaSettingsScreen extends Disposable {
 			first = false;
 			const block = append(card, $('section.kingu-orca-settings-subsection'));
 			this._sectionElements.set(subsection.id, block);
+			if (pane.id === 'accounts' && this._accounts.render(block, subsection.title, subsection.description)) {
+				continue;
+			}
 			if (subsection.title || subsection.description) {
 				const head = append(block, $('.kingu-orca-settings-subsection-header'));
 				if (subsection.title) {
@@ -459,6 +480,9 @@ class KinguOrcaSettingsScreen extends Disposable {
 	}
 
 	private _renderRow(parent: HTMLElement, row: IOrcaSettingsRow, store: DisposableStore): void {
+		if (row.keys.length === 0 && this._accounts.renderMiniMaxCredential(parent, row.label)) {
+			return;
+		}
 		const key = row.keys[0];
 		switch (row.control) {
 			case 'toggle':

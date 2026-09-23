@@ -8,7 +8,10 @@ import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js
 import { mainWindow } from '../../../../base/browser/window.js';
 import { KeyCode } from '../../../../base/common/keyCodes.js';
 import { Disposable, DisposableStore, IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Codicon } from '../../../../base/common/codicons.js';
+import { ThemeIcon } from '../../../../base/common/themables.js';
 import { KINGU_LUCIDE_ICONS } from '../common/kinguLucideIcons.js';
+import { KINGU_PROVIDER_LOGOS } from '../common/kinguProviderLogos.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -42,6 +45,38 @@ export function lucideIcon(name: string, size = 12, className?: string): SVGSVGE
 		svg.appendChild(element);
 	}
 	return svg;
+}
+
+/** Icons for the providers whose logo is not carried; codicons for the rest. */
+const FALLBACK_PROVIDER_ICONS: Readonly<Record<string, ThemeIcon>> = {
+	gemini: Codicon.sparkle,
+	antigravity: Codicon.rocket,
+	opencodeGo: Codicon.code,
+	kimi: Codicon.circleFilled,
+	minimax: Codicon.pulse,
+	grok: Codicon.zap,
+};
+
+/** A provider's mark, as the ADE's `ProviderIcon` draws it; a codicon where the logo is not carried. */
+export function providerIcon(slot: string, size = 13): HTMLElement {
+	const logo = KINGU_PROVIDER_LOGOS[slot];
+	if (!logo) {
+		return $(`span.kingu-orca-provider-icon${ThemeIcon.asCSSSelector(FALLBACK_PROVIDER_ICONS[slot] ?? Codicon.circleLargeOutline)}`);
+	}
+	const holder = $('span.kingu-orca-provider-icon.logo');
+	const svg = mainWindow.document.createElementNS(SVG_NS, 'svg');
+	svg.setAttribute('viewBox', logo.viewBox);
+	svg.setAttribute('width', String(size));
+	svg.setAttribute('height', String(size));
+	const path = mainWindow.document.createElementNS(SVG_NS, 'path');
+	path.setAttribute('d', logo.path);
+	path.setAttribute('fill', logo.fill ?? 'currentColor');
+	if (logo.evenOdd) {
+		path.setAttribute('fill-rule', 'evenodd');
+	}
+	svg.appendChild(path);
+	holder.appendChild(svg);
+	return holder;
 }
 
 /** A piece of a footer chip, in the ADE's vocabulary: an icon, a label, a status dot, a middot. */

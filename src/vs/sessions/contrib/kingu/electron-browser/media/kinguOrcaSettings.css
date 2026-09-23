@@ -467,7 +467,7 @@
 	position: relative;
 	display: inline-flex;
 	align-items: center;
-	width: 180px;
+	min-width: 180px;
 }
 
 .kingu-orca-select select {
@@ -628,6 +628,279 @@
 	color: var(--kingu-orca-muted);
 	font-family: var(--monaco-monospace-font);
 	font-size: 11px;
+}
+
+/* #endregion */
+
+/* #region AI Provider Accounts (accounts-pane-*-section) */
+
+/* The provider heading: h3 flex items-center gap-2 text-sm font-semibold, its mark at 16px. */
+.kingu-orca-account-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.kingu-orca-account-block {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 8px 0;
+}
+
+.kingu-orca-account-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.kingu-orca-account-buttons {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+}
+
+.kingu-orca-account-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* A card: flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 */
+.kingu-orca-account-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	box-sizing: border-box;
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px solid color-mix(in srgb, var(--kingu-orca-settings-border) 70%, transparent);
+	border-radius: 6px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	transition: border-color 150ms, background-color 150ms;
+}
+
+button.kingu-orca-account-card {
+	cursor: pointer;
+}
+
+.kingu-orca-account-card:hover {
+	border-color: var(--kingu-orca-settings-input);
+	background-color: color-mix(in srgb, var(--kingu-orca-accent) 8%, transparent);
+}
+
+.kingu-orca-account-card.active {
+	border-color: color-mix(in srgb, var(--kingu-orca-foreground) 20%, transparent);
+	background-color: color-mix(in srgb, var(--kingu-orca-accent) 15%, transparent);
+}
+
+.kingu-orca-account-card.destructive {
+	border-color: color-mix(in srgb, var(--kingu-orca-destructive) 50%, transparent);
+	background-color: color-mix(in srgb, var(--kingu-orca-destructive) 5%, transparent);
+}
+
+.kingu-orca-account-card:disabled,
+.kingu-orca-account-card-body:disabled {
+	cursor: default;
+}
+
+.kingu-orca-account-card-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.kingu-orca-account-card-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.kingu-orca-account-name {
+	overflow: hidden;
+	font-size: 14px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-account-detail {
+	overflow: hidden;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-account-detail.destructive {
+	color: var(--kingu-orca-destructive);
+}
+
+/* Badge variant=outline: h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none */
+.kingu-orca-account-badge {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	height: 16px;
+	padding: 0 6px;
+	border: 1px solid var(--kingu-orca-settings-input);
+	border-radius: 4px;
+	color: color-mix(in srgb, var(--kingu-orca-foreground) 80%, transparent);
+	font-size: 10px;
+	font-weight: 500;
+	line-height: 1;
+}
+
+.kingu-orca-account-badge.destructive {
+	border-color: transparent;
+	background-color: var(--kingu-orca-destructive);
+	color: #fff;
+}
+
+/* The empty list: rounded-md border border-dashed px-3 py-4 text-xs text-muted-foreground */
+.kingu-orca-account-empty {
+	padding: 16px 12px;
+	border: 1px dashed color-mix(in srgb, var(--kingu-orca-settings-border) 70%, transparent);
+	border-radius: 6px;
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+}
+
+.kingu-orca-account-actions {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px;
+}
+
+/* Button size=xs: h-6 gap-1 rounded-md px-2 text-xs */
+.kingu-orca-xs-button {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	padding: 0 8px;
+	border-radius: 6px;
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.kingu-orca-xs-button.outline {
+	border: 1px solid var(--kingu-orca-settings-input);
+	background-color: var(--kingu-orca-settings-input-bg);
+	color: var(--kingu-orca-foreground);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.kingu-orca-xs-button.outline:hover {
+	background-color: var(--kingu-orca-accent);
+}
+
+.kingu-orca-xs-button.ghost {
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+}
+
+.kingu-orca-xs-button.ghost:hover {
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-xs-button.ghost.danger:hover {
+	color: var(--kingu-orca-destructive);
+}
+
+.kingu-orca-xs-button:disabled {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+/* A sign-in card: flex items-start gap-3 rounded-lg border bg-muted/20 p-3 */
+.kingu-orca-account-status {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px;
+	border: 1px solid color-mix(in srgb, var(--kingu-orca-settings-border) 40%, transparent);
+	border-radius: 8px;
+	background-color: rgba(128, 128, 128, 0.06);
+}
+
+.kingu-orca-account-status.fresh {
+	border-color: color-mix(in srgb, var(--kingu-orca-settings-border) 60%, transparent);
+}
+
+.kingu-orca-account-status > .kingu-orca-icon {
+	margin-top: 2px;
+}
+
+.kingu-orca-account-status-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.kingu-orca-account-status-text p {
+	margin: 0;
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+}
+
+.kingu-orca-account-status-text p.strong {
+	color: var(--kingu-orca-foreground);
+	font-weight: 500;
+}
+
+.kingu-orca-account-status-text p.destructive {
+	color: var(--kingu-orca-destructive);
+}
+
+.kingu-orca-account-head-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.kingu-orca-account-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.kingu-orca-account-link:hover {
+	color: var(--kingu-orca-foreground);
 }
 
 /* #endregion */

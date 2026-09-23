@@ -6,11 +6,9 @@
 import './media/kinguOrcaFooter.css';
 import { $, addDisposableListener, append, EventType } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
-import { Codicon } from '../../../../base/common/codicons.js';
 import { timeout } from '../../../../base/common/async.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/path.js';
-import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -37,12 +35,11 @@ import { KINGU_SHOW_USAGE_COMMAND_ID } from '../browser/kinguUsagePage.contribut
 import { IKinguOrcaService } from '../common/kinguOrca.js';
 import { formatFooterWindow, formatOrcaMemory, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, tightestFooterWindow } from '../common/kinguOrcaFooter.js';
 import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
-import { KINGU_PROVIDER_LOGOS } from '../common/kinguProviderLogos.js';
 import { displayedUsagePercent, KinguUsageDisplay, nextResetTickDelay } from '../common/kinguStatusBar.js';
 import { OrcaUsageMode } from '../common/kinguOrcaUsage.js';
 import { OrcaUsagePanel } from './kinguOrcaUsagePanel.js';
 import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
-import { attachFooterTooltip, FooterChip, FooterPopover, iconButton, lucideIcon, menuItem, menuLabel, menuRadioItem, menuSeparator, wireMenuKeyboard } from './kinguOrcaFooterParts.js';
+import { attachFooterTooltip, FooterChip, FooterPopover, iconButton, lucideIcon, menuItem, menuLabel, menuRadioItem, menuSeparator, providerIcon, wireMenuKeyboard } from './kinguOrcaFooterParts.js';
 import { FLOATING_ENABLED_SETTING_ID, FLOATING_LOCATION_SETTING_ID, KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID, showFloatingWorkspaceMenu } from './kinguFloatingWorkspace.contribution.js';
 import './kinguOrcaService.js';
 
@@ -68,36 +65,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /** The ADE's keep-awake mode, as the setting the Settings editor shows. */
 const AWAKE_SETTING_ID = orcaSettingIdForKey('computerAwakeMode') ?? 'kingu.agents.computerAwakeMode';
 
-/** Icons for the providers whose logo is not carried; codicons for the rest. */
-const FALLBACK_PROVIDER_ICONS: Readonly<Record<string, ThemeIcon>> = {
-	gemini: Codicon.sparkle,
-	antigravity: Codicon.rocket,
-	opencodeGo: Codicon.code,
-	kimi: Codicon.circleFilled,
-	minimax: Codicon.pulse,
-	grok: Codicon.zap,
-};
 
-function providerIcon(slot: string): HTMLElement {
-	const logo = KINGU_PROVIDER_LOGOS[slot];
-	if (!logo) {
-		return $(`span.kingu-orca-provider-icon${ThemeIcon.asCSSSelector(FALLBACK_PROVIDER_ICONS[slot] ?? Codicon.circleLargeOutline)}`);
-	}
-	const holder = $('span.kingu-orca-provider-icon.logo');
-	const svg = mainWindow.document.createElementNS(SVG_NS, 'svg');
-	svg.setAttribute('viewBox', logo.viewBox);
-	svg.setAttribute('width', '13');
-	svg.setAttribute('height', '13');
-	const path = mainWindow.document.createElementNS(SVG_NS, 'path');
-	path.setAttribute('d', logo.path);
-	path.setAttribute('fill', logo.fill ?? 'currentColor');
-	if (logo.evenOdd) {
-		path.setAttribute('fill-rule', 'evenodd');
-	}
-	svg.appendChild(path);
-	holder.appendChild(svg);
-	return holder;
-}
+
 
 /**
  * One agent inside the usage pill, `ProviderSegment` in the ADE, state for
