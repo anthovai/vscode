@@ -25,7 +25,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ITerminalInstance, ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../../workbench/contrib/terminal/common/terminal.js';
-import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
+import { IKinguFloatingWorkspaceService } from './kinguFloatingWorkspacePanel.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
 import { IKinguListeningPort, IKinguPortScan, IKinguProcessUsage } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
@@ -284,7 +284,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		@IClipboardService private readonly _clipboardService: IClipboardService,
 		@IWorkspaceContextService private readonly _workspaceService: IWorkspaceContextService,
 		@IStorageService private readonly _storageService: IStorageService,
-		@IWorkbenchLayoutService private readonly _layoutService: IWorkbenchLayoutService,
+		@IKinguFloatingWorkspaceService private readonly _floating: IKinguFloatingWorkspaceService,
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
 		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@ILogService private readonly _logService: ILogService,
@@ -307,7 +307,7 @@ class KinguOrcaFooterContribution extends Disposable {
 			event.stopPropagation();
 			showFloatingWorkspaceMenu(this._contextMenuService, this._configurationService, event, 'status-bar');
 		}));
-		this._register(this._layoutService.onDidChangePartVisibility(() => this._renderPanelToggle()));
+		this._register(this._floating.onDidChangeOpen(() => this._renderPanelToggle()));
 
 		this._register(this._orca.onPush('rateLimits:update')(([state]) => this._renderUsage(state as OrcaRateLimitState)));
 		this._register(this._orca.onPush('agentAwake:changed')(([status]) => {
@@ -1264,7 +1264,7 @@ class KinguOrcaFooterContribution extends Disposable {
 
 	/** `Show Floating Workspace` or `Minimize Floating Workspace`, as the ADE's footer spells them. */
 	private _floatingLabel(): string {
-		return this._layoutService.isVisible(Parts.PANEL_PART)
+		return this._floating.isOpen
 			? localize('kingu.footer.floating.minimize', "Minimize Floating Workspace")
 			: localize('kingu.footer.floating.show', "Show Floating Workspace");
 	}

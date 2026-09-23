@@ -69,4 +69,8 @@ export const KINGU_LUCIDE_ICONS: Readonly<Record<string, readonly KinguLucideEle
 	'hard-drive': [['path',{'d':'M10 16h.01'}],['path',{'d':'M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'}],['path',{'d':'M21.946 12.013H2.054'}],['path',{'d':'M6 16h.01'}]],
 	'check': [['path',{'d':'M20 6 9 17l-5-5'}]],
 	'plus': [['path',{'d':'M5 12h14'}],['path',{'d':'M12 5v14'}]],
+	'maximize-2': [['path',{'d':'M15 3h6v6'}],['path',{'d':'m21 3-7 7'}],['path',{'d':'m3 21 7-7'}],['path',{'d':'M9 21H3v-6'}]],
+	'minimize-2': [['path',{'d':'m14 10 7-7'}],['path',{'d':'M20 10h-6V4'}],['path',{'d':'m3 21 7-7'}],['path',{'d':'M4 14h6v6'}]],
+	'minus': [['path',{'d':'M5 12h14'}]],
+	'file-text': [['path',{'d':'M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'}],['path',{'d':'M14 2v5a1 1 0 0 0 1 1h5'}],['path',{'d':'M10 9H8'}],['path',{'d':'M16 13H8'}],['path',{'d':'M16 17H8'}]],
 };

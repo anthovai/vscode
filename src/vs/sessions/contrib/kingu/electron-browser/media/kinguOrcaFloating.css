@@ -1,0 +1,316 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * The ADE's floating workspace, class for class: `FloatingTerminalPanelSurface`
+ * (`fixed z-[45] rounded-lg` with its two-layer shadow, an inner `border
+ * bg-card`), its `h-9` title bar, `FloatingTerminalWindowControls` and
+ * `FloatingTerminalEmptyState`.
+ */
+.kingu-orca-floating-panel {
+	position: fixed;
+	z-index: 45;
+	display: flex;
+	min-width: 420px;
+	min-height: 280px;
+	border-radius: 8px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16), 0 24px 64px rgba(0, 0, 0, 0.32);
+	outline: none;
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms;
+}
+
+.monaco-workbench.vs-dark .kingu-orca-floating-panel,
+.monaco-workbench.hc-black .kingu-orca-floating-panel {
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), 0 28px 72px rgba(0, 0, 0, 0.58);
+}
+
+.kingu-orca-floating-panel.open {
+	visibility: visible;
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.kingu-orca-floating-inner {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid rgba(0, 0, 0, 0.14);
+	border-radius: 8px;
+	background-color: var(--kingu-orca-settings-card-solid, var(--vscode-editorWidget-background));
+}
+
+.monaco-workbench.vs-dark .kingu-orca-floating-inner,
+.monaco-workbench.hc-black .kingu-orca-floating-inner {
+	border-color: rgba(255, 255, 255, 0.14);
+	background-color: #171717;
+}
+
+/* `flex h-9 shrink-0 cursor-grab items-center border-b bg-[var(--bg-titlebar,var(--card))]`. */
+.kingu-orca-floating-titlebar {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	height: 36px;
+	border-bottom: 1px solid var(--kingu-orca-settings-border, var(--kingu-orca-border));
+	cursor: grab;
+	user-select: none;
+}
+
+.kingu-orca-floating-titlebar.dragging {
+	cursor: grabbing;
+}
+
+.kingu-orca-floating-tabs {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	align-self: stretch;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.kingu-orca-floating-tab {
+	display: flex;
+	flex-shrink: 1;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	max-width: 200px;
+	height: 100%;
+	padding: 0 8px 0 12px;
+	border-right: 1px solid var(--kingu-orca-settings-border, var(--kingu-orca-border));
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.kingu-orca-floating-tab:hover {
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-floating-tab.active {
+	background-color: var(--vscode-editor-background);
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-floating-tab-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-floating-tab-close,
+.kingu-orca-floating-new {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	cursor: pointer;
+}
+
+.kingu-orca-floating-tab-close {
+	width: 18px;
+	height: 18px;
+	opacity: 0;
+}
+
+.kingu-orca-floating-tab:hover .kingu-orca-floating-tab-close,
+.kingu-orca-floating-tab.active .kingu-orca-floating-tab-close {
+	opacity: 1;
+}
+
+.kingu-orca-floating-new {
+	width: 28px;
+	height: 28px;
+	margin: 0 4px;
+}
+
+.kingu-orca-floating-tab-close:hover,
+.kingu-orca-floating-new:hover {
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-foreground);
+}
+
+/* The window controls: `icon-xs` (size-6) buttons, `border-border bg-secondary shadow-xs hover:bg-accent`. */
+.kingu-orca-floating-controls {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+}
+
+.kingu-orca-floating-control {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 1px solid var(--kingu-orca-settings-input, var(--kingu-orca-border));
+	border-radius: 6px;
+	background-color: var(--vscode-button-secondaryBackground, #262626);
+	color: var(--vscode-button-secondaryForeground, var(--kingu-orca-foreground));
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+	cursor: pointer;
+}
+
+.monaco-workbench.vs-dark .kingu-orca-floating-control {
+	background-color: #262626;
+	color: #fafafa;
+}
+
+.kingu-orca-floating-control:hover {
+	background-color: var(--kingu-orca-accent);
+}
+
+.monaco-workbench .kingu-orca-floating-control:focus,
+.monaco-workbench .kingu-orca-floating-new:focus,
+.monaco-workbench .kingu-orca-floating-tab-close:focus,
+.monaco-workbench .kingu-orca-floating-panel:focus {
+	outline: none;
+}
+
+/* The body: `relative min-h-0 flex-1 overflow-hidden bg-background`, one pane per tab. */
+.kingu-orca-floating-body {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	background-color: var(--vscode-editor-background);
+}
+
+.monaco-workbench.vs-dark .kingu-orca-floating-body {
+	background-color: #0a0a0a;
+}
+
+.kingu-orca-floating-tab-body {
+	position: absolute;
+	inset: 0;
+	display: none;
+	padding: 4px 0 0 8px;
+}
+
+.kingu-orca-floating-tab-body.markdown {
+	padding: 0;
+}
+
+.kingu-orca-floating-tab-body.active {
+	display: block;
+}
+
+/* `FloatingTerminalEmptyState`: a 360px column of ghost rows, `grid-cols-[1rem_1fr_auto]`, each with its shortcut. */
+.kingu-orca-floating-empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.kingu-orca-floating-empty-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 360px;
+}
+
+.kingu-orca-floating-empty-item {
+	display: grid;
+	grid-template-columns: 1rem minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	height: 32px;
+	padding: 0 12px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--kingu-orca-foreground);
+	font: inherit;
+	font-size: 14px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.kingu-orca-floating-empty-item > .kingu-orca-icon {
+	opacity: 0.9;
+}
+
+.kingu-orca-floating-empty-item:hover {
+	background-color: rgba(128, 128, 128, 0.16);
+}
+
+.monaco-workbench .kingu-orca-floating-empty-item:focus {
+	outline: none;
+}
+
+.kingu-orca-floating-empty-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* `ShortcutKeyCombo`: bordered keys with a small `+` between. */
+.kingu-orca-floating-shortcut {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	justify-self: end;
+	opacity: 0.9;
+}
+
+.kingu-orca-floating-shortcut kbd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 22px;
+	padding: 0 6px;
+	border: 1px solid var(--kingu-orca-settings-input, var(--kingu-orca-border));
+	border-radius: 4px;
+	background-color: rgba(128, 128, 128, 0.14);
+	color: var(--kingu-orca-foreground);
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	box-sizing: border-box;
+}
+
+.kingu-orca-floating-shortcut-sep {
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+}
+
+/* `FloatingTerminalResizeHandles`: the edges and corners, invisible. */
+.kingu-orca-floating-resize {
+	position: absolute;
+	z-index: 1;
+}
+
+.kingu-orca-floating-panel.maximized .kingu-orca-floating-resize {
+	display: none;
+}
+
+.kingu-orca-floating-resize.n { top: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+.kingu-orca-floating-resize.s { bottom: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+.kingu-orca-floating-resize.e { right: -3px; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+.kingu-orca-floating-resize.w { left: -3px; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+.kingu-orca-floating-resize.ne { top: -3px; right: -3px; width: 12px; height: 12px; cursor: nesw-resize; }
+.kingu-orca-floating-resize.sw { bottom: -3px; left: -3px; width: 12px; height: 12px; cursor: nesw-resize; }
+.kingu-orca-floating-resize.nw { top: -3px; left: -3px; width: 12px; height: 12px; cursor: nwse-resize; }
+.kingu-orca-floating-resize.se { bottom: -3px; right: -3px; width: 12px; height: 12px; cursor: nwse-resize; }

@@ -274,6 +274,7 @@ import './contrib/kingu/electron-browser/kinguSettingsBridge.contribution.js';
 // Kingu: the ADE's footer, drawn from the ADE's engine
 import './contrib/kingu/electron-browser/kinguOrcaFooter.contribution.js';
 import './contrib/kingu/electron-browser/kinguFloatingWorkspace.contribution.js';
+import './contrib/kingu/electron-browser/kinguFloatingWorkspacePanel.js';
 import './contrib/kingu/electron-browser/kinguOrcaSettingsScreen.contribution.js';
 
 //#endregion

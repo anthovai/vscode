@@ -18,7 +18,8 @@ import { IKeybindingService } from '../../../../platform/keybinding/common/keybi
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
+import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
+import { IKinguFloatingWorkspaceService } from './kinguFloatingWorkspacePanel.js';
 import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 
@@ -26,13 +27,7 @@ import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 export const FLOATING_ENABLED_SETTING_ID = orcaSettingIdForKey('floatingTerminalEnabled') ?? 'kingu.floatingWorkspace.floatingTerminalEnabled';
 export const FLOATING_LOCATION_SETTING_ID = orcaSettingIdForKey('floatingTerminalTriggerLocation') ?? 'kingu.floatingWorkspace.floatingTerminalTriggerLocation';
 
-/**
- * The ADE's `floatingTerminal.toggle`, bound to Mod+Alt+A as there.
- *
- * The ADE's floating workspace is an overlay holding its own terminal tabs. This
- * window already has a surface for exactly that, its panel, so the toggle
- * shows and hides the panel rather than drawing a second terminal host.
- */
+/** The ADE's `floatingTerminal.toggle`, bound to Mod+Alt+A as there: shows and hides the floating workspace. */
 export const KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID = 'kingu.floatingWorkspace.toggle';
 
 registerAction2(class extends Action2 {
@@ -44,8 +39,8 @@ registerAction2(class extends Action2 {
 			keybinding: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyA, weight: KeybindingWeight.WorkbenchContrib },
 		});
 	}
-	run(accessor: ServicesAccessor): Promise<unknown> {
-		return accessor.get(ICommandService).executeCommand('workbench.action.togglePanel');
+	run(accessor: ServicesAccessor): void {
+		accessor.get(IKinguFloatingWorkspaceService).toggle();
 	}
 });
 
@@ -110,6 +105,7 @@ class KinguFloatingWorkspaceButton extends Disposable {
 
 	constructor(
 		@IWorkbenchLayoutService private readonly _layoutService: IWorkbenchLayoutService,
+		@IKinguFloatingWorkspaceService private readonly _floating: IKinguFloatingWorkspaceService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
@@ -148,7 +144,7 @@ class KinguFloatingWorkspaceButton extends Disposable {
 		container.appendChild(wrapper);
 		store.add(toDisposable(() => wrapper.remove()));
 
-		const open = () => this._layoutService.isVisible(Parts.PANEL_PART);
+		const open = () => this._floating.isOpen;
 		const label = () => {
 			const shortcut = this._keybindingService.lookupKeybinding(KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID)?.getLabel();
 			const action = open() ? localize('kingu.floatingWorkspace.minimize', "Minimize") : localize('kingu.floatingWorkspace.show', "Show");
@@ -161,7 +157,7 @@ class KinguFloatingWorkspaceButton extends Disposable {
 			button.setAttribute('aria-label', open() ? localize('kingu.floatingWorkspace.minimizeAria', "Minimize floating workspace") : localize('kingu.floatingWorkspace.showAria', "Show floating workspace"));
 		};
 		refresh();
-		store.add(this._layoutService.onDidChangePartVisibility(refresh));
+		store.add(this._floating.onDidChangeOpen(refresh));
 		store.add(attachFooterTooltip(button, () => [label()], 400, undefined, 'left'));
 
 		// Position: the stored corner anchor, re-resolved when the window resizes.
