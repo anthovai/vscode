@@ -10,7 +10,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IAgentHostService } from '../../../../platform/agentHost/common/agentService.js';
@@ -33,7 +33,7 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
 import { describeListeningPort } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
-import { formatRateLimit, IKinguRateLimit, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
+import { formatRateLimit, IKinguRateLimit, nextResetTickDelay, readRateLimitFromAccount } from '../common/kinguStatusBar.js';
 import { IKinguUsageSource, KinguUsageDetail, usageRows } from '../common/kinguUsageRoster.js';
 import { IKinguUsageRosterOptions, PROVIDER_ICONS, renderKinguUsageRoster, updateKinguUsageRoster } from './kinguUsageRosterPanel.js';
 import { KINGU_SHOW_USAGE_COMMAND_ID } from './kinguUsagePage.contribution.js';
@@ -134,6 +134,10 @@ class KinguStatusBarContribution extends Disposable {
 	private readonly _terminals = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _memory = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _ports = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	/** The one timer that moves every countdown on the strip. */
+	private readonly _resetTick = this._register(new MutableDisposable());
+	/** Reset times of the windows currently drawn, refilled on every update. */
+	private readonly _pendingResets: number[] = [];
 	private readonly _providers = new Map<KinguQuotaProvider, IStatusbarEntryAccessor>();
 	/**
 	 * The gauge element per provider, kept because the status bar appends it once
@@ -315,10 +319,33 @@ class KinguStatusBarContribution extends Disposable {
 	private _updateProviders(): void {
 		// Ordered so a provider appearing later does not shuffle the ones before it.
 		let priority = 110;
+		this._pendingResets.length = 0;
 		for (const provider of KINGU_STATUS_BAR_PROVIDERS) {
 			this._updateProvider(provider, priority--);
 		}
 		this._updateRefreshButton(priority - 1);
+		this._scheduleResetTick();
+	}
+
+	/**
+	 * Wakes when a countdown would next read differently, and only then.
+	 *
+	 * The gauges now say how long until a window resets, which is a label that
+	 * changes with the clock rather than with an event — so without this it
+	 * would sit at `3h 54m` until the next quota poll minutes later, and a
+	 * reading that is wrong most of the time is worse than the window length it
+	 * replaced. Scheduled to the boundary instead of ticking every second: the
+	 * label is floored to the minute, so a second-by-second redraw would spend
+	 * fifty-nine wakeups out of sixty drawing the same string.
+	 */
+	private _scheduleResetTick(): void {
+		this._resetTick.clear();
+		const delay = nextResetTickDelay(Date.now(), this._pendingResets);
+		if (delay === undefined) {
+			return;
+		}
+		const timer = mainWindow.setTimeout(() => this._updateProviders(), delay);
+		this._resetTick.value = toDisposable(() => mainWindow.clearTimeout(timer));
 	}
 
 	/**
@@ -424,7 +451,15 @@ class KinguStatusBarContribution extends Disposable {
 		}
 
 		const label = KINGU_QUOTA_PROVIDER_LABELS[provider];
-		const text = windows.map(formatRateLimit).join(' · ');
+		const now = Date.now();
+		// Collected as the gauges are built rather than walked for separately, so
+		// the tick is scheduled from exactly the windows that are on screen.
+		for (const limit of windows) {
+			if (limit.resetsAt !== undefined) {
+				this._pendingResets.push(limit.resetsAt);
+			}
+		}
+		const text = windows.map(limit => formatRateLimit(limit, 'used', now)).join(' · ');
 		let gauge = this._gauges.get(provider);
 		if (!gauge) {
 			gauge = new KinguGauge(PROVIDER_ICONS[provider]);
