@@ -1,0 +1,55 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * One agent's usage, drawn as the ADE draws it: the mark, a short neutral bar
+ * filled from the most consumed window, then every window's reading.
+ *
+ * The bar is neutral on purpose, as in the ADE. It is a glance at proportion;
+ * the colour that says "stop soon" would make every heavy user's footer read as
+ * an alarm.
+ */
+.kingu-orca-segment {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-variant-numeric: tabular-nums;
+}
+
+.kingu-orca-segment.stale {
+	opacity: 0.8;
+}
+
+.kingu-orca-provider-icon {
+	display: inline-flex;
+	align-items: center;
+	font-size: 13px;
+}
+
+.kingu-orca-provider-icon.logo svg {
+	display: block;
+}
+
+.kingu-orca-bar {
+	width: 48px;
+	height: 6px;
+	flex-shrink: 0;
+	border-radius: 999px;
+	overflow: hidden;
+	background-color: var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
+}
+
+.kingu-orca-bar.hidden {
+	display: none;
+}
+
+.kingu-orca-bar-fill {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background-color: var(--vscode-descriptionForeground);
+	opacity: 0.55;
+	transition: width 300ms ease;
+}

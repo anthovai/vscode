@@ -271,6 +271,8 @@ import './contrib/kingu/electron-browser/kinguVaultEnvironment.contribution.js';
 import './contrib/kingu/electron-browser/kinguWorkbench.contribution.js';
 // Kingu: the ADE's settings, offered in this window's Settings editor
 import './contrib/kingu/electron-browser/kinguSettingsBridge.contribution.js';
+// Kingu: the ADE's footer, drawn from the ADE's engine
+import './contrib/kingu/electron-browser/kinguOrcaFooter.contribution.js';
 
 //#endregion
 

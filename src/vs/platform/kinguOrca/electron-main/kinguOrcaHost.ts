@@ -577,16 +577,67 @@ async function bringUpEngine(): Promise<BrowserWindow | undefined> {
 			}
 		}
 	};
+	// The windows the user actually looks at: every window but this hidden one.
+	const userWindows = () => BrowserWindow.getAllWindows().filter(candidate => candidate !== window && !candidate.isDestroyed());
+	// Window events the ADE uses to mean "the user is back": it refreshes quotas
+	// on them. Electron raises focus app-wide and has no app-wide show or
+	// restore, and a window that is shown or restored takes focus, so all three
+	// are answered by a user window gaining focus.
+	const activationEvents = new Set<string | symbol>(['focus', 'show', 'restore']);
+	const activationListeners = new Map<(...args: unknown[]) => void, (event: unknown, focused: BrowserWindow) => void>();
 	// Never shown. The ADE brings its window forward on a deep link, a second
 	// instance or a notification click; here the window it would bring forward
 	// is empty, so those calls do nothing and the Agents Window stays in front.
+	//
+	// And never asked about itself. The ADE's services gate work on whether
+	// their window is visible and focused — quota polling stops altogether
+	// otherwise — and the window they mean is the one their UI is in, which is
+	// now the Agents Window. Answering for the hidden window would leave every
+	// such service switched off for good.
 	const hidden = new Proxy(window, {
 		get(target, property) {
 			if (property === 'show' || property === 'focus' || property === 'showInactive' || property === 'restore' || property === 'maximize' || property === 'moveTop') {
 				return () => { };
 			}
 			if (property === 'isVisible') {
-				return () => false;
+				return () => userWindows().some(candidate => candidate.isVisible());
+			}
+			if (property === 'isMinimized') {
+				return () => { const windows = userWindows(); return windows.length > 0 && windows.every(candidate => candidate.isMinimized()); };
+			}
+			if (property === 'isFocused') {
+				return () => userWindows().some(candidate => candidate.isFocused());
+			}
+			if (property === 'on' || property === 'addListener' || property === 'once') {
+				return (event: string | symbol, listener: (...args: unknown[]) => void) => {
+					if (!activationEvents.has(event)) {
+						target[property](event as 'closed', listener);
+						return hidden;
+					}
+					const forward = (_event: unknown, focused: BrowserWindow) => {
+						if (focused !== window) {
+							if (property === 'once') {
+								app.removeListener('browser-window-focus', forward);
+							}
+							listener();
+						}
+					};
+					activationListeners.set(listener, forward);
+					app.on('browser-window-focus', forward);
+					return hidden;
+				};
+			}
+			if (property === 'off' || property === 'removeListener') {
+				return (event: string | symbol, listener: (...args: unknown[]) => void) => {
+					const forward = activationListeners.get(listener);
+					if (activationEvents.has(event) && forward) {
+						app.removeListener('browser-window-focus', forward);
+						activationListeners.delete(listener);
+					} else {
+						target[property](event as 'closed', listener);
+					}
+					return hidden;
+				};
 			}
 			// The real window as `this`, not the proxy: Electron's native getters
 			// (`webContents` first among them) refuse any other receiver, and say so
