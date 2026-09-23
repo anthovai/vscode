@@ -65,6 +65,18 @@ export function isOrcaBoot(argv: readonly string[] = process.argv): boolean {
 	return argv.includes(ORCA_BOOT_ARG);
 }
 
+/**
+ * Whether this boot opens the Agents Window, which runs the ADE's engine with
+ * no ADE renderer.
+ *
+ * Read from `process.argv` rather than the parsed arguments because this is
+ * answered before the ESM bootstrap has run, which is the only point early
+ * enough to beat Electron to `ready`.
+ */
+export function isAgentsBoot(argv: readonly string[] = process.argv): boolean {
+	return argv.includes('--agents');
+}
+
 interface IOrcaStartup {
 	setMainWindowOpener(opener: () => BrowserWindow): void;
 	runMainProcessPreflight(options: { focusExistingWindow: () => void; requestDesktopActivation: (argv?: readonly string[]) => void }): boolean;
@@ -79,6 +91,8 @@ interface IOrcaStartup {
 		handleMacAppActivation: () => void;
 	}): Promise<void>;
 	mainProcessState: { mainWindow: unknown };
+	hasKinguHandler(channel: string): boolean;
+	invokeKinguHandler(channel: string, event: unknown, args: readonly unknown[]): Promise<unknown>;
 	getLinearStatus(): IOrcaProviderStatus;
 	getJiraStatus(): IOrcaProviderStatus;
 }
@@ -491,6 +505,137 @@ function startWorkbench(): void {
 		workbenchStarted = false;
 		console.error('[kingu-orca] could not start the workbench', error);
 	});
+}
+
+/**
+ * A message the ADE pushed to what it believes is its renderer.
+ *
+ * With the engine running headless there is no ADE renderer, so its pushes —
+ * a quota that changed, a setting another surface wrote, an update that became
+ * available — are the only way the Agents Window learns what the ADE learned.
+ */
+export interface IOrcaPush {
+	readonly channel: string;
+	readonly args: readonly unknown[];
+}
+
+const pushListeners = new Set<(push: IOrcaPush) => void>();
+
+/** Subscribes to the ADE's pushes. Returns the unsubscribe. */
+export function onOrcaPush(listener: (push: IOrcaPush) => void): () => void {
+	pushListeners.add(listener);
+	return () => pushListeners.delete(listener);
+}
+
+let engine: Promise<BrowserWindow | undefined> | undefined;
+
+/**
+ * Runs the ADE's backend in this process, with no ADE UI.
+ *
+ * This is what makes the Agents Window *use* the ADE rather than copy it. Its
+ * status bar, its settings and its pages call the ADE's own handlers — the same
+ * code the ADE's renderer calls, with every side effect that call has — instead
+ * of a second implementation that would have to be kept in step with the first
+ * and would drift the day it was written.
+ *
+ * The ADE needs a main window: it hands its services a window to push to and
+ * reads `event.sender` to know who asked. It gets a hidden one. Not the Agents
+ * Window, because a real `webContents` is what its ~700 handlers were written
+ * against, and a shim of one would be a guess at which of its members they use;
+ * the last guess of that kind, counting `state.mainWindow.*` uses, missed a
+ * window passed into a function that called `on`. A hidden window costs one
+ * idle renderer and is right by construction. Its `send` is the one member
+ * replaced, so every push lands in {@link onOrcaPush} instead of a page nobody
+ * is looking at.
+ *
+ * Idempotent, and lazy: the first caller starts it, the rest wait on the same
+ * start.
+ */
+export function startOrcaEngine(): Promise<BrowserWindow | undefined> {
+	engine ??= bringUpEngine();
+	return engine;
+}
+
+async function bringUpEngine(): Promise<BrowserWindow | undefined> {
+	const orca = loadStartup();
+	if (!orca) {
+		return undefined;
+	}
+	const window = new BrowserWindow({
+		show: false,
+		width: 800,
+		height: 600,
+		webPreferences: { sandbox: true, contextIsolation: true },
+	});
+	const contents = window.webContents;
+	contents.send = (channel: string, ...args: unknown[]) => {
+		for (const listener of pushListeners) {
+			try {
+				listener({ channel, args });
+			} catch (error) {
+				console.error(`[kingu-orca] push listener failed on ${channel}`, error);
+			}
+		}
+	};
+	// Never shown. The ADE brings its window forward on a deep link, a second
+	// instance or a notification click; here the window it would bring forward
+	// is empty, so those calls do nothing and the Agents Window stays in front.
+	const hidden = new Proxy(window, {
+		get(target, property) {
+			if (property === 'show' || property === 'focus' || property === 'showInactive' || property === 'restore' || property === 'maximize' || property === 'moveTop') {
+				return () => { };
+			}
+			if (property === 'isVisible') {
+				return () => false;
+			}
+			// The real window as `this`, not the proxy: Electron's native getters
+			// (`webContents` first among them) refuse any other receiver, and say so
+			// as "Object has been destroyed".
+			const value = Reflect.get(target, property, target);
+			return typeof value === 'function' ? value.bind(target) : value;
+		},
+	});
+	hostWindow = hidden;
+	try {
+		await orca.initializeMainProcessReady({
+			openMainWindow: () => {
+				try {
+					orca.attachMainWindowCoreServices(hidden, {
+						markExpectedRendererReload: () => { },
+						recordRendererReload: () => { },
+					});
+				} catch (error) {
+					console.error('[kingu-orca] could not attach core services', error);
+				}
+				return hidden;
+			},
+			handleMacAppActivation: () => { },
+		});
+	} catch (error) {
+		console.error('[kingu-orca] headless engine startup failed', error);
+	}
+	orca.mainProcessState.mainWindow = hidden;
+	return hidden;
+}
+
+/**
+ * Calls one of the ADE's handlers from this process, as its renderer would.
+ *
+ * Starts the engine if it is not running. `event.sender` is the ADE's own main
+ * window, because that is who its renderer's calls come from and some handlers
+ * check.
+ */
+export async function invokeOrca(channel: string, args: readonly unknown[]): Promise<unknown> {
+	const window = await startOrcaEngine();
+	const orca = loadStartup();
+	if (!window || !orca) {
+		throw new Error('The Kingu engine is not available in this build — run `npm run build-kingu-orca`.');
+	}
+	if (!orca.hasKinguHandler(channel)) {
+		throw new Error(`Kingu has no handler for ${channel}`);
+	}
+	const sender = window.webContents;
+	return await orca.invokeKinguHandler(channel, { sender, senderFrame: sender.mainFrame, processId: sender.getProcessId(), frameId: sender.mainFrame.routingId }, args);
 }
 
 /** The ADE's renderer, for anything in this process that needs to reach it. */

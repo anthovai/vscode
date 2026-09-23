@@ -5,8 +5,6 @@
 
 import { localize } from '../../../nls.js';
 
-export const KINGU_SETTINGS_CHANNEL_NAME = 'kinguSettings';
-
 /**
  * One setting the ADE owns, offered in this window's Settings editor.
  *

@@ -22,6 +22,10 @@
  * around it.
  */
 
+// First, before any module that registers an ipcMain handler: see ipc-capture.ts.
+import './ipc-capture'
+export { hasKinguHandler, invokeKinguHandler } from './ipc-capture'
+
 export { runMainProcessPreflight } from './main/startup/main-process-preflight'
 export type { MainProcessPreflightOptions } from './main/startup/main-process-preflight'
 
@@ -125,48 +129,3 @@ export function onHostMessage(
  */
 export { getStatus as getLinearStatus } from './main/linear/client'
 export { getStatus as getJiraStatus } from './main/jira/client'
-
-/**
- * Kingu's own settings store.
- *
- * Exported so the host can offer Kingu's settings in *its* settings editor and
- * have them mean something. The host reads and writes the same object the rest
- * of this program does, so a setting changed there is not a copy that has to be
- * kept in step — it is the setting.
- *
- * `mainProcessState.store` is the instance when the full startup has run. A
- * host that only wants the preferences constructs one of these instead, which
- * is safe precisely because it is the other case: the program whose store that
- * would collide with is not running.
- */
-export { Store } from './main/persistence'
-
-/**
- * The host facilities Kingu's core reads instead of importing `electron`.
- *
- * Exported beside {@link Store} because nothing in this program works without
- * one installed: `getPath('userData')` is read at module scope in about
- * seventeen places, so a store constructed before this throws on its first path
- * rather than falling back to a wrong directory — deliberately, so a missing
- * install is obvious at once.
- *
- * `runMainProcessPreflight` installs it as part of the full startup. A host
- * that wants only the preferences installs it itself, which `hasAppEnvironment`
- * is here to make idempotent.
- */
-export { hasAppEnvironment, setAppEnvironment } from './shared/app-environment'
-export { ElectronAppEnvironment } from './main/host/electron-app-environment'
-
-/**
- * Which profile's data file the store should open.
- *
- * Exported because a `new Store()` with no data file opens the one beside the
- * user data root, and that is not where a profile's settings live — so a host
- * that skipped this would read and write a file the running program never
- * looks at. The settings would appear to save and change nothing, which is
- * exactly what happened before this was exported.
- *
- * `main-process-ready-foundation` resolves the profile the same way before
- * constructing its own store; this is that one step, on its own.
- */
-export { ensureActiveKinguProfile } from './main/kingu-profiles/profile-index-store'

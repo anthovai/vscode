@@ -18,7 +18,7 @@ import * as perf from './vs/base/common/performance.js';
 import { resolveNLSConfiguration } from './vs/base/node/nls.js';
 import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
 import { INLSConfiguration } from './vs/nls.js';
-import { isOrcaBoot, ORCA_SCHEME, prepareOrcaBoot, startOrca } from './vs/platform/kinguOrca/electron-main/kinguOrcaHost.js';
+import { isAgentsBoot, isOrcaBoot, ORCA_SCHEME, prepareOrcaBoot, startOrca } from './vs/platform/kinguOrca/electron-main/kinguOrcaHost.js';
 import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
 
 perf.mark('code/didStartMain');
@@ -191,7 +191,10 @@ perf.mark('code/willWaitForAppReady');
 // the browser process user agent, which Electron refuses once it is ready, and
 // `vs/code/electron-main/main.js` is not imported until after ready — so a hook
 // there is always too late.
-if (isOrcaBoot()) {
+//
+// `--agents` needs it too: the Agents Window runs the ADE's engine with no ADE
+// renderer, and its status bar and settings call the ADE's handlers directly.
+if (isOrcaBoot() || isAgentsBoot()) {
 	prepareOrcaBoot();
 }
 

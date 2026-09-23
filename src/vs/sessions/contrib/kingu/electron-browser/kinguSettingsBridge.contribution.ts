@@ -4,15 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, IConfigurationNode, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
-import { KINGU_BRIDGED_SETTINGS, KINGU_SETTINGS_CHANNEL_NAME } from '../../../../platform/kinguSettings/common/kinguSettings.js';
+import { KINGU_BRIDGED_SETTINGS } from '../../../../platform/kinguSettings/common/kinguSettings.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { IKinguOrcaService } from '../common/kinguOrca.js';
+import './kinguOrcaService.js';
 
 /**
  * The ADE's settings, in this window's Settings editor.
@@ -31,17 +31,15 @@ class KinguSettingsBridgeContribution extends Disposable {
 
 	static readonly ID = 'kingu.contrib.settingsBridge';
 
-	private readonly _channel: IChannel;
 	/** Keys this window is mid-write on, so the echo back does not loop. */
 	private readonly _writing = new Set<string>();
 
 	constructor(
-		@IMainProcessService mainProcessService: IMainProcessService,
+		@IKinguOrcaService private readonly _orca: IKinguOrcaService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ILogService private readonly _logService: ILogService,
 	) {
 		super();
-		this._channel = mainProcessService.getChannel(KINGU_SETTINGS_CHANNEL_NAME);
 
 		// Adopt what the ADE already holds before listening, so a first run shows
 		// the ADE's real values rather than this window's defaults — and so the
@@ -57,12 +55,14 @@ class KinguSettingsBridgeContribution extends Disposable {
 				}
 			}
 			if (Object.keys(changed).length > 0) {
-				void this._channel.call('write', changed);
+				void this._write(changed);
 			}
 		}));
 
-		this._register(this._channel.listen<Record<string, unknown>>('onDidChange')(values => {
-			void this._apply(values);
+		// The ADE tells every window but the one that wrote, so this carries only
+		// changes made elsewhere — by the ADE itself, or by a migration.
+		this._register(this._orca.onPush('settings:changed')(([updates]) => {
+			void this._apply(toIds(updates as Record<string, unknown>));
 		}));
 	}
 
@@ -82,7 +82,7 @@ class KinguSettingsBridgeContribution extends Disposable {
 	 */
 	private async _adopt(): Promise<void> {
 		try {
-			const fromOrca = await this._channel.call<Record<string, unknown>>('read');
+			const fromOrca = toIds(await this._orca.invoke<Record<string, unknown>>('settings:get'));
 			const toOrca: Record<string, unknown> = {};
 			const toWindow: Record<string, unknown> = {};
 			for (const setting of KINGU_BRIDGED_SETTINGS) {
@@ -95,10 +95,26 @@ class KinguSettingsBridgeContribution extends Disposable {
 			}
 			await this._apply(toWindow);
 			if (Object.keys(toOrca).length > 0) {
-				await this._channel.call('write', toOrca);
+				await this._write(toOrca);
 			}
 		} catch (error) {
 			this._logService.error('[kingu-settings] could not reconcile the ADE settings', error);
+		}
+	}
+
+	/**
+	 * Sends a change to the ADE through its own `settings:set`.
+	 *
+	 * The handler, not the store: `settings:set` is where the ADE sanitizes a
+	 * value and then acts on it — installs or removes the agent status hooks,
+	 * applies a proxy, switches the app icon. Writing the store directly would
+	 * change what is saved and none of what happens.
+	 */
+	private async _write(updatesById: Record<string, unknown>): Promise<void> {
+		try {
+			await this._orca.invoke('settings:set', toKeys(updatesById));
+		} catch (error) {
+			this._logService.error('[kingu-settings] could not write the ADE settings', error);
 		}
 	}
 
@@ -124,6 +140,33 @@ class KinguSettingsBridgeContribution extends Disposable {
 			}
 		}
 	}
+}
+
+const idByKey = new Map(KINGU_BRIDGED_SETTINGS.map(setting => [setting.key, setting.id]));
+const keyById = new Map(KINGU_BRIDGED_SETTINGS.map(setting => [setting.id, setting.key]));
+
+/** The ADE's settings object, as this window's setting ids; unbridged keys are dropped. */
+function toIds(settings: Record<string, unknown>): Record<string, unknown> {
+	const byId: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(settings ?? {})) {
+		const id = idByKey.get(key);
+		if (id !== undefined && value !== undefined) {
+			byId[id] = value;
+		}
+	}
+	return byId;
+}
+
+/** The reverse of {@link toIds}. */
+function toKeys(updatesById: Record<string, unknown>): Record<string, unknown> {
+	const byKey: Record<string, unknown> = {};
+	for (const [id, value] of Object.entries(updatesById)) {
+		const key = keyById.get(id);
+		if (key !== undefined) {
+			byKey[key] = value;
+		}
+	}
+	return byKey;
 }
 
 const properties: IConfigurationNode['properties'] = {};
