@@ -119,7 +119,7 @@ let lastTooltipHiddenAt = 0;
  * segments). It never takes the pointer, and a press hides it until the
  * pointer leaves, as Radix does.
  */
-export function attachFooterTooltip(target: HTMLElement, lines: () => readonly string[], delay = 400, suppressed?: () => boolean): IDisposable {
+export function attachFooterTooltip(target: HTMLElement, lines: () => readonly string[], delay = 400, suppressed?: () => boolean, side: 'top' | 'left' = 'top'): IDisposable {
 	const store = new DisposableStore();
 	const shown = store.add(new MutableDisposable());
 	let timer: number | undefined;
@@ -154,10 +154,18 @@ export function attachFooterTooltip(target: HTMLElement, lines: () => readonly s
 		const arrow = append(tooltip, $('span.kingu-orca-tooltip-arrow'));
 		const container = target.closest('.monaco-workbench') ?? getWindow(target).document.body;
 		container.appendChild(tooltip);
-		placeAbove(tooltip, target, 6, 'center');
-		const tooltipRect = tooltip.getBoundingClientRect();
-		const targetRect = target.getBoundingClientRect();
-		arrow.style.left = `${Math.round(targetRect.left + targetRect.width / 2 - tooltipRect.left - 5)}px`;
+		if (side === 'left') {
+			tooltip.classList.add('left');
+			placeLeft(tooltip, target, 6);
+			const tooltipRect = tooltip.getBoundingClientRect();
+			const targetRect = target.getBoundingClientRect();
+			arrow.style.top = `${Math.round(targetRect.top + targetRect.height / 2 - tooltipRect.top - 5)}px`;
+		} else {
+			placeAbove(tooltip, target, 6, 'center');
+			const tooltipRect = tooltip.getBoundingClientRect();
+			const targetRect = target.getBoundingClientRect();
+			arrow.style.left = `${Math.round(targetRect.left + targetRect.width / 2 - tooltipRect.left - 5)}px`;
+		}
 		shown.value = toDisposable(() => tooltip.remove());
 	};
 	store.add(addDisposableListener(target, 'pointerenter', () => {
@@ -210,6 +218,23 @@ function placeAbove(surface: HTMLElement, anchor: HTMLElement, sideOffset: numbe
 	surface.style.visibility = '';
 }
 
+/** Places a floating label to the left of an anchor, centred on it, as Radix places `side="left"`. */
+function placeLeft(surface: HTMLElement, anchor: HTMLElement, sideOffset: number): void {
+	const window = getWindow(anchor);
+	const anchorRect = anchor.getBoundingClientRect();
+	surface.style.position = 'fixed';
+	surface.style.visibility = 'hidden';
+	surface.style.left = '0px';
+	surface.style.top = '0px';
+	const width = surface.offsetWidth;
+	const height = surface.offsetHeight;
+	const left = Math.max(COLLISION_PADDING, anchorRect.left - sideOffset - width);
+	const top = Math.max(COLLISION_PADDING, Math.min(anchorRect.top + anchorRect.height / 2 - height / 2, window.innerHeight - COLLISION_PADDING - height));
+	surface.style.left = `${Math.round(left)}px`;
+	surface.style.top = `${Math.round(top)}px`;
+	surface.style.visibility = '';
+}
+
 export interface IFooterPopoverOptions {
 	/** `menu` is the ADE's DropdownMenu surface; `popover` its Popover surface. */
 	readonly surface: 'menu' | 'popover';
@@ -220,6 +245,10 @@ export interface IFooterPopoverOptions {
 	readonly flush?: boolean;
 	/** Called once each time it opens, as the ADE's `onOpenChange(true)`. */
 	readonly onOpen?: () => void;
+	/** Called each time it closes. */
+	readonly onClose?: () => void;
+	/** Other surfaces that belong to this one — a submenu — where a press does not close it. */
+	readonly contains?: (node: Node) => boolean;
 }
 
 /**
@@ -284,6 +313,7 @@ export class FooterPopover extends Disposable {
 		this._anchor.setAttribute('aria-expanded', 'true');
 		store.add(toDisposable(() => {
 			this._drawing.clear();
+			this._options.onClose?.();
 			surface.remove();
 			this._surface = undefined;
 			this._anchor.setAttribute('aria-expanded', 'false');
@@ -296,7 +326,7 @@ export class FooterPopover extends Disposable {
 		// Capture, so a press that a surface underneath swallows still closes it.
 		store.add(addDisposableListener(window.document, EventType.POINTER_DOWN, (event: PointerEvent) => {
 			const target = event.target as Node | null;
-			if (target && (surface.contains(target) || this._anchor.contains(target))) {
+			if (target && (surface.contains(target) || this._anchor.contains(target) || this._options.contains?.(target))) {
 				return;
 			}
 			this.close();

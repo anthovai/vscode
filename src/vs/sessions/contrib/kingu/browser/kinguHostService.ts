@@ -11,7 +11,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
 import { KinguQuotaResult } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
 import { IKinguHostService, IKinguMemoryReading } from '../../../../platform/kinguHost/common/kinguHostService.js';
-import { IKinguListeningPort } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
+import { IKinguListeningPort, IKinguPortScan, IKinguProcessUsage, IKinguStopPortRequest, KinguStopPortResult } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
 import { KINGU_HOST_CHANNEL_NAME } from '../../../../platform/kinguHost/common/kinguHostTypes.js';
 import { IKinguComputerRequest, KinguComputerResult } from '../../../../platform/kinguComputer/common/kinguComputerProtocol.js';
 
@@ -65,6 +65,30 @@ export class KinguHostService extends Disposable implements IKinguHostService {
 	async readListeningPorts(): Promise<readonly IKinguListeningPort[]> {
 		try {
 			return await this._channel.call<readonly IKinguListeningPort[]>('getListeningPorts');
+		} catch {
+			return [];
+		}
+	}
+
+	async scanPorts(): Promise<IKinguPortScan> {
+		try {
+			return await this._channel.call<IKinguPortScan>('scanPorts');
+		} catch {
+			return { workspace: [], external: [] };
+		}
+	}
+
+	async stopPortProcess(request: IKinguStopPortRequest): Promise<KinguStopPortResult> {
+		try {
+			return await this._channel.call<KinguStopPortResult>('stopPortProcess', request);
+		} catch (error) {
+			return { ok: false, reason: error instanceof Error && error.message ? error.message : 'Failed to stop the process.' };
+		}
+	}
+
+	async measureProcesses(pids: readonly number[]): Promise<readonly IKinguProcessUsage[]> {
+		try {
+			return await this._channel.call<readonly IKinguProcessUsage[]>('measureProcesses', pids);
 		} catch {
 			return [];
 		}

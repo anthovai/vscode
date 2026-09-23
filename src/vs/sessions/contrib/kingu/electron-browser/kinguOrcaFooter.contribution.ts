@@ -4,9 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import './media/kinguOrcaFooter.css';
-import { $, append } from '../../../../base/browser/dom.js';
+import { $, addDisposableListener, append, EventType } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Codicon } from '../../../../base/common/codicons.js';
+import { timeout } from '../../../../base/common/async.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/path.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
@@ -15,28 +16,34 @@ import { localize } from '../../../../nls.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ITerminalInstance, ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../../workbench/contrib/terminal/common/terminal.js';
+import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
-import { KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
-import { IKinguListeningPort } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
+import { IKinguListeningPort, IKinguPortScan, IKinguProcessUsage } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
 import { IKinguAdvertisedUrlService } from '../browser/kinguAdvertisedUrlService.js';
 import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
-import { IKinguUsageRosterOptions, renderKinguUsageRoster, updateKinguUsageRoster } from '../browser/kinguUsageRosterPanel.js';
-import { IKinguUsageSource, KinguUsageDetail, usageRows } from '../common/kinguUsageRoster.js';
 import { KINGU_SHOW_USAGE_COMMAND_ID } from '../browser/kinguUsagePage.contribution.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
 import { formatFooterWindow, formatOrcaMemory, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, tightestFooterWindow } from '../common/kinguOrcaFooter.js';
 import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
 import { KINGU_PROVIDER_LOGOS } from '../common/kinguProviderLogos.js';
-import { IKinguRateLimit, nextResetTickDelay } from '../common/kinguStatusBar.js';
+import { displayedUsagePercent, KinguUsageDisplay, nextResetTickDelay } from '../common/kinguStatusBar.js';
+import { OrcaUsageMode } from '../common/kinguOrcaUsage.js';
+import { OrcaUsagePanel } from './kinguOrcaUsagePanel.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
 import { attachFooterTooltip, FooterChip, FooterPopover, iconButton, lucideIcon, menuItem, menuLabel, menuRadioItem, menuSeparator, wireMenuKeyboard } from './kinguOrcaFooterParts.js';
+import { FLOATING_ENABLED_SETTING_ID, FLOATING_LOCATION_SETTING_ID, KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID, showFloatingWorkspaceMenu } from './kinguFloatingWorkspace.contribution.js';
 import './kinguOrcaService.js';
 
 /**
@@ -50,7 +57,7 @@ import './kinguOrcaService.js';
  */
 const RESOURCE_INTERVAL_MS = 60_000;
 /** While the Resource Manager is open it is read as the ADE reads it, every few seconds. */
-const RESOURCE_OPEN_INTERVAL_MS = 5_000;
+const RESOURCE_OPEN_INTERVAL_MS = 2_000;
 /** Remote hosts change by user action, so a slow poll is enough to catch the rest. */
 const SSH_INTERVAL_MS = 30_000;
 /** The ADE's background port poll. */
@@ -60,9 +67,6 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** The ADE's keep-awake mode, as the setting the Settings editor shows. */
 const AWAKE_SETTING_ID = orcaSettingIdForKey('computerAwakeMode') ?? 'kingu.agents.computerAwakeMode';
-/** Whether the floating-workspace toggle is on, and where the ADE puts it. */
-const FLOATING_ENABLED_SETTING_ID = orcaSettingIdForKey('floatingTerminalEnabled') ?? 'kingu.floatingWorkspace.floatingTerminalEnabled';
-const FLOATING_LOCATION_SETTING_ID = orcaSettingIdForKey('floatingTerminalTriggerLocation') ?? 'kingu.floatingWorkspace.floatingTerminalTriggerLocation';
 
 /** Icons for the providers whose logo is not carried; codicons for the rest. */
 const FALLBACK_PROVIDER_ICONS: Readonly<Record<string, ThemeIcon>> = {
@@ -73,45 +77,6 @@ const FALLBACK_PROVIDER_ICONS: Readonly<Record<string, ThemeIcon>> = {
 	minimax: Codicon.pulse,
 	grok: Codicon.zap,
 };
-
-/** The providers the usage panel knows how to draw, by the ADE's slot. */
-const ROSTER_PROVIDERS: Readonly<Record<string, KinguQuotaProvider>> = {
-	claude: KinguQuotaProvider.Claude,
-	codex: KinguQuotaProvider.Codex,
-	gemini: KinguQuotaProvider.Gemini,
-	kimi: KinguQuotaProvider.Kimi,
-	grok: KinguQuotaProvider.Grok,
-};
-
-/**
- * The ADE's usage, as the panel the ADE opens from its footer reads it.
- *
- * The session and the week; the Fable week stays on the strip, where it is
- * named, because the panel labels a window by its length and would show two
- * rows both called `wk`.
- */
-function rosterSources(state: OrcaRateLimitState | undefined): IKinguUsageSource[] {
-	const sources: IKinguUsageSource[] = [];
-	for (const [slot, provider] of Object.entries(ROSTER_PROVIDERS)) {
-		const limits = state?.[slot];
-		if (!isProviderShown(limits)) {
-			continue;
-		}
-		const windows: IKinguRateLimit[] = [];
-		for (const window of [limits.session, limits.weekly]) {
-			if (window) {
-				windows.push({ usedPercent: window.usedPercent, windowDurationMins: window.windowMinutes, resetsAt: window.resetsAt ?? undefined });
-			}
-		}
-		sources.push({
-			provider,
-			limits: windows,
-			problem: windows.length === 0 && limits.status === 'error' ? 'unavailable' : undefined,
-			pending: windows.length === 0 && limits.status === 'fetching',
-		});
-	}
-	return sources;
-}
 
 function providerIcon(slot: string): HTMLElement {
 	const logo = KINGU_PROVIDER_LOGOS[slot];
@@ -140,7 +105,7 @@ function providerIcon(slot: string): HTMLElement {
  * warning and a word when it failed with nothing to show, otherwise the mark,
  * the bar from the tightest window and every window's reading.
  */
-function renderProviderSegment(slot: string, provider: IOrcaProviderRateLimits, windows: readonly IOrcaFooterWindow[]): HTMLElement {
+function renderProviderSegment(slot: string, provider: IOrcaProviderRateLimits, windows: readonly IOrcaFooterWindow[], mode: OrcaUsageMode, display: KinguUsageDisplay): HTMLElement {
 	const tightest = tightestFooterWindow(windows);
 	if (provider.status === 'idle' || (provider.status === 'fetching' && !tightest)) {
 		const segment = $('span.kingu-orca-segment.quiet');
@@ -163,16 +128,23 @@ function renderProviderSegment(slot: string, provider: IOrcaProviderRateLimits, 
 	}
 	const segment = $('span.kingu-orca-segment');
 	segment.appendChild(providerIcon(slot));
-	if (tightest) {
-		const bar = append(segment, $('span.kingu-orca-bar'));
-		append(bar, $('span.kingu-orca-bar-fill')).style.width = `${Math.round(Math.min(100, Math.max(0, tightest.usedPercent)))}%`;
-	}
-	windows.forEach((window, index) => {
-		if (index > 0) {
-			append(segment, $('span.kingu-orca-muted')).textContent = '·';
+	if (mode === 'compact') {
+		// Compact: the tightest window alone, its countdown after it, no bar.
+		if (tightest) {
+			append(segment, $('span.kingu-orca-tabular')).textContent = formatFooterWindow(tightest, display);
 		}
-		append(segment, $('span.kingu-orca-tabular')).textContent = formatFooterWindow(window, 'used');
-	});
+	} else {
+		if (tightest) {
+			const bar = append(segment, $('span.kingu-orca-bar'));
+			append(bar, $('span.kingu-orca-bar-fill')).style.width = `${displayedUsagePercent(Math.min(100, Math.max(0, tightest.usedPercent)), display)}%`;
+		}
+		windows.forEach((window, index) => {
+			if (index > 0) {
+				append(segment, $('span.kingu-orca-muted')).textContent = '·';
+			}
+			append(segment, $('span.kingu-orca-tabular')).textContent = formatFooterWindow(window, display);
+		});
+	}
 	if (provider.status === 'error') {
 		segment.appendChild(lucideIcon('triangle-alert', 11, 'kingu-orca-muted'));
 	}
@@ -272,12 +244,16 @@ class KinguOrcaFooterContribution extends Disposable {
 	private _refreshing = false;
 	private _awakeStatus: IOrcaAwakeStatus = { mode: 'off', active: false };
 	private _memory: IOrcaMemorySnapshot | undefined;
-	private _listening: readonly IKinguListeningPort[] = [];
+	/** Each of this window's terminals, measured with everything it started. */
+	private _terminalUsage = new Map<number, IKinguProcessUsage>();
+	private _portScan: IKinguPortScan = { workspace: [], external: [] };
 	private _scanningPorts = false;
 	private _sshTargets: readonly IOrcaSshTarget[] = [];
 	private _updateStatus: IOrcaUpdateStatus | undefined;
 
-	private _rosterDetail: KinguUsageDetail = 'detailed';
+	/** The ADE's UI state: Detailed or Compact, and whether percentages count what is used or what is left. */
+	private _usageMode: OrcaUsageMode = 'verbose';
+	private _usageDisplay: KinguUsageDisplay = 'used';
 	private _resourceSort: ResourceSort = 'memory';
 	private _appCollapsed = true;
 	private readonly _collapsedWorktrees = new Set<string>();
@@ -290,9 +266,27 @@ class KinguOrcaFooterContribution extends Disposable {
 	private readonly _resourceChip = this._register(new FooterChip('resources', () => this._resourcePopover.toggle()));
 	private readonly _portsChip = this._register(new FooterChip('ports', () => this._portsPopover.toggle()));
 	private readonly _sshChip = this._register(new FooterChip('ssh', () => this._sshPopover.toggle()));
-	private readonly _panelChip = this._register(new FooterChip('boxed', () => void this._commandService.executeCommand('workbench.action.togglePanel')));
+	private readonly _panelChip = this._register(new FooterChip('boxed', () => void this._commandService.executeCommand(KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID)));
 
-	private readonly _usagePopover = this._register(new FooterPopover(this._usageChip.element, () => this._rosterPanel(), { surface: 'menu', align: 'start', width: '360px', flush: true }));
+	private readonly _usagePanel = new OrcaUsagePanel({
+		state: () => this._rateLimits,
+		mode: () => this._usageMode,
+		display: () => this._usageDisplay,
+		refreshing: () => this._refreshing || this._anyFetching(),
+		providerIcon: slot => providerIcon(slot),
+		setMode: mode => void this._setUsageMode(mode),
+		refresh: () => this._refreshUsage(),
+		openUsageDetails: () => void this._commandService.executeCommand(KINGU_SHOW_USAGE_COMMAND_ID),
+		openAccounts: sectionId => void this._commandService.executeCommand(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, { pane: 'accounts', sectionId }),
+		invoke: (channel, ...args) => this._orca.invoke(channel, ...args),
+		confirm: async (message, detail, primaryButton) => (await this._dialogService.confirm({ type: 'warning', message, detail, primaryButton })).confirmed,
+		notify: message => this._notificationService.error(message),
+	});
+	private readonly _usagePopover = this._register(new FooterPopover(this._usageChip.element, (close, store) => this._usagePanel.render(close, store), {
+		surface: 'menu', align: 'start', width: '360px', flush: true,
+		contains: node => this._usagePanel.contains(node),
+		onClose: () => this._usagePanel.closeSubmenu(),
+	}));
 	private readonly _awakePopover = this._register(new FooterPopover(this._awakeChip.element, close => this._awakeMenu(close), { surface: 'menu', align: 'end', width: '256px' }));
 	private readonly _resourcePopover = this._register(new FooterPopover(this._resourceChip.element, (close, store) => this._resourceManager(close, store), {
 		surface: 'popover', align: 'end', width: '26rem',
@@ -317,8 +311,13 @@ class KinguOrcaFooterContribution extends Disposable {
 		@ICommandService private readonly _commandService: ICommandService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IDialogService private readonly _dialogService: IDialogService,
+		@INotificationService private readonly _notificationService: INotificationService,
 		@IClipboardService private readonly _clipboardService: IClipboardService,
 		@IWorkspaceContextService private readonly _workspaceService: IWorkspaceContextService,
+		@IStorageService private readonly _storageService: IStorageService,
+		@IWorkbenchLayoutService private readonly _layoutService: IWorkbenchLayoutService,
+		@IKeybindingService private readonly _keybindingService: IKeybindingService,
+		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@ILogService private readonly _logService: ILogService,
 	) {
 		super();
@@ -330,7 +329,16 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._register(attachFooterTooltip(this._updateChip.element, () => [this._updateTooltip()]));
 		this._register(attachFooterTooltip(this._resourceChip.element, () => this._resourceTooltipLines(), 150, () => this._resourcePopover.isOpen));
 		this._register(attachFooterTooltip(this._portsChip.element, () => [this._portsTooltip()], 150, () => this._portsPopover.isOpen));
-		this._register(attachFooterTooltip(this._panelChip.element, () => [localize('kingu.footer.panel.name', "Toggle Panel")]));
+		this._register(attachFooterTooltip(this._panelChip.element, () => {
+			const shortcut = this._keybindingService.lookupKeybinding(KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID)?.getLabel();
+			return [shortcut ? `${this._floatingLabel()} (${shortcut})` : this._floatingLabel()];
+		}));
+		this._register(addDisposableListener(this._panelChip.element, EventType.CONTEXT_MENU, (event: MouseEvent) => {
+			event.preventDefault();
+			event.stopPropagation();
+			showFloatingWorkspaceMenu(this._contextMenuService, this._configurationService, event, 'status-bar');
+		}));
+		this._register(this._layoutService.onDidChangePartVisibility(() => this._renderPanelToggle()));
 
 		this._register(this._orca.onPush('rateLimits:update')(([state]) => this._renderUsage(state as OrcaRateLimitState)));
 		this._register(this._orca.onPush('agentAwake:changed')(([status]) => {
@@ -371,6 +379,7 @@ class KinguOrcaFooterContribution extends Disposable {
 	private async _start(): Promise<void> {
 		await Promise.all([
 			this._read('rateLimits:get', state => this._renderUsage(state as OrcaRateLimitState)),
+			this._readUsageUiState(),
 			this._read('agentAwake:getStatus', status => {
 				this._awakeStatus = status as IOrcaAwakeStatus;
 				this._renderAwake();
@@ -427,8 +436,8 @@ class KinguOrcaFooterContribution extends Disposable {
 					resets.push(window.resetsAt);
 				}
 			}
-			segments.push(renderProviderSegment(slot, provider, windows));
-			labels.push(localize('kingu.footer.usage.providerAria', "{0}: {1}", name, windows.map(window => formatFooterWindow(window, 'used')).join(', ') || '—'));
+			segments.push(renderProviderSegment(slot, provider, windows, this._usageMode, this._usageDisplay));
+			labels.push(localize('kingu.footer.usage.providerAria', "{0}: {1}", name, windows.map(window => formatFooterWindow(window, this._usageDisplay)).join(', ') || '—'));
 		}
 
 		if (segments.length === 0) {
@@ -455,28 +464,36 @@ class KinguOrcaFooterContribution extends Disposable {
 			}, 'kingu.footer.refresh', StatusbarAlignment.LEFT, 109);
 		}
 		this._usagePopover.refresh();
+		this._usagePanel.refreshSubmenu();
 		this._scheduleTick(resets);
 	}
 
-	private _rosterPanel(): HTMLElement {
-		const options = (): IKinguUsageRosterOptions => ({
-			rows: usageRows(rosterSources(this._rateLimits)),
-			detail: this._rosterDetail,
-			display: 'used',
-			refreshing: this._refreshing,
-			onDetailChange: detail => {
-				this._rosterDetail = detail;
-				updateKinguUsageRoster(root, options());
-			},
-			onRefresh: () => this._refreshUsage(),
-			onDetails: () => {
-				this._usagePopover.close();
-				void this._commandService.executeCommand(KINGU_SHOW_USAGE_COMMAND_ID);
-			},
+	private _anyFetching(): boolean {
+		return ORCA_FOOTER_PROVIDERS.some(({ slot }) => {
+			const provider = this._rateLimits?.[slot];
+			return !!provider && typeof provider === 'object' && provider.status === 'fetching';
 		});
-		// Declared after the closures above, which only run once it exists.
-		const root = renderKinguUsageRoster(options());
-		return root;
+	}
+
+	/** Reads the ADE's usage mode and percentage display, as its footer hydrates them from `ui:get`. */
+	private async _readUsageUiState(): Promise<void> {
+		await this._read('ui:get', value => {
+			const ui = value as { readonly statusBarUsageMode?: unknown; readonly usagePercentageDisplay?: unknown } | undefined;
+			this._usageMode = ui?.statusBarUsageMode === 'compact' ? 'compact' : 'verbose';
+			this._usageDisplay = ui?.usagePercentageDisplay === 'remaining' ? 'remaining' : 'used';
+			this._renderUsage(this._rateLimits);
+		});
+	}
+
+	/** `setStatusBarUsageMode`: persisted in the ADE's UI state, and the pill redrawn in the new mode. */
+	private async _setUsageMode(mode: OrcaUsageMode): Promise<void> {
+		this._usageMode = mode;
+		this._renderUsage(this._rateLimits);
+		try {
+			await this._orca.invoke('ui:set', { statusBarUsageMode: mode });
+		} catch (error) {
+			this._logService.warn('[kingu-footer] could not save the usage mode', error);
+		}
 	}
 
 	private async _refreshUsage(): Promise<void> {
@@ -626,10 +643,23 @@ class KinguOrcaFooterContribution extends Disposable {
 	// #region Resource Manager
 
 	private async _readResources(): Promise<void> {
-		await this._read('memory:getSnapshot', snapshot => {
-			this._memory = snapshot as IOrcaMemorySnapshot | undefined;
+		await Promise.all([
+			this._read('memory:getSnapshot', snapshot => {
+				this._memory = snapshot as IOrcaMemorySnapshot | undefined;
+			}),
+			this._measureTerminals(),
+		]);
+		if (!this._store.isDisposed) {
 			this._renderResources();
-		});
+		}
+	}
+
+	/** The window's terminals are not the ADE daemon's, so they are measured here, each shell with its tree. */
+	private async _measureTerminals(): Promise<void> {
+		const pids = this._terminalService.instances.map(instance => instance.processId).filter((pid): pid is number => typeof pid === 'number');
+		const usage = await this._hostService.measureProcesses(pids);
+		this._terminalUsage = new Map(usage.map(entry => [entry.pid, entry]));
+		this._resourceSampleId++;
 	}
 
 	private _onResourceManagerOpened(): void {
@@ -735,14 +765,18 @@ class KinguOrcaFooterContribution extends Disposable {
 		}
 		const workspaceName = this._workspaceService.getWorkspace().folders[0]?.name ?? localize('kingu.footer.resources.workspace', "Workspace");
 		for (const [folder, instances] of byFolder) {
+			const sessions = instances.map(instance => {
+				const usage = instance.processId === undefined ? undefined : this._terminalUsage.get(instance.processId);
+				return { id: String(instance.instanceId), label: instance.title || localize('kingu.footer.resources.terminal', "Terminal"), cpu: usage?.cpu ?? null, memory: usage?.memory ?? null, bound: true, terminal: instance };
+			});
 			rows.push({
 				id: `terminal:${folder}`,
 				name: folder ? basename(folder) || folder : workspaceName,
 				repoName: workspaceName,
-				cpu: null,
-				memory: null,
-				history: [],
-				sessions: instances.map(instance => ({ id: String(instance.instanceId), label: instance.title || localize('kingu.footer.resources.terminal', "Terminal"), cpu: null, memory: null, bound: true, terminal: instance })),
+				cpu: sumMetric(sessions.map(session => session.cpu)),
+				memory: sumMetric(sessions.map(session => session.memory)),
+				history: this._worktreeHistory(`terminal:${folder}`, sumMetric(sessions.map(session => session.memory))),
+				sessions,
 			});
 		}
 		const compare = (a: number | null, b: number | null) => a === null && b === null ? 0 : a === null ? 1 : b === null ? -1 : b - a;
@@ -752,6 +786,25 @@ class KinguOrcaFooterContribution extends Disposable {
 			default: return rows.sort((a, b) => a.name.localeCompare(b.name));
 		}
 	}
+
+	/** Oldest-first memory samples for a workspace row, as the ADE keeps for its sparkline. */
+	private readonly _histories = new Map<string, number[]>();
+
+	private _worktreeHistory(id: string, memory: number | null): readonly number[] {
+		const samples = this._histories.get(id) ?? [];
+		if (memory !== null && this._historySampledAt.get(id) !== this._resourceSampleId) {
+			samples.push(memory);
+			if (samples.length > 60) {
+				samples.shift();
+			}
+			this._historySampledAt.set(id, this._resourceSampleId);
+		}
+		this._histories.set(id, samples);
+		return samples;
+	}
+
+	private readonly _historySampledAt = new Map<string, number>();
+	private _resourceSampleId = 0;
 
 	/** `ResourceUsageStatusSegment`'s popover: header, summary, the sorted tree, the app's own row. */
 	private _resourceManager(close: () => void, store: DisposableStore): HTMLElement {
@@ -1017,7 +1070,7 @@ class KinguOrcaFooterContribution extends Disposable {
 			this._renderPorts();
 		}
 		try {
-			this._listening = await this._hostService.readListeningPorts();
+			this._portScan = await this._hostService.scanPorts();
 		} catch (error) {
 			this._logService.warn('[kingu-footer] ports failed', error);
 		}
@@ -1028,13 +1081,17 @@ class KinguOrcaFooterContribution extends Disposable {
 	}
 
 	private _portsTooltip(): string {
-		const count = this._listening.length;
-		return localize('kingu.footer.ports.tooltip', "Ports — {0} workspace {1}", count, count === 1 ? localize('kingu.footer.ports.port', "port") : localize('kingu.footer.ports.ports', "ports"));
+		const count = this._portScan.workspace.length;
+		const external = this._portScan.external.length;
+		const noun = count === 1 ? localize('kingu.footer.ports.port', "port") : localize('kingu.footer.ports.ports', "ports");
+		return external > 0
+			? localize('kingu.footer.ports.tooltipExternal', "Ports — {0} workspace {1} · {2} external", count, noun, external)
+			: localize('kingu.footer.ports.tooltip', "Ports — {0} workspace {1}", count, noun);
 	}
 
 	/** `PortsStatusSegment`'s trigger: a plug (a spinner while scanning) and the workspace port count. */
 	private _renderPorts(): void {
-		const count = this._listening.length;
+		const count = this._portScan.workspace.length;
 		const aria = localize('kingu.footer.ports.aria', "Ports, {0} workspace {1}", count, count === 1 ? 'port' : 'ports');
 		this._portsChip.set([
 			this._scanningPorts ? { kind: 'icon', name: 'loader-circle', className: 'spin kingu-orca-muted' } : { kind: 'icon', name: 'plug', className: 'kingu-orca-muted' },
@@ -1051,25 +1108,25 @@ class KinguOrcaFooterContribution extends Disposable {
 
 	/** The ports popover: the header, the workspace's ports, then the collapsed External Ports section. */
 	private _portsPanel(close: () => void, store: DisposableStore): HTMLElement {
-		const ports = this._listening;
+		const { workspace, external } = this._portScan;
 		const root = $('div');
 		const header = append(root, $('.kingu-orca-panel-header'));
 		const title = append(header, $('.kingu-orca-panel-title'));
 		title.appendChild(lucideIcon('plug', 12));
 		append(title, $('span')).textContent = localize('kingu.footer.ports.title', "Ports");
-		append(header, $('span.kingu-orca-text-11.kingu-orca-tabular.kingu-orca-muted')).textContent = localize('kingu.footer.ports.counts', "{0} workspace · {1} external", ports.length, 0);
+		append(header, $('span.kingu-orca-text-11.kingu-orca-tabular.kingu-orca-muted')).textContent = localize('kingu.footer.ports.counts', "{0} workspace · {1} external", workspace.length, external.length);
 
 		const scroll = append(root, $('.kingu-orca-scroll'));
 		scroll.style.maxHeight = '28rem';
 		this._portsPopover.trackScroll(scroll);
-		if (ports.length > 0) {
+		if (workspace.length > 0) {
 			const section = append(scroll, $('section.kingu-orca-port-section'));
 			const sectionHeader = append(section, $('.kingu-orca-port-section-header'));
 			append(sectionHeader, $('span.kingu-orca-truncate')).textContent = this._workspaceService.getWorkspace().folders[0]?.name ?? localize('kingu.footer.resources.workspace', "Workspace");
-			append(sectionHeader, $('span.kingu-orca-port-section-count')).textContent = String(ports.length);
+			append(sectionHeader, $('span.kingu-orca-port-section-count')).textContent = String(workspace.length);
 			const rows = append(section, $('.kingu-orca-port-rows'));
-			for (const port of ports) {
-				this._portRow(rows, port, close, store);
+			for (const port of workspace) {
+				this._portRow(rows, port, false, close, store);
 			}
 		} else {
 			append(scroll, $('.kingu-orca-empty')).textContent = this._scanningPorts
@@ -1077,27 +1134,32 @@ class KinguOrcaFooterContribution extends Disposable {
 				: localize('kingu.footer.ports.none', "No workspace ports detected");
 		}
 
-		const external = append(scroll, $('section.kingu-orca-external'));
-		const toggle = append(external, $('button.kingu-orca-external-toggle')) as HTMLButtonElement;
+		const externalSection = append(scroll, $('section.kingu-orca-external'));
+		const toggle = append(externalSection, $('button.kingu-orca-external-toggle')) as HTMLButtonElement;
 		toggle.type = 'button';
 		toggle.setAttribute('aria-expanded', String(this._externalOpen));
 		toggle.appendChild(lucideIcon(this._externalOpen ? 'chevron-down' : 'chevron-right', 12));
 		append(toggle, $('span')).textContent = localize('kingu.footer.ports.external', "External Ports");
-		append(toggle, $('span.count')).textContent = '0';
+		append(toggle, $('span.count')).textContent = String(external.length);
 		toggle.addEventListener('click', () => {
 			this._externalOpen = !this._externalOpen;
 			this._portsPopover.refresh();
 		});
 		if (this._externalOpen) {
-			const list = append(external, $('.kingu-orca-port-rows'));
-			append(list, $('.kingu-orca-empty')).textContent = localize('kingu.footer.ports.noExternal', "No external ports detected");
+			const list = append(externalSection, $('.kingu-orca-port-rows'));
+			if (external.length === 0) {
+				append(list, $('.kingu-orca-empty')).textContent = localize('kingu.footer.ports.noExternal', "No external ports detected");
+			}
+			for (const port of external) {
+				this._portRow(list, port, true, close, store);
+			}
 		}
 		return root;
 	}
 
-	/** `PortRow`: the port, the process, and open, copy and stop on hover; the address beneath. */
-	private _portRow(parent: HTMLElement, port: IKinguListeningPort, close: () => void, store: DisposableStore): void {
-		const advertised = this._advertisedUrls.get(port.port)?.url;
+	/** `PortRow`: the port, the process, and open, copy and stop on hover; the address (or `external`) beneath. */
+	private _portRow(parent: HTMLElement, port: IKinguListeningPort, external: boolean, close: () => void, store: DisposableStore): void {
+		const advertised = external ? undefined : this._advertisedUrls.get(port.port)?.url;
 		const address = portAddress(port.port, advertised);
 		const row = append(parent, $('.kingu-orca-port-row'));
 		append(row, $('span.kingu-orca-port-number')).textContent = String(port.port);
@@ -1112,10 +1174,31 @@ class KinguOrcaFooterContribution extends Disposable {
 			close();
 			void this._openPort(port.port, advertised);
 		});
-		iconButton(actions, store, 'copy', localize('kingu.footer.ports.copy', "Copy {0}", address), 'small', () => void this._clipboardService.writeText(address));
-		const stop = iconButton(actions, store, 'trash-2', localize('kingu.footer.ports.stop', "Stop Process"), 'small', () => { });
-		stop.disabled = true;
-		append(detail, $('.kingu-orca-port-address')).textContent = address;
+		iconButton(actions, store, 'copy', localize('kingu.footer.ports.copy', "Copy {0}", address), 'small', () => {
+			void this._clipboardService.writeText(address);
+			this._notificationService.info(localize('kingu.footer.ports.copied', "Copied {0}", address));
+		});
+		// `canStopWorkspacePort`: a workspace port with a known owner that is not the app itself.
+		const canStop = !external && !!port.pid && !/^(electron|kingu)(\.exe)?$/i.test(port.process ?? '');
+		const stop = iconButton(actions, store, 'trash-2', localize('kingu.footer.ports.stop', "Stop Process"), 'small destructive', () => void this._stopPort(port));
+		stop.disabled = !canStop;
+		append(detail, $('.kingu-orca-port-address')).textContent = external ? 'external' : address;
+	}
+
+	/** The ADE's Stop Process: the host re-checks the port against a fresh scan, then the list is rescanned twice. */
+	private async _stopPort(port: IKinguListeningPort): Promise<void> {
+		if (!port.pid) {
+			return;
+		}
+		const result = await this._hostService.stopPortProcess({ pid: port.pid, port: port.port });
+		if (!result.ok) {
+			this._notificationService.error(result.reason);
+			return;
+		}
+		this._notificationService.info(localize('kingu.footer.ports.stopped', "Stopped process on {0}", port.port));
+		await this._readPorts(true);
+		await timeout(500);
+		await this._readPorts(false);
 	}
 
 	/**
@@ -1187,9 +1270,11 @@ class KinguOrcaFooterContribution extends Disposable {
 	// #endregion
 
 	/**
-	 * The ADE's floating-workspace button. The ADE shows it in the footer only
-	 * when its trigger location is `status-bar`; by default it floats over the
-	 * workbench instead, so the footer ends with the ports.
+	 * The ADE's floating-workspace toggle in its status-bar form: a boxed
+	 * `size-5` button with the panels icon, labelled with its shortcut, and the
+	 * same right-click menu as the floating button (here, "Move to Floating
+	 * Button"). The ADE puts it in the footer only when its trigger location is
+	 * `status-bar`; by default it floats over the workbench instead.
 	 */
 	private _renderPanelToggle(): void {
 		const enabled = this._configurationService.getValue<boolean>(FLOATING_ENABLED_SETTING_ID) !== false;
@@ -1198,26 +1283,40 @@ class KinguOrcaFooterContribution extends Disposable {
 			this._panel.clear();
 			return;
 		}
-		this._panelChip.set([{ kind: 'icon', name: 'panels-top-left', size: 14 }], localize('kingu.footer.panel.name', "Toggle Panel"));
+		const label = this._floatingLabel();
+		this._panelChip.set([{ kind: 'icon', name: 'panels-top-left', size: 14 }], label);
 		this._place(this._panel, {
-			name: localize('kingu.footer.panel.name', "Toggle Panel"),
+			name: localize('kingu.footer.floating.name', "Floating Workspace"),
 			text: '',
 			content: this._panelChip.element,
-			ariaLabel: localize('kingu.footer.panel.name', "Toggle Panel"),
+			ariaLabel: label,
 		}, 'kingu.footer.panel', StatusbarAlignment.RIGHT, 95);
 	}
 
+	/** `Show Floating Workspace` or `Minimize Floating Workspace`, as the ADE's footer spells them. */
+	private _floatingLabel(): string {
+		return this._layoutService.isVisible(Parts.PANEL_PART)
+			? localize('kingu.footer.floating.minimize', "Minimize Floating Workspace")
+			: localize('kingu.footer.floating.show', "Show Floating Workspace");
+	}
+
 	/**
-	 * The strip carries the ADE's segments and nothing else.
+	 * The strip carries the ADE's segments beside this window's own — the
+	 * notifications bell and the remote indicator stay — but not the Copilot
+	 * status, which this window does not use.
 	 *
-	 * The workbench also contributes a remote indicator, the Copilot status and
-	 * the notifications bell; the ADE's footer has none of the three. Hidden the
-	 * way a user hides an entry, so the status bar's own context menu brings any
-	 * of them back.
+	 * Hidden the way a user hides an entry, so the status bar's own context menu
+	 * brings it back. The bell and the remote indicator were hidden the same way
+	 * by an earlier build; they are shown again once, and after that whatever the
+	 * user chooses from that menu stands.
 	 */
 	private _hideForeignEntries(): void {
-		for (const id of FOREIGN_ENTRIES) {
-			this._statusbarService.updateEntryVisibility(id, false);
+		this._statusbarService.updateEntryVisibility(COPILOT_ENTRY, false);
+		if (!this._storageService.getBoolean(RESTORED_ENTRIES_KEY, StorageScope.PROFILE, false)) {
+			for (const id of RESTORED_ENTRIES) {
+				this._statusbarService.updateEntryVisibility(id, true);
+			}
+			this._storageService.store(RESTORED_ENTRIES_KEY, true, StorageScope.PROFILE, StorageTarget.MACHINE);
 		}
 	}
 }
@@ -1225,8 +1324,11 @@ class KinguOrcaFooterContribution extends Disposable {
 /** The terminal's own restart of its pty host (`TerminalDeveloperCommandId.RestartPtyHost`), which this layer may not import. */
 const RESTART_PTY_HOST_COMMAND_ID = 'workbench.action.terminal.restartPtyHost';
 
-/** Entries the ADE's footer does not have: the remote indicator, Copilot, and the notifications bell. */
-const FOREIGN_ENTRIES = ['status.host', 'chat.statusBarEntry', 'status.notifications'];
+/** The Copilot status, which the ADE's footer does not have and this window does not use. */
+const COPILOT_ENTRY = 'chat.statusBarEntry';
+/** This window's own entries that an earlier build hid, shown again once. */
+const RESTORED_ENTRIES = ['status.host', 'status.notifications'];
+const RESTORED_ENTRIES_KEY = 'kingu.footer.restoredOwnEntries';
 
 function awakeTitle(): string {
 	return localize('kingu.footer.awake.title', "Keep computer awake");

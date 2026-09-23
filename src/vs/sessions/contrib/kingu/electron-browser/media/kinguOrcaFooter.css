@@ -939,3 +939,582 @@
 }
 
 /* #endregion */
+
+/* #region Floating workspace */
+
+/* The label beside the floating button: `side="left"`, the arrow on its right edge. */
+.kingu-orca-tooltip.left > .kingu-orca-tooltip-arrow {
+	bottom: auto;
+	right: -4px;
+}
+
+/* `FloatingTerminalIconContextMenu`'s wrapper: `fixed z-[46]`, above the workbench. */
+.kingu-orca-floating-trigger {
+	position: fixed;
+	z-index: 46;
+	display: block;
+	width: 36px;
+	height: 36px;
+}
+
+/*
+ * `FloatingTerminalToggleButton`: an outline icon button, `size-9 rounded-lg
+ * border-transparent bg-card`, the ADE's ring-and-drop shadow, lifting a
+ * pixel on hover and grabbing while dragged; `dark:bg-accent` with a
+ * brighter ring.
+ */
+.kingu-orca-floating-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	background-color: var(--vscode-editorWidget-background);
+	color: var(--kingu-orca-foreground);
+	box-shadow: 0 4px 12px rgb(0 0 0 / 0.22), 0 0 0 1px color-mix(in srgb, var(--kingu-orca-foreground) 12%, transparent);
+	cursor: grab;
+	transition: transform 150ms, background-color 150ms;
+	touch-action: none;
+}
+
+.monaco-workbench.vs-dark .kingu-orca-floating-button,
+.monaco-workbench.hc-black .kingu-orca-floating-button {
+	background-color: var(--vscode-list-hoverBackground, #262626);
+	box-shadow: 0 6px 16px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.22);
+}
+
+.kingu-orca-floating-button:hover {
+	transform: translateY(-2px);
+	background-color: var(--kingu-orca-accent);
+}
+
+.monaco-workbench.vs-dark .kingu-orca-floating-button:hover {
+	background-color: color-mix(in srgb, var(--vscode-list-hoverBackground, #262626) 82%, white);
+}
+
+.kingu-orca-floating-button:active,
+.kingu-orca-floating-button.dragging {
+	transform: none;
+	cursor: grabbing;
+}
+
+.monaco-workbench .kingu-orca-floating-button:focus {
+	outline: none;
+}
+
+.monaco-workbench .kingu-orca-floating-button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* #endregion */
+
+/* #region Usage popover (UsageRosterPanel) */
+
+.monaco-workbench {
+	--kingu-orca-muted-bg: rgba(128, 128, 128, 0.2);
+	--kingu-orca-red: oklch(0.637 0.237 25.331);
+}
+
+.kingu-orca-bar-tone {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	transition: width 300ms;
+}
+
+.kingu-orca-bar-tone.muted { background-color: color-mix(in srgb, var(--kingu-orca-muted) 40%, transparent); }
+.kingu-orca-bar-tone.yellow { background-color: var(--kingu-orca-yellow); }
+.kingu-orca-bar-tone.red { background-color: var(--kingu-orca-red); }
+
+.kingu-orca-usage {
+	width: 360px;
+	font-size: 12px;
+}
+
+/* flex items-center justify-between px-3.5 pb-2 pt-3 */
+.kingu-orca-usage-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 14px 8px;
+}
+
+.kingu-orca-usage-title {
+	color: var(--kingu-orca-foreground);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.kingu-orca-usage-header-trailing {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--kingu-orca-muted);
+}
+
+/* The refresh item: size-5 justify-center p-0 */
+.kingu-orca-usage-refresh {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: inherit;
+	cursor: default;
+}
+
+.kingu-orca-usage-refresh:hover {
+	background-color: var(--kingu-orca-item-focus);
+}
+
+.kingu-orca-usage-toggle {
+	padding: 0 14px 10px;
+}
+
+/* SettingsSegmentedControl: inline-flex rounded-md border bg-background/50 p-0.5 */
+.kingu-orca-segmented {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px;
+	border: 1px solid var(--kingu-orca-border);
+	border-radius: 6px;
+	background-color: color-mix(in srgb, var(--vscode-editor-background) 50%, transparent);
+}
+
+.kingu-orca-segmented.equal {
+	display: flex;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.kingu-orca-segment-option {
+	padding: 2px 10px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	font: inherit;
+	font-size: 12px;
+	text-align: center;
+	cursor: pointer;
+}
+
+.kingu-orca-segmented.equal > .kingu-orca-segment-option {
+	flex: 1;
+}
+
+.kingu-orca-segment-option:hover {
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-segment-option.active {
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-foreground);
+	font-weight: 500;
+}
+
+.kingu-orca-usage-rule {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-orca-border) 70%, transparent);
+}
+
+/* A row: the submenu trigger's w-full items-center gap-3 px-3.5 py-2.5, its chevron at the end. */
+.kingu-orca-usage-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 10px 14px;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: default;
+	outline: none;
+}
+
+.kingu-orca-usage-row.sign-in {
+	cursor: pointer;
+}
+
+.kingu-orca-usage-row:hover,
+.kingu-orca-usage-row:focus-visible,
+.kingu-orca-usage-row.open {
+	background-color: var(--kingu-orca-item-focus);
+}
+
+.monaco-workbench .kingu-orca-usage-row:focus,
+.monaco-workbench .kingu-orca-usage-footer-item:focus,
+.monaco-workbench .kingu-orca-usage-refresh:focus,
+.monaco-workbench .kingu-orca-segment-option:focus {
+	outline: none;
+}
+
+.kingu-orca-usage-row-chevron {
+	margin-left: auto;
+	color: var(--kingu-orca-muted);
+}
+
+.kingu-orca-usage-row-content {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.kingu-orca-usage-row-line {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.kingu-orca-usage-row-icon {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	box-sizing: border-box;
+	border: 1px solid var(--kingu-orca-border);
+	border-radius: 6px;
+	background-color: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.15));
+}
+
+.kingu-orca-usage-row-name {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--kingu-orca-foreground);
+	font-size: 13px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-usage-row-plan {
+	color: var(--kingu-orca-muted);
+	font-weight: 400;
+}
+
+.kingu-orca-usage-row-status {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-usage-sign-in {
+	flex-shrink: 0;
+	margin-left: auto;
+	padding: 2px 10px;
+	border: 1px solid var(--kingu-orca-border);
+	border-radius: 6px;
+	background-color: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.15));
+	color: var(--kingu-orca-foreground);
+	font-size: 12px;
+}
+
+.kingu-orca-push-end {
+	margin-left: auto;
+}
+
+.kingu-orca-usage-row-reset {
+	flex-shrink: 0;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+}
+
+.kingu-orca-usage-row-metrics {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	padding-left: 30px;
+}
+
+/* UsageMetric */
+.kingu-orca-usage-metric {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+}
+
+.kingu-orca-usage-metric-label {
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+}
+
+.kingu-orca-usage-metric-bar {
+	width: 28px;
+	height: 5px;
+	overflow: hidden;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-muted-bg);
+}
+
+.kingu-orca-usage-metric-value {
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+.kingu-orca-usage-metric-value.foreground { color: var(--kingu-orca-foreground); }
+.kingu-orca-usage-metric-value.yellow { color: var(--kingu-orca-yellow); }
+.kingu-orca-usage-metric-value.red { color: var(--kingu-orca-red); }
+
+/* The footer items: w-full justify-between rounded-none px-3.5 py-2.5 text-[13px] */
+.kingu-orca-usage-footer-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 10px 14px;
+	border: none;
+	background: transparent;
+	color: var(--kingu-orca-foreground);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+	outline: none;
+}
+
+.kingu-orca-usage-footer-item:hover,
+.kingu-orca-usage-footer-item:focus-visible {
+	background-color: var(--kingu-orca-item-focus);
+}
+
+/* The side menu: w-[300px] p-0, scrolling within the window. */
+.kingu-orca-usage-submenu {
+	max-height: calc(100vh - 40px);
+	overflow-y: auto;
+}
+
+.kingu-orca-usage-panel-box {
+	padding: 8px;
+}
+
+/* ProviderPanel: w-full space-y-3 text-xs */
+.kingu-orca-provider-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	font-size: 12px;
+}
+
+.kingu-orca-provider-panel-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--kingu-orca-foreground);
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.kingu-orca-provider-panel-updated {
+	margin-top: -8px;
+	color: var(--kingu-orca-muted);
+	opacity: 0.8;
+}
+
+.kingu-orca-provider-panel-divider {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-orca-border) 70%, transparent);
+}
+
+.kingu-orca-provider-panel-window {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.kingu-orca-provider-panel-window-label {
+	color: var(--kingu-orca-foreground);
+	font-weight: 500;
+}
+
+.kingu-orca-provider-panel-bar {
+	width: 100%;
+	height: 6px;
+	overflow: hidden;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-muted-bg);
+}
+
+.kingu-orca-provider-panel-numbers {
+	display: flex;
+	justify-content: space-between;
+	color: var(--kingu-orca-muted);
+}
+
+.kingu-orca-provider-panel-error-label {
+	color: color-mix(in srgb, var(--kingu-orca-foreground) 85%, transparent);
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.kingu-orca-menu-label.stacked {
+	display: block;
+}
+
+.kingu-orca-menu-label.stacked > div + div {
+	margin-top: 2px;
+	font-size: 11px;
+}
+
+.kingu-orca-menu-item:disabled {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+/* The account switcher. */
+.kingu-orca-usage-account-current {
+	max-width: 180px;
+	overflow: hidden;
+	color: var(--kingu-orca-foreground);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-usage-account-chevron {
+	margin-left: auto;
+	color: var(--kingu-orca-muted);
+	opacity: 0.85;
+}
+
+.kingu-orca-usage-account-box-wrap {
+	padding: 0 4px 4px;
+}
+
+.kingu-orca-usage-switch-heading {
+	padding: 4px 8px;
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.kingu-orca-usage-account-box {
+	max-height: 220px;
+	overflow-y: auto;
+	padding: 4px;
+	border: 1px solid color-mix(in srgb, var(--kingu-orca-border) 60%, transparent);
+	border-radius: 6px;
+	background-color: color-mix(in srgb, var(--kingu-orca-accent) 5%, transparent);
+}
+
+.kingu-orca-usage-account-empty {
+	padding: 6px 8px;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+}
+
+.kingu-orca-usage-account-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: 100%;
+	min-width: 0;
+}
+
+.kingu-orca-usage-account-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.kingu-orca-usage-account-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-usage-account-label.wrap {
+	overflow: visible;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.kingu-orca-usage-account-active {
+	flex-shrink: 0;
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+	font-weight: 500;
+}
+
+.kingu-orca-usage-account-note {
+	padding: 6px 8px;
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+	line-height: 16px;
+}
+
+/* InlineUsageBars and its skeleton. */
+.kingu-orca-inline-bars {
+	display: grid;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+}
+
+.kingu-orca-inline-cell {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.kingu-orca-inline-bar {
+	flex: 1;
+	min-width: 0;
+	height: 4px;
+	overflow: hidden;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-muted-bg);
+}
+
+.kingu-orca-inline-label {
+	flex-shrink: 0;
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.kingu-orca-inline-skeleton {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	animation: kingu-orca-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.kingu-orca-inline-skeleton > span {
+	flex: 1;
+	height: 4px;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-muted-bg);
+}
+
+.kingu-orca-inline-sign-in {
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+}
+
+/* #endregion */

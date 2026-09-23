@@ -39,13 +39,20 @@ import {
 	readKimiToken,
 } from '../common/kinguQuotaProviders.js';
 import {
+	checkStopPortRequest,
+	classifyListeningPorts,
 	IKinguListeningPort,
+	IKinguPortScan,
+	IKinguProcessUsage,
+	IKinguStopPortRequest,
+	KinguStopPortResult,
 	nameListeningPorts,
 	normalizeListeningPorts,
 	parseLsofPorts,
 	parseNetstatPorts,
 	parseSsPorts,
 } from '../common/kinguHostPorts.js';
+import { cpuBetweenSweeps, IKinguProcessRow, parseWindowsProcessTable, processSubtree, WINDOWS_PROCESS_TABLE_SCRIPT } from '../common/kinguProcessTable.js';
 import { executableNames, executableSearchDirectories, MAX_COMMANDS_PER_REQUEST, MAX_SEARCH_DIRECTORIES } from '../common/kinguExecutables.js';
 import { KNOWN_AGENT_COMMANDS } from '../common/kinguAgentCommands.js';
 import { IProcessEnvironment } from '../../../base/common/platform.js';
@@ -81,6 +88,10 @@ export class KinguHostChannel implements IServerChannel {
 	private _executables: Promise<ReadonlyMap<string, string>> | undefined;
 	/** Started on first use and retired when idle; see `KinguComputerSidecar`. */
 	private _computer: KinguComputerSidecar | undefined;
+	private _sweep: Promise<IKinguProcessSweep> | undefined;
+	private _lastSweep: IKinguProcessSweep | undefined;
+	/** The previous sweep's CPU times, from which Windows CPU is derived. */
+	private _previousCpuTimes: { readonly at: number; readonly times: ReadonlyMap<number, number> } | undefined;
 
 	constructor(
 		private readonly _logService: ILogService,
@@ -107,6 +118,15 @@ export class KinguHostChannel implements IServerChannel {
 		}
 		if (command === 'getListeningPorts') {
 			return await this._getListeningPorts() as T;
+		}
+		if (command === 'scanPorts') {
+			return await this._scanPorts() as T;
+		}
+		if (command === 'stopPortProcess') {
+			return await this._stopPortProcess(arg as IKinguStopPortRequest | undefined) as T;
+		}
+		if (command === 'measureProcesses') {
+			return await this._measureProcesses(Array.isArray(arg) ? arg.filter((pid): pid is number => Number.isSafeInteger(pid) && pid > 0) : []) as T;
 		}
 		throw new Error(`Unknown Kingu host command: ${command}`);
 	}
@@ -161,6 +181,86 @@ export class KinguHostChannel implements IServerChannel {
 			// A missing tool, a denied read: the strip simply shows no ports.
 			return [];
 		}
+	}
+
+	/** The ADE's workspace and external ports: this app's own, then everything else worth naming. */
+	private async _scanPorts(): Promise<IKinguPortScan> {
+		try {
+			const [entries, tree] = await Promise.all([this._listSockets(), this._processTree()]);
+			// The app's own processes serve its own plumbing (the engine, the debug
+			// port); the ADE never counts itself as a workspace, so neither does this.
+			const app = this._appPids();
+			const owned = new Set([...tree.keys()].filter(pid => !app.has(pid)));
+			const scan = classifyListeningPorts(entries, owned);
+			return { workspace: nameListeningPorts(scan.workspace, tree), external: nameListeningPorts(scan.external, tree) };
+		} catch {
+			return { workspace: [], external: [] };
+		}
+	}
+
+	/** This app's own processes: the main process and every one Electron runs for it. */
+	private _appPids(): Set<number> {
+		return new Set<number>([process.pid, ...app.getAppMetrics().map(metric => metric.pid)]);
+	}
+
+	/**
+	 * Stops the process holding a workspace port, as the ADE's
+	 * `workspacePorts:kill` does: a fresh scan authorizes it, only that pid is
+	 * signalled (not its tree), and a process already gone counts as stopped.
+	 */
+	private async _stopPortProcess(request: IKinguStopPortRequest | undefined): Promise<KinguStopPortResult> {
+		if (!request) {
+			return { ok: false, reason: 'Invalid process or port.' };
+		}
+		const scan = await this._scanPorts();
+		const allowed = checkStopPortRequest(request, scan, this._appPids());
+		if (!allowed.ok) {
+			return allowed;
+		}
+		try {
+			process.kill(request.pid, 'SIGTERM');
+			return { ok: true };
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+				return { ok: true };
+			}
+			return { ok: false, reason: error instanceof Error && error.message ? error.message : 'Failed to stop the process.' };
+		}
+	}
+
+	/**
+	 * CPU and memory for each of these processes and everything below it.
+	 *
+	 * The window's terminals are this app's descendants, so one walk of the app's
+	 * own tree answers for all of them. A pid that is not in it - gone, or not
+	 * the app's - gets no answer rather than a zero.
+	 */
+	private async _measureProcesses(pids: readonly number[]): Promise<readonly IKinguProcessUsage[]> {
+		if (pids.length === 0) {
+			return [];
+		}
+		let sweep: IKinguProcessSweep;
+		try {
+			sweep = await this._processTable();
+		} catch {
+			return [];
+		}
+		const memory = new Map(sweep.rows.map(row => [row.pid, row.memory]));
+		const ours = processSubtree(sweep.rows, process.pid);
+		const usage: IKinguProcessUsage[] = [];
+		for (const pid of pids.slice(0, 256)) {
+			if (!ours.has(pid)) {
+				continue;
+			}
+			let cpu = 0;
+			let bytes = 0;
+			for (const member of processSubtree(sweep.rows, pid)) {
+				cpu += sweep.cpu.get(member) ?? 0;
+				bytes += memory.get(member) ?? 0;
+			}
+			usage.push({ pid, cpu, memory: bytes });
+		}
+		return usage;
 	}
 
 	/**
@@ -278,15 +378,51 @@ export class KinguHostChannel implements IServerChannel {
 	 * `3000 node`.
 	 */
 	private async _processTree(): Promise<ReadonlyMap<number, string>> {
+		const { rows } = await this._processTable();
+		const names = new Map(rows.map(row => [row.pid, row.name]));
 		const tree = new Map<number, string>();
+		for (const pid of processSubtree(rows, process.pid)) {
+			tree.set(pid, names.get(pid) ?? 'unknown');
+		}
+		return tree;
+	}
+
+	/**
+	 * One host-wide process sweep, shared by everything that asks within a second.
+	 *
+	 * On Windows it is the ADE's own sweep — PowerShell's `Win32_Process`, CPU as
+	 * the difference between two sweeps — because the native process-tree module
+	 * cannot find this process's own root there, so a walk from it comes back
+	 * empty. Elsewhere `ps`, through the workbench's `listProcesses`.
+	 */
+	private async _processTable(): Promise<IKinguProcessSweep> {
+		if (this._lastSweep && Date.now() - this._lastSweep.at < PROCESS_SWEEP_REUSE_MS) {
+			return this._lastSweep;
+		}
+		this._sweep ??= this._takeSweep().then(sweep => {
+			this._lastSweep = sweep;
+			return sweep;
+		}).finally(() => { this._sweep = undefined; });
+		return this._sweep;
+	}
+
+	private async _takeSweep(): Promise<IKinguProcessSweep> {
+		const at = Date.now();
+		if (platform() === 'win32') {
+			const rows = parseWindowsProcessTable(await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PROCESS_TABLE_SCRIPT], PROCESS_SWEEP_TIMEOUT_MS));
+			const cpu = cpuBetweenSweeps(this._previousCpuTimes?.times, rows, this._previousCpuTimes ? at - this._previousCpuTimes.at : 0);
+			this._previousCpuTimes = { at, times: new Map(rows.map(row => [row.pid, row.cpuTime ?? 0])) };
+			return { at, rows, cpu };
+		}
+		const rows: IKinguProcessRow[] = [];
 		const collect = (item: ProcessItem): void => {
-			tree.set(item.pid, processName(item));
+			rows.push({ pid: item.pid, ppid: item.ppid, name: processName(item), memory: item.mem || 0, cpu: item.load || 0 });
 			for (const child of item.children ?? []) {
 				collect(child);
 			}
 		};
 		collect(await listProcesses(process.pid));
-		return tree;
+		return { at, rows, cpu: new Map(rows.map(row => [row.pid, row.cpu ?? 0])) };
 	}
 
 	private async _getQuota(provider: KinguQuotaProvider | undefined): Promise<KinguQuotaResult> {
@@ -419,13 +555,24 @@ export class KinguHostChannel implements IServerChannel {
 
 /** How long a listing tool is given before the strip does without it. */
 const PORT_LISTING_TIMEOUT_MS = 5_000;
+/** A PowerShell sweep can take a few seconds on a busy machine; the ADE allows the same. */
+const PROCESS_SWEEP_TIMEOUT_MS = 15_000;
+/** Readings asked for within this of each other share one sweep. */
+const PROCESS_SWEEP_REUSE_MS = 1_000;
+
+/** One sweep: every process, and each one's CPU. */
+interface IKinguProcessSweep {
+	readonly at: number;
+	readonly rows: readonly IKinguProcessRow[];
+	readonly cpu: ReadonlyMap<number, number>;
+}
 
 /** A listing tool's stdout, with a fixed argument list and no shell. */
-function run(command: string, args: readonly string[]): Promise<string> {
+function run(command: string, args: readonly string[], timeout = PORT_LISTING_TIMEOUT_MS): Promise<string> {
 	return new Promise((resolve, reject) => {
 		// `execFile` rather than `exec`: there is nothing here to interpolate, and a
 		// shell would be a way for one to appear later.
-		execFile(command, [...args], { timeout: PORT_LISTING_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
+		execFile(command, [...args], { timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
 			// `lsof` exits non-zero when some sockets were unreadable while still
 			// printing the ones that were, so output wins over the exit code.
 			if (stdout) {

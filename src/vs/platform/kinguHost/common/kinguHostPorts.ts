@@ -61,6 +61,79 @@ export function normalizeListeningPorts(entries: readonly IKinguListeningPort[],
 	return [...byPort.values()].sort((left, right) => left.port - right.port);
 }
 
+/**
+ * The ADE's split of listening ports: the ones this app's own processes hold
+ * (its "workspace" ports, counted on the footer), and every other interesting
+ * port on the machine (its "external" ones, listed but not counted).
+ *
+ * The ADE attributes a port to a workspace by the owning process's working
+ * directory or command line; here the question is the one this app can answer
+ * exactly - is the owner one of its descendants - which is what "a port my
+ * agents started" means in this window.
+ */
+export interface IKinguPortScan {
+	readonly workspace: readonly IKinguListeningPort[];
+	readonly external: readonly IKinguListeningPort[];
+}
+
+/** Splits interesting ports into the app's own and everything else, one row per port, lowest first. */
+export function classifyListeningPorts(entries: readonly IKinguListeningPort[], owned: ReadonlySet<number>): IKinguPortScan {
+	const workspace = new Map<number, IKinguListeningPort>();
+	const external = new Map<number, IKinguListeningPort>();
+	for (const entry of entries) {
+		if (!isInterestingPort(entry)) {
+			continue;
+		}
+		const target = entry.pid !== undefined && owned.has(entry.pid) ? workspace : external;
+		if (!target.has(entry.port)) {
+			target.set(entry.port, entry);
+		}
+	}
+	for (const port of workspace.keys()) {
+		external.delete(port);
+	}
+	const sorted = (ports: Map<number, IKinguListeningPort>) => [...ports.values()].sort((left, right) => left.port - right.port);
+	return { workspace: sorted(workspace), external: sorted(external) };
+}
+
+/** A request to stop the process holding a port, as the ADE's `workspacePorts:kill` takes it. */
+export interface IKinguStopPortRequest {
+	readonly pid: number;
+	readonly port: number;
+}
+
+export type KinguStopPortResult = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+/**
+ * Whether a stop request may go ahead, checked against a fresh scan - the
+ * ADE's rules, in its order. The caller's pid is never trusted on its own: the
+ * port must still be listening, held by that pid, and held by one of this
+ * app's descendants that is not the app itself.
+ */
+export function checkStopPortRequest(request: IKinguStopPortRequest, scan: IKinguPortScan, appPids: ReadonlySet<number>): KinguStopPortResult {
+	if (!Number.isSafeInteger(request.pid) || request.pid <= 0 || !Number.isSafeInteger(request.port)) {
+		return { ok: false, reason: 'Invalid process or port.' };
+	}
+	const row = [...scan.workspace, ...scan.external].find(entry => entry.port === request.port && entry.pid === request.pid);
+	if (!row) {
+		return { ok: false, reason: 'The port is no longer listening.' };
+	}
+	if (!scan.workspace.includes(row)) {
+		return { ok: false, reason: 'Only workspace-owned local processes can be stopped here.' };
+	}
+	if (appPids.has(request.pid)) {
+		return { ok: false, reason: 'Kingu cannot stop its own process.' };
+	}
+	return { ok: true };
+}
+
+/** What a process and everything below it is using: CPU in percent of one core, memory in bytes. */
+export interface IKinguProcessUsage {
+	readonly pid: number;
+	readonly cpu: number;
+	readonly memory: number;
+}
+
 /** The ports with their owners' names attached, where the tree knows one. */
 export function nameListeningPorts(ports: readonly IKinguListeningPort[], names: ReadonlyMap<number, string>): IKinguListeningPort[] {
 	return ports.map(port => {

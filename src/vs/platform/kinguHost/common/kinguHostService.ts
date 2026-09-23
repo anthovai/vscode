@@ -7,7 +7,7 @@ import { Event } from '../../../base/common/event.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { KinguQuotaProvider } from './kinguQuotaProviders.js';
 import { KinguQuotaResult } from './kinguRateLimits.js';
-import { IKinguListeningPort } from './kinguHostPorts.js';
+import { IKinguListeningPort, IKinguPortScan, IKinguProcessUsage, IKinguStopPortRequest, KinguStopPortResult } from './kinguHostPorts.js';
 import { IKinguComputerRequest, KinguComputerResult } from '../../kinguComputer/common/kinguComputerProtocol.js';
 
 /** What the app is holding, and what is holding it. */
@@ -48,6 +48,15 @@ export interface IKinguHostService {
 
 	/** The TCP ports something on this machine is listening on. */
 	readListeningPorts(): Promise<readonly IKinguListeningPort[]>;
+
+	/** The ADE's split of ports: this app's own ("workspace") and every other one worth naming ("external"). */
+	scanPorts(): Promise<IKinguPortScan>;
+
+	/** Stops the process holding one of this app's ports, after checking it against a fresh scan. */
+	stopPortProcess(request: IKinguStopPortRequest): Promise<KinguStopPortResult>;
+
+	/** CPU and memory for each of these processes and everything below it; unknown pids are left out. */
+	measureProcesses(pids: readonly number[]): Promise<readonly IKinguProcessUsage[]>;
 
 	/**
 	 * Where each of these commands is installed, for the ones that are.

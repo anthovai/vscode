@@ -6,6 +6,8 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import {
+	checkStopPortRequest,
+	classifyListeningPorts,
 	describeListeningPort,
 	isInterestingPort,
 	nameListeningPorts,
@@ -141,6 +143,39 @@ suite('Kingu listening ports', () => {
 			const named = nameListeningPorts([{ port: 3000, address: '0.0.0.0', pid: 77 }], new Map());
 			assert.strictEqual(named[0].process, undefined);
 			assert.strictEqual(describeListeningPort(named[0]), '3000');
+		});
+	});
+
+	suite('the ADE workspace and external split', () => {
+		const entries = [
+			{ port: 3000, address: '127.0.0.1', pid: 10 },
+			{ port: 3000, address: '::1', pid: 10 },
+			{ port: 5432, address: '0.0.0.0', pid: 99 },
+			{ port: 8080, address: '0.0.0.0', pid: 11 },
+			{ port: 60000, address: '0.0.0.0', pid: 12 },
+		];
+		const owned = new Set([10, 11, 1]);
+
+		test('puts the ports the app owns in the workspace and the rest outside', () => {
+			const scan = classifyListeningPorts(entries, owned);
+			assert.deepStrictEqual([scan.workspace.map(port => port.port), scan.external.map(port => port.port)], [[3000, 8080], [5432]]);
+		});
+
+		test('lets a stop through only for a live workspace port that is not the app itself', () => {
+			const scan = classifyListeningPorts(entries, owned);
+			assert.deepStrictEqual([
+				checkStopPortRequest({ pid: 10, port: 3000 }, scan, new Set([1])),
+				checkStopPortRequest({ pid: 10, port: 4000 }, scan, new Set([1])),
+				checkStopPortRequest({ pid: 99, port: 5432 }, scan, new Set([1])),
+				checkStopPortRequest({ pid: 11, port: 8080 }, scan, new Set([1, 11])),
+				checkStopPortRequest({ pid: -1, port: 8080 }, scan, new Set([1])),
+			], [
+				{ ok: true },
+				{ ok: false, reason: 'The port is no longer listening.' },
+				{ ok: false, reason: 'Only workspace-owned local processes can be stopped here.' },
+				{ ok: false, reason: 'Kingu cannot stop its own process.' },
+				{ ok: false, reason: 'Invalid process or port.' },
+			]);
 		});
 	});
 });
