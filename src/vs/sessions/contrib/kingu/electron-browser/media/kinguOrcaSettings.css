@@ -1,0 +1,633 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * The ADE's settings screen, class for class: `settings-page-renderer.tsx`,
+ * `SettingsSidebar.tsx`, `SettingsSection.tsx`, `SettingsFormControls.tsx`
+ * and the `ui/` primitives they use. The ADE's tokens: `worktree-sidebar`
+ * (#2a2a2a dark, #f5f5f5 light), `card` (#171717 / #fff), `input`
+ * (white 15% / #e5e5e5), `border` (white 7% / #e5e5e5).
+ */
+.monaco-workbench {
+	--kingu-orca-settings-bg: var(--vscode-editor-background);
+	--kingu-orca-settings-sidebar: #f5f5f5;
+	--kingu-orca-settings-sidebar-accent: #eaeaea;
+	--kingu-orca-settings-sidebar-border: #e5e5e5;
+	--kingu-orca-settings-card: rgba(255, 255, 255, 0.5);
+	--kingu-orca-settings-input: #e5e5e5;
+	--kingu-orca-settings-input-bg: transparent;
+	--kingu-orca-settings-border: #e5e5e5;
+	--kingu-orca-settings-muted-track: rgba(115, 115, 115, 0.3);
+}
+
+.monaco-workbench.vs-dark,
+.monaco-workbench.hc-black {
+	--kingu-orca-settings-sidebar: #2a2a2a;
+	--kingu-orca-settings-sidebar-accent: #353535;
+	--kingu-orca-settings-sidebar-border: rgb(255 255 255 / 0.07);
+	--kingu-orca-settings-card: rgba(23, 23, 23, 0.5);
+	--kingu-orca-settings-input: rgb(255 255 255 / 0.15);
+	--kingu-orca-settings-input-bg: rgb(255 255 255 / 0.045);
+	--kingu-orca-settings-border: rgb(255 255 255 / 0.07);
+	--kingu-orca-settings-muted-track: rgba(161, 161, 161, 0.3);
+}
+
+/* `settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background`, over the workbench. */
+.kingu-orca-settings {
+	position: fixed;
+	left: 0;
+	right: 0;
+	z-index: 40;
+	display: flex;
+	overflow: hidden;
+	background-color: var(--kingu-orca-settings-bg);
+	color: var(--kingu-orca-foreground);
+	font-size: 14px;
+}
+
+/* #region Sidebar: `w-[280px] shrink-0 flex-col border-r bg-worktree-sidebar`. */
+
+.kingu-orca-settings-sidebar {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 280px;
+	border-right: 1px solid var(--kingu-orca-settings-sidebar-border);
+	background-color: var(--kingu-orca-settings-sidebar);
+}
+
+.kingu-orca-settings-sidebar-block {
+	padding: 12px;
+	border-bottom: 1px solid var(--kingu-orca-settings-sidebar-border);
+}
+
+/* "Back to app": a ghost `sm` button, `w-full justify-start gap-2 text-[13px] text-muted-foreground`. */
+.kingu-orca-settings-back {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: 32px;
+	padding: 0 12px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.kingu-orca-settings-back:hover {
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-settings-search {
+	position: relative;
+}
+
+.kingu-orca-settings-search-icon {
+	position: absolute;
+	top: 50%;
+	left: 12px;
+	color: var(--kingu-orca-muted);
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.kingu-orca-settings-search .kingu-orca-input {
+	padding-left: 36px;
+	padding-right: 56px;
+	background-color: color-mix(in srgb, var(--kingu-orca-settings-bg) 60%, transparent);
+	font-size: 13px;
+}
+
+.kingu-orca-settings-search-hint {
+	position: absolute;
+	top: 50%;
+	right: 8px;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.kingu-orca-settings-kbd {
+	padding: 1px 5px;
+	border: 1px solid var(--kingu-orca-settings-border);
+	border-radius: 4px;
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-foreground);
+	font-family: inherit;
+	font-size: 11px;
+}
+
+.kingu-orca-settings-kbd-sep {
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+}
+
+/* `min-h-0 flex-1 overflow-y-auto px-3 py-4`, groups `space-y-5`. */
+.kingu-orca-settings-nav {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 20px;
+	min-height: 0;
+	padding: 16px 12px;
+	overflow-y: auto;
+}
+
+.kingu-orca-settings-nav-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* `px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground`. */
+.kingu-orca-settings-nav-heading {
+	margin: 0;
+	padding: 0 12px;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+
+.kingu-orca-settings-nav-items {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* `flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-[13px]`. */
+.kingu-orca-settings-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 12px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: color-mix(in srgb, var(--kingu-orca-foreground) 60%, transparent);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 150ms, color 150ms;
+}
+
+.kingu-orca-settings-nav-item:hover {
+	background-color: color-mix(in srgb, var(--kingu-orca-settings-sidebar-accent) 60%, transparent);
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-settings-nav-item.active {
+	background-color: var(--kingu-orca-settings-sidebar-accent);
+	box-shadow: 0 0 0 1px rgba(161, 161, 161, 0.25);
+	color: var(--kingu-orca-foreground);
+	font-weight: 500;
+}
+
+/* `ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider`. */
+.kingu-orca-settings-nav-badge {
+	flex-shrink: 0;
+	margin-left: auto;
+	padding: 2px 6px;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-muted);
+	font-size: 9px;
+	font-weight: 500;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+/* #endregion */
+
+/* #region Content: `mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10 pb-24`. */
+
+.kingu-orca-settings-main {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+
+.kingu-orca-settings-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.kingu-orca-settings-column {
+	display: flex;
+	flex-direction: column;
+	gap: 40px;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 896px;
+	margin: 0 auto;
+	padding: 40px 32px 96px;
+}
+
+.kingu-orca-settings-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 24rem;
+	border: 1px dashed color-mix(in srgb, var(--kingu-orca-settings-border) 60%, transparent);
+	border-radius: 16px;
+	color: var(--kingu-orca-muted);
+	font-size: 14px;
+}
+
+.kingu-orca-settings-pane {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+
+/* `border-b border-border/60 pb-5`, the title `text-2xl font-semibold`, the subtitle `text-sm leading-6 muted`. */
+.kingu-orca-settings-pane-header {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-bottom: 20px;
+	border-bottom: 1px solid var(--kingu-orca-settings-border);
+}
+
+.kingu-orca-settings-pane-title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	color: var(--kingu-orca-foreground);
+	font-size: 24px;
+	font-weight: 600;
+	line-height: 1.25;
+}
+
+.kingu-orca-settings-pane-badge {
+	padding: 2px 8px;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.kingu-orca-settings-pane-subtitle {
+	max-width: 48rem;
+	margin: 0;
+	color: var(--kingu-orca-muted);
+	font-size: 14px;
+	line-height: 24px;
+}
+
+/* `rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs`, sections `space-y-6` with a separator between. */
+.kingu-orca-settings-card {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding: 24px 28px;
+	border: 1px solid color-mix(in srgb, var(--kingu-orca-settings-border) 50%, transparent);
+	border-radius: 12px;
+	background-color: var(--kingu-orca-settings-card);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.kingu-orca-settings-separator {
+	height: 1px;
+	background-color: var(--kingu-orca-settings-border);
+}
+
+.kingu-orca-settings-subsection {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	scroll-margin-top: 24px;
+}
+
+/* `SettingsSubsectionHeader`: `text-sm font-semibold`, `text-xs text-muted-foreground`. */
+.kingu-orca-settings-subsection-header h3 {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.kingu-orca-settings-subsection-header p {
+	margin: 4px 0 0;
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+}
+
+/* `SettingsRow`: `flex gap-4 py-3 items-center justify-between`; `py-2` without a description. */
+.kingu-orca-settings-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 8px 0;
+}
+
+.kingu-orca-settings-row.has-description {
+	padding: 12px 0;
+}
+
+.kingu-orca-settings-row-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.kingu-orca-settings-row-control {
+	flex-shrink: 0;
+}
+
+/* `Label`: `text-sm leading-none font-medium`; the description `text-xs text-muted-foreground`. */
+.kingu-orca-settings-label {
+	color: var(--kingu-orca-foreground);
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1;
+	user-select: text;
+}
+
+.kingu-orca-settings-description {
+	margin: 0;
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+	line-height: 16px;
+	user-select: text;
+}
+
+.kingu-orca-settings-stacked {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.kingu-orca-settings-stacked-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.kingu-orca-settings-path {
+	display: flex;
+	gap: 8px;
+}
+
+.kingu-orca-settings-unavailable {
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+	opacity: 0.7;
+}
+
+/* #endregion */
+
+/* #region Controls */
+
+/* `Input`: `h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs`, `dark:bg-input/30`. */
+.kingu-orca-input,
+.kingu-orca-textarea {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	height: 36px;
+	padding: 4px 12px;
+	border: 1px solid var(--kingu-orca-settings-input);
+	border-radius: 6px;
+	background-color: var(--kingu-orca-settings-input-bg);
+	color: var(--kingu-orca-foreground);
+	font: inherit;
+	font-size: 14px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+	outline: none;
+}
+
+.kingu-orca-textarea {
+	height: auto;
+	padding: 8px 12px;
+	font-family: var(--monaco-monospace-font);
+	font-size: 12px;
+	resize: vertical;
+}
+
+.kingu-orca-input::placeholder,
+.kingu-orca-textarea::placeholder {
+	color: color-mix(in srgb, var(--kingu-orca-muted) 60%, transparent);
+}
+
+.kingu-orca-input:focus-visible,
+.kingu-orca-textarea:focus-visible,
+.monaco-workbench .kingu-orca-input:focus,
+.monaco-workbench .kingu-orca-textarea:focus {
+	border-color: #737373;
+	outline: none;
+	box-shadow: 0 0 0 3px rgba(115, 115, 115, 0.5);
+}
+
+.kingu-orca-input.wide {
+	width: 260px;
+}
+
+.kingu-orca-input.number {
+	width: 96px;
+	font-variant-numeric: tabular-nums;
+}
+
+.kingu-orca-number {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.kingu-orca-slider {
+	width: 160px;
+	accent-color: var(--kingu-orca-foreground);
+}
+
+/* `SelectTrigger` at `w-[180px]`: `h-9 rounded-md border px-3 py-2 text-sm`, a chevron at half opacity. */
+.kingu-orca-select {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	width: 180px;
+}
+
+.kingu-orca-select select {
+	box-sizing: border-box;
+	width: 100%;
+	height: 36px;
+	padding: 0 32px 0 12px;
+	border: 1px solid var(--kingu-orca-settings-input);
+	border-radius: 6px;
+	background-color: var(--kingu-orca-settings-input-bg);
+	color: var(--kingu-orca-foreground);
+	font: inherit;
+	font-size: 14px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+	appearance: none;
+	cursor: pointer;
+	outline: none;
+}
+
+.kingu-orca-select select:hover {
+	background-color: color-mix(in srgb, var(--kingu-orca-settings-input) 50%, transparent);
+}
+
+.kingu-orca-select select option {
+	background-color: var(--vscode-editorWidget-background);
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-select-chevron {
+	position: absolute;
+	right: 10px;
+	color: var(--kingu-orca-muted);
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+/* The ADE's `Switch`: `h-5 w-9 rounded-full p-0.5`, `bg-foreground` on, `bg-muted-foreground/30` off; the thumb `size-3.5 bg-background`. */
+.kingu-orca-switch {
+	position: relative;
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	box-sizing: border-box;
+	width: 36px;
+	height: 20px;
+	padding: 2px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-settings-muted-track);
+	cursor: pointer;
+	transition: background-color 150ms;
+}
+
+.kingu-orca-switch.checked {
+	background-color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-switch-thumb {
+	display: block;
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-settings-bg);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+	transition: transform 150ms;
+	pointer-events: none;
+}
+
+.kingu-orca-switch.checked .kingu-orca-switch-thumb {
+	transform: translateX(16px);
+}
+
+.monaco-workbench .kingu-orca-switch:focus {
+	outline: none;
+}
+
+.monaco-workbench .kingu-orca-switch:focus-visible {
+	box-shadow: 0 0 0 3px rgba(115, 115, 115, 0.5);
+}
+
+/* The segmented control's `md` size: `px-3 py-1 text-sm`. */
+.kingu-orca-segmented.md .kingu-orca-segment-option {
+	padding: 4px 12px;
+	font-size: 14px;
+}
+
+.kingu-orca-segmented.sm .kingu-orca-segment-option {
+	padding: 2px 10px;
+	font-size: 12px;
+}
+
+/* `Button variant="outline"`: `h-9 gap-2 rounded-md border bg-background px-4 text-sm font-medium shadow-xs`. */
+.kingu-orca-button {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 36px;
+	padding: 0 16px;
+	border-radius: 6px;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.kingu-orca-button.outline {
+	border: 1px solid var(--kingu-orca-settings-input);
+	background-color: var(--kingu-orca-settings-input-bg);
+	color: var(--kingu-orca-foreground);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.kingu-orca-button.outline:hover {
+	background-color: var(--kingu-orca-accent);
+}
+
+.kingu-orca-button.sm {
+	height: 32px;
+	padding: 0 12px;
+	font-size: 13px;
+}
+
+/* The sources list: a bordered list, each row a label, a mono path and Show / Hide. */
+.kingu-orca-settings-list {
+	overflow: hidden;
+	border: 1px solid var(--kingu-orca-settings-border);
+	border-radius: 8px;
+}
+
+.kingu-orca-settings-list-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 12px;
+}
+
+.kingu-orca-settings-list-row + .kingu-orca-settings-list-row {
+	border-top: 1px solid var(--kingu-orca-settings-border);
+}
+
+.kingu-orca-settings-list-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.kingu-orca-settings-list-label {
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.kingu-orca-settings-list-detail {
+	color: var(--kingu-orca-muted);
+	font-family: var(--monaco-monospace-font);
+	font-size: 11px;
+}
+
+/* #endregion */
