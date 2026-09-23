@@ -4,12 +4,184 @@
  *--------------------------------------------------------------------------------------------*/
 
 /*
- * One agent's usage, drawn as the ADE draws it: the mark, a short neutral bar
- * filled from the most consumed window, then every window's reading.
+ * The ADE's footer, class for class. Each rule names the Tailwind classes of
+ * the ADE component it reproduces (`kingu-orca/renderer/src/components/
+ * status-bar/*`), so a change there has one obvious place to land here.
  *
- * The bar is neutral on purpose, as in the ADE. It is a glance at proportion;
- * the colour that says "stop soon" would make every heavy user's footer read as
- * an alarm.
+ * The ADE's theme tokens map onto the workbench's: `foreground` and
+ * `muted-foreground` onto the foreground and description colours, `accent`
+ * onto the toolbar hover, `border` onto the widget border. The floating
+ * surfaces keep the ADE's own translucent recipe, light and dark.
+ */
+.monaco-workbench {
+	--kingu-orca-foreground: var(--vscode-foreground);
+	--kingu-orca-muted: var(--vscode-descriptionForeground);
+	--kingu-orca-accent: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+	--kingu-orca-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+	--kingu-orca-surface-bg: rgba(255, 255, 255, 0.82);
+	--kingu-orca-surface-border: rgba(0, 0, 0, 0.14);
+	--kingu-orca-surface-shadow: 0 12px 28px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+	--kingu-orca-popover-shadow: 0 16px 36px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+	--kingu-orca-item-focus: rgba(0, 0, 0, 0.08);
+	/* Tailwind's emerald-500, yellow-500 and the destructive red. */
+	--kingu-orca-emerald: oklch(0.696 0.17 162.48);
+	--kingu-orca-yellow: oklch(0.795 0.184 86.047);
+	--kingu-orca-destructive: var(--vscode-errorForeground);
+}
+
+.monaco-workbench.vs-dark,
+.monaco-workbench.hc-black {
+	--kingu-orca-surface-bg: rgba(0, 0, 0, 0.72);
+	--kingu-orca-surface-border: rgba(255, 255, 255, 0.14);
+	--kingu-orca-surface-shadow: 0 16px 34px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+	--kingu-orca-popover-shadow: 0 20px 44px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+	--kingu-orca-item-focus: rgba(255, 255, 255, 0.14);
+}
+
+.kingu-orca-muted { color: var(--kingu-orca-muted); }
+.kingu-orca-muted-50 { color: var(--kingu-orca-muted); opacity: 0.5; }
+.kingu-orca-foreground { color: var(--kingu-orca-foreground); }
+.kingu-orca-text-11 { font-size: 11px; }
+.kingu-orca-medium { font-weight: 500; }
+.kingu-orca-tabular { font-variant-numeric: tabular-nums; }
+.kingu-orca-emerald { color: var(--kingu-orca-emerald); }
+.kingu-orca-yellow { color: var(--kingu-orca-yellow); }
+.kingu-orca-destructive { color: var(--kingu-orca-destructive); }
+
+.kingu-orca-icon {
+	display: block;
+	flex-shrink: 0;
+}
+
+.kingu-orca-icon.spin {
+	animation: kingu-orca-spin 1s linear infinite;
+}
+
+.kingu-orca-pulse {
+	animation: kingu-orca-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes kingu-orca-spin {
+	to { transform: rotate(360deg); }
+}
+
+@keyframes kingu-orca-pulse {
+	50% { opacity: 0.5; }
+}
+
+/* #region Triggers */
+
+/*
+ * Every segment's button: `inline-flex cursor-pointer items-center gap-1.5
+ * rounded px-1 py-0.5 hover:bg-accent/70`, 12px apart (`gap-3`). The status bar
+ * packs its entries edge to edge, so each carries half the gap on either side.
+ */
+.kingu-orca-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0 6px;
+	padding: 2px 4px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	font: inherit;
+	font-size: 12px;
+	line-height: 16px;
+	cursor: pointer;
+	outline-offset: -1px;
+}
+
+.kingu-orca-trigger:hover,
+.kingu-orca-trigger[aria-expanded="true"] {
+	background-color: var(--kingu-orca-accent);
+}
+
+.monaco-workbench .kingu-orca-trigger:focus {
+	outline: none;
+}
+
+.monaco-workbench .kingu-orca-trigger:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* The usage roster pill: `inline-flex items-center gap-3 rounded px-1 py-0.5`, in the foreground. */
+.kingu-orca-trigger.usage {
+	gap: 12px;
+	color: var(--kingu-orca-foreground);
+}
+
+/* Keep awake: `gap-1`, the cup brightening while it is active. */
+.kingu-orca-trigger.awake {
+	gap: 4px;
+}
+
+.kingu-orca-trigger.awake.active > .kingu-orca-icon {
+	color: var(--kingu-orca-foreground);
+}
+
+/* Refresh: `p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-40`. */
+.kingu-orca-trigger.refresh {
+	padding: 2px;
+}
+
+.kingu-orca-trigger.refresh:hover {
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-trigger:disabled {
+	cursor: default;
+	opacity: 0.4;
+}
+
+/* The floating-workspace button: `size-5 rounded border border-border bg-secondary shadow-xs`. */
+.kingu-orca-trigger.boxed {
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 1px solid var(--kingu-orca-border);
+	background-color: var(--vscode-button-secondaryBackground, transparent);
+	color: var(--vscode-button-secondaryForeground, var(--kingu-orca-foreground));
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Status dots: `size-1.5 rounded-full`, `bg-foreground` or `bg-muted-foreground/40`. */
+.kingu-orca-dot {
+	display: inline-block;
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background-color: var(--kingu-orca-muted);
+	opacity: 0.4;
+}
+
+.kingu-orca-dot.active {
+	background-color: var(--kingu-orca-foreground);
+	opacity: 1;
+}
+
+.kingu-orca-dot.emerald {
+	background-color: var(--kingu-orca-emerald);
+	opacity: 1;
+}
+
+.kingu-orca-dot.yellow {
+	background-color: var(--kingu-orca-yellow);
+	opacity: 1;
+}
+
+.kingu-orca-dot.destructive {
+	background-color: var(--kingu-orca-destructive);
+	opacity: 1;
+}
+
+/*
+ * One agent: `inline-flex items-center gap-1.5` — the mark, a 48 x 6 neutral
+ * bar (`bg-muted`, filled `bg-muted-foreground/40`), then every window's
+ * reading in tabular figures, muted middots between.
  */
 .kingu-orca-segment {
 	display: inline-flex;
@@ -18,8 +190,15 @@
 	font-variant-numeric: tabular-nums;
 }
 
-.kingu-orca-segment.stale {
-	opacity: 0.8;
+.kingu-orca-segment.quiet {
+	gap: 4px;
+	color: var(--kingu-orca-muted);
+}
+
+.kingu-orca-segment.unavailable {
+	gap: 4px;
+	color: var(--kingu-orca-muted);
+	opacity: 0.5;
 }
 
 .kingu-orca-provider-icon {
@@ -38,18 +217,725 @@
 	flex-shrink: 0;
 	border-radius: 999px;
 	overflow: hidden;
-	background-color: var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
-}
-
-.kingu-orca-bar.hidden {
-	display: none;
+	background-color: rgba(128, 128, 128, 0.2);
 }
 
 .kingu-orca-bar-fill {
 	display: block;
 	height: 100%;
 	border-radius: 999px;
-	background-color: var(--vscode-descriptionForeground);
-	opacity: 0.55;
+	background-color: var(--kingu-orca-muted);
+	opacity: 0.4;
 	transition: width 300ms ease;
 }
+
+/* #endregion */
+
+/* #region Tooltip */
+
+/*
+ * `TooltipContent`: `rounded-md bg-foreground px-3 py-1.5 text-xs
+ * text-background`, an arrow under it, never taking the pointer.
+ */
+.kingu-orca-tooltip {
+	position: fixed;
+	z-index: 2600;
+	width: max-content;
+	max-width: 320px;
+	padding: 6px 12px;
+	border-radius: 6px;
+	background-color: var(--kingu-orca-foreground);
+	color: var(--vscode-editor-background);
+	font-size: 12px;
+	line-height: 16px;
+	text-wrap: balance;
+	pointer-events: none;
+	animation: kingu-orca-fade-in 150ms ease-out;
+}
+
+.kingu-orca-tooltip > div + div {
+	margin-top: 2px;
+}
+
+.kingu-orca-tooltip-arrow {
+	position: absolute;
+	bottom: -4px;
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+	background-color: var(--kingu-orca-foreground);
+	transform: rotate(45deg);
+}
+
+@keyframes kingu-orca-fade-in {
+	from { opacity: 0; transform: translateY(2px) scale(0.98); }
+}
+
+/* #endregion */
+
+/* #region Surfaces */
+
+/*
+ * `DropdownMenuContent`: `min-w-[11rem] rounded-[11px] border p-[4px]`,
+ * translucent, blurred, the dual shadow. `PopoverContent`: the same recipe at
+ * `rounded-md`, and every footer popover is `p-0`.
+ */
+.kingu-orca-surface {
+	position: fixed;
+	z-index: 2550;
+	box-sizing: border-box;
+	max-width: calc(100vw - 32px);
+	max-height: calc(100vh - 48px);
+	overflow-x: hidden;
+	overflow-y: auto;
+	border: 1px solid var(--kingu-orca-surface-border);
+	background-color: var(--kingu-orca-surface-bg);
+	backdrop-filter: blur(40px);
+	color: var(--kingu-orca-foreground);
+	font-size: 12px;
+	outline: none;
+	animation: kingu-orca-fade-in 150ms ease-out;
+}
+
+/* Radix focuses the content so the arrow keys work, and draws no ring for it. */
+/* The workbench rings every focused `[tabindex]` and button; the ADE's surfaces and rows show focus by their background. */
+.monaco-workbench .kingu-orca-surface.kingu-orca-surface:focus,
+.monaco-workbench .kingu-orca-surface .kingu-orca-menu-item:focus,
+.monaco-workbench .kingu-orca-surface .kingu-orca-session:focus {
+	outline: none;
+}
+
+.kingu-orca-surface.menu {
+	min-width: 176px;
+	padding: 4px;
+	border-radius: 11px;
+	box-shadow: var(--kingu-orca-surface-shadow);
+}
+
+.kingu-orca-surface.popover {
+	padding: 0;
+	overflow: hidden;
+	border-radius: 6px;
+	box-shadow: var(--kingu-orca-popover-shadow);
+}
+
+.kingu-orca-surface.flush {
+	padding: 0;
+}
+
+/* `DropdownMenuLabel`: `px-2 py-[4px] text-[11px] font-semibold text-muted-foreground`. */
+.kingu-orca-menu-label {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 4px 8px;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.kingu-orca-menu-label-trailing {
+	font-weight: 400;
+}
+
+/* The ADE's small uppercase heading, as the remote hosts menu opens. */
+.kingu-orca-menu-heading {
+	padding: 6px 8px 4px;
+	color: var(--kingu-orca-muted);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+/* `DropdownMenuSeparator`: `my-[3px] h-px bg-border/60`. */
+.kingu-orca-menu-separator {
+	height: 1px;
+	margin: 3px 0;
+	background-color: var(--kingu-orca-border);
+	opacity: 0.6;
+}
+
+/*
+ * `DropdownMenuItem`: `flex items-center gap-2 rounded-md px-2 py-[4px]
+ * text-[12px] leading-[17px] font-[450]`, `focus:bg-white/14`. The radio item
+ * leaves `pl-7` for its indicator; the footer's use `py-1.5`.
+ */
+.kingu-orca-menu-item {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 4px 8px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	font-weight: 450;
+	line-height: 17px;
+	text-align: left;
+	cursor: default;
+	outline: none;
+}
+
+.kingu-orca-menu-item:hover,
+.kingu-orca-menu-item:focus-visible {
+	background-color: var(--kingu-orca-item-focus);
+}
+
+.kingu-orca-menu-item.radio {
+	padding: 6px 8px 6px 28px;
+}
+
+.kingu-orca-menu-indicator {
+	position: absolute;
+	left: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	pointer-events: none;
+}
+
+/* `CircleIcon className="size-2 fill-current"`. */
+.kingu-orca-menu-radio-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background-color: currentColor;
+}
+
+.kingu-orca-menu-body {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.kingu-orca-menu-description {
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	font-weight: 400;
+}
+
+/* #endregion */
+
+/* #region Popover panels */
+
+/* A panel header: `flex items-center justify-between gap-2 border-b border-border px-3 py-1.5`. */
+.kingu-orca-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 12px;
+	border-bottom: 1px solid var(--kingu-orca-border);
+}
+
+.kingu-orca-panel-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	color: var(--kingu-orca-foreground);
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.kingu-orca-panel-title > .kingu-orca-icon {
+	color: var(--kingu-orca-muted);
+}
+
+.kingu-orca-panel-title > span,
+.kingu-orca-truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-panel-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+/* `inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground`. */
+.kingu-orca-icon-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	cursor: pointer;
+}
+
+.kingu-orca-icon-button:hover {
+	background-color: var(--kingu-orca-accent);
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-icon-button.destructive:hover {
+	background-color: color-mix(in srgb, var(--kingu-orca-destructive) 10%, transparent);
+	color: var(--kingu-orca-destructive);
+}
+
+.kingu-orca-icon-button.small {
+	width: 20px;
+	height: 20px;
+}
+
+.kingu-orca-icon-button:disabled {
+	opacity: 0.35;
+	cursor: default;
+	pointer-events: none;
+}
+
+.kingu-orca-empty {
+	padding: 16px 12px;
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+	text-align: center;
+}
+
+.kingu-orca-scroll {
+	overflow-y: auto;
+}
+
+/* The Resource Manager's summary: `px-3 py-2 border-b flex items-baseline justify-between gap-3 text-xs tabular-nums`. */
+.kingu-orca-resource-summary {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--kingu-orca-border);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.kingu-orca-resource-summary-figures {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+	min-width: 0;
+}
+
+.kingu-orca-figure {
+	color: var(--kingu-orca-foreground);
+	font-weight: 500;
+}
+
+.kingu-orca-figure > .unit {
+	color: var(--kingu-orca-muted);
+	font-weight: 400;
+}
+
+/* The body: a fixed `h-[420px]` column, a sort header, then the tree scrolling on its own. */
+.kingu-orca-resource-body {
+	display: flex;
+	flex-direction: column;
+	height: 420px;
+}
+
+.kingu-orca-resource-body > .kingu-orca-scroll {
+	flex: 1;
+}
+
+/* `flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide`. */
+.kingu-orca-sort-header {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: space-between;
+	padding: 4px 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-orca-border) 50%, transparent);
+	background-color: rgba(128, 128, 128, 0.08);
+	font-size: 10px;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.kingu-orca-sort-header button {
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	opacity: 0.8;
+	font: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+	cursor: pointer;
+}
+
+.kingu-orca-sort-header button:hover,
+.kingu-orca-sort-header button.active {
+	color: var(--kingu-orca-foreground);
+	opacity: 1;
+}
+
+.kingu-orca-sort-header button.active {
+	font-weight: 600;
+}
+
+.kingu-orca-metric-columns {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	font-variant-numeric: tabular-nums;
+}
+
+/* `w-12 text-right`, `w-16 text-right`, and the `w-5` gutter every row keeps for its kill X. */
+.kingu-orca-cpu-column { width: 48px; text-align: right; }
+.kingu-orca-mem-column { width: 64px; text-align: right; }
+.kingu-orca-gutter {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: flex-end;
+	width: 20px;
+}
+
+.kingu-orca-metrics-end {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 8px;
+}
+
+.kingu-orca-metric-pair {
+	color: var(--kingu-orca-muted);
+	font-size: 12px;
+}
+
+.kingu-orca-metric-pair.small {
+	font-size: 11px;
+}
+
+.kingu-orca-metric-pair.empty {
+	opacity: 0.5;
+}
+
+.kingu-orca-sparkline polyline {
+	stroke: var(--kingu-orca-muted);
+	stroke-opacity: 0.7;
+}
+
+.kingu-orca-chevron {
+	display: flex;
+	flex-shrink: 0;
+	padding: 8px 2px 8px 8px;
+	border: none;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	cursor: pointer;
+}
+
+.kingu-orca-chevron.placeholder {
+	width: 12px;
+	cursor: default;
+}
+
+/* A workspace: `group/wtrow flex items-center ml-2 hover:bg-muted/60`, its name `text-xs font-medium`. */
+.kingu-orca-worktree {
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-orca-border) 20%, transparent);
+}
+
+.kingu-orca-worktree:last-child {
+	border-bottom: none;
+}
+
+.kingu-orca-worktree-row {
+	display: flex;
+	align-items: center;
+	margin-left: 8px;
+}
+
+.kingu-orca-worktree-row:hover {
+	background-color: rgba(128, 128, 128, 0.12);
+}
+
+.kingu-orca-worktree-name {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 8px 8px 8px 4px;
+	border: none;
+	background: transparent;
+	color: var(--kingu-orca-foreground);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	text-align: left;
+	cursor: pointer;
+}
+
+.kingu-orca-worktree-row > .kingu-orca-metrics-end {
+	padding-right: 12px;
+}
+
+/* A session: `flex items-center gap-2 pl-10 pr-3 py-1.5`, a green dot while a tab holds it. */
+.kingu-orca-session {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px 6px 40px;
+}
+
+.kingu-orca-session.clickable {
+	cursor: pointer;
+}
+
+.kingu-orca-session.clickable:hover {
+	background-color: color-mix(in srgb, var(--kingu-orca-accent) 60%, transparent);
+}
+
+.kingu-orca-session-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-orca-session .kingu-orca-kill {
+	opacity: 0;
+}
+
+.kingu-orca-session:hover .kingu-orca-kill,
+.kingu-orca-session:focus-within .kingu-orca-kill {
+	opacity: 1;
+}
+
+.kingu-orca-kill {
+	display: inline-flex;
+	padding: 2px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--kingu-orca-muted);
+	cursor: pointer;
+}
+
+.kingu-orca-kill:hover {
+	background-color: color-mix(in srgb, var(--kingu-orca-destructive) 10%, transparent);
+	color: var(--kingu-orca-destructive);
+}
+
+/* The app's own row: `text-[11px] font-semibold uppercase tracking-wide text-muted-foreground`. */
+.kingu-orca-group {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-orca-border) 50%, transparent);
+}
+
+.kingu-orca-group-row {
+	display: flex;
+	align-items: center;
+}
+
+.kingu-orca-group-name {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+	padding: 8px 12px 8px 0;
+}
+
+.kingu-orca-group-title {
+	overflow: hidden;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.025em;
+	text-overflow: ellipsis;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.kingu-orca-group-children {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-orca-border) 30%, transparent);
+}
+
+.kingu-orca-subrow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 12px 6px 24px;
+}
+
+.kingu-orca-subrow > span:first-child {
+	overflow: hidden;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Ports: a workspace section, sticky header, `grid-cols-[4.5rem_minmax(0,1fr)]` rows. */
+.kingu-orca-port-section {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-orca-border) 40%, transparent);
+}
+
+.kingu-orca-port-section:first-child {
+	border-top: none;
+}
+
+.kingu-orca-port-section-header {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-orca-border) 40%, transparent);
+	background-color: var(--vscode-editorWidget-background);
+	color: var(--kingu-orca-foreground);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.kingu-orca-port-section-count {
+	color: var(--kingu-orca-muted);
+	opacity: 0.7;
+	font-family: var(--monaco-monospace-font);
+	font-size: 10px;
+	font-weight: 400;
+}
+
+.kingu-orca-port-rows {
+	padding: 0 4px 4px;
+}
+
+.kingu-orca-port-row {
+	display: grid;
+	grid-template-columns: 4.5rem minmax(0, 1fr);
+	align-items: start;
+	gap: 8px;
+	min-width: 0;
+	padding: 6px 8px;
+	border-radius: 6px;
+}
+
+.kingu-orca-port-row:hover {
+	background-color: color-mix(in srgb, var(--kingu-orca-accent) 50%, transparent);
+}
+
+.kingu-orca-port-number {
+	color: var(--kingu-orca-foreground);
+	font-family: var(--monaco-monospace-font);
+	font-size: 12px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	user-select: text;
+}
+
+.kingu-orca-port-detail {
+	min-width: 0;
+}
+
+.kingu-orca-port-process {
+	position: relative;
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	height: 20px;
+}
+
+.kingu-orca-port-process > span {
+	overflow: hidden;
+	color: var(--kingu-orca-muted);
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	user-select: text;
+}
+
+.kingu-orca-port-actions {
+	position: absolute;
+	inset: 0 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 2px;
+	border: 1px solid color-mix(in srgb, var(--kingu-orca-border) 40%, transparent);
+	border-radius: 6px;
+	background-color: var(--vscode-editorWidget-background);
+	opacity: 0;
+	transition: opacity 150ms;
+}
+
+.kingu-orca-port-row:hover .kingu-orca-port-actions,
+.kingu-orca-port-row:focus-within .kingu-orca-port-actions {
+	opacity: 1;
+}
+
+.kingu-orca-port-address {
+	overflow: hidden;
+	color: var(--kingu-orca-muted);
+	opacity: 0.7;
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	user-select: text;
+}
+
+/* `External Ports`: `sticky flex w-full items-center gap-1.5 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.05em]`. */
+.kingu-orca-external-toggle {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 8px 12px;
+	border: none;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-orca-border) 40%, transparent);
+	background-color: var(--vscode-editorWidget-background);
+	color: var(--kingu-orca-muted);
+	font: inherit;
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.05em;
+	text-align: left;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
+.kingu-orca-external-toggle:hover {
+	color: var(--kingu-orca-foreground);
+}
+
+.kingu-orca-external-toggle > .count {
+	margin-left: auto;
+	font-family: var(--monaco-monospace-font);
+	font-size: 10px;
+}
+
+.kingu-orca-external {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-orca-border) 60%, transparent);
+}
+
+/* The usage roster fills the ADE's `w-[360px]` popover. */
+.kingu-orca-surface .kingu-usage-roster {
+	width: auto;
+}
+
+/* #endregion */
