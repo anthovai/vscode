@@ -11,6 +11,7 @@ import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../.
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -23,7 +24,8 @@ import { IKinguUsageRosterOptions, renderKinguUsageRoster, updateKinguUsageRoste
 import { IKinguUsageSource, KinguUsageDetail, usageRows } from '../common/kinguUsageRoster.js';
 import { KINGU_SHOW_USAGE_COMMAND_ID } from '../browser/kinguUsagePage.contribution.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
-import { formatFooterWindow, formatOrcaMemory, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, orcaAwakeSettingsForMode, OrcaRateLimitState, providerFooterWindows, tightestFooterWindow } from '../common/kinguOrcaFooter.js';
+import { formatFooterWindow, formatOrcaMemory, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, tightestFooterWindow } from '../common/kinguOrcaFooter.js';
+import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
 import { KINGU_PROVIDER_LOGOS } from '../common/kinguProviderLogos.js';
 import { formatResetDuration, IKinguRateLimit, nextResetTickDelay } from '../common/kinguStatusBar.js';
 import './kinguOrcaService.js';
@@ -42,6 +44,9 @@ const RESOURCE_INTERVAL_MS = 60_000;
 const SSH_INTERVAL_MS = 30_000;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** The ADE's keep-awake mode, as the setting the Settings editor shows. */
+const AWAKE_SETTING_ID = orcaSettingIdForKey('computerAwakeMode') ?? 'kingu.agents.computerAwakeMode';
 
 /** Icons for the providers whose logo is not carried; codicons for the rest. */
 const FALLBACK_PROVIDER_ICONS: Readonly<Record<string, ThemeIcon>> = {
@@ -188,7 +193,6 @@ class KinguOrcaFooterContribution extends Disposable {
 	private _rateLimits: OrcaRateLimitState | undefined;
 	private _refreshing = false;
 	private _awakeStatus: IOrcaAwakeStatus = { mode: 'off', active: false };
-	private _configuredAwake: OrcaAwakeMode | undefined;
 	private _memoryBytes: number | undefined;
 	private _rosterDetail: KinguUsageDetail = 'detailed';
 
@@ -199,6 +203,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		@IKinguHostService private readonly _hostService: IKinguHostService,
 		@IQuickInputService private readonly _quickInputService: IQuickInputService,
 		@ICommandService private readonly _commandService: ICommandService,
+		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ILogService private readonly _logService: ILogService,
 	) {
 		super();
@@ -208,10 +213,11 @@ class KinguOrcaFooterContribution extends Disposable {
 			this._awakeStatus = status as IOrcaAwakeStatus;
 			this._renderAwake();
 		}));
-		this._register(this._orca.onPush('settings:changed')(([updates]) => {
-			const changed = updates as Record<string, unknown>;
-			if (changed.computerAwakeMode !== undefined || changed.keepComputerAwakeWhileAgentsRun !== undefined) {
-				this._configuredAwake = normalizeOrcaAwakeMode(changed.computerAwakeMode, changed.keepComputerAwakeWhileAgentsRun);
+		// Keep awake is a setting like any other here: the footer reads it from, and
+		// writes it to, the same place the Settings editor does, so the two cannot
+		// disagree about which mode is chosen.
+		this._register(this._configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AWAKE_SETTING_ID)) {
 				this._renderAwake();
 			}
 		}));
@@ -234,11 +240,6 @@ class KinguOrcaFooterContribution extends Disposable {
 			this._read('rateLimits:get', state => this._renderUsage(state as OrcaRateLimitState)),
 			this._read('agentAwake:getStatus', status => {
 				this._awakeStatus = status as IOrcaAwakeStatus;
-				this._renderAwake();
-			}),
-			this._read('settings:get', settings => {
-				const values = settings as Record<string, unknown>;
-				this._configuredAwake = normalizeOrcaAwakeMode(values.computerAwakeMode, values.keepComputerAwakeWhileAgentsRun);
 				this._renderAwake();
 			}),
 			this._read('updater:getStatus', status => this._renderUpdate(status as IOrcaUpdateStatus)),
@@ -418,7 +419,7 @@ class KinguOrcaFooterContribution extends Disposable {
 	private _renderAwake(): void {
 		// The configured mode wins over the service's until the service agrees,
 		// as in the ADE: a choice just made must read back as made.
-		const configured = this._configuredAwake ?? this._awakeStatus.mode;
+		const configured = normalizeOrcaAwakeMode(this._configurationService.getValue(AWAKE_SETTING_ID));
 		const agrees = this._awakeStatus.mode === configured;
 		const active = agrees ? this._awakeStatus.active : configured === 'on';
 		const label = awakeModeLabel(configured);
@@ -450,10 +451,8 @@ class KinguOrcaFooterContribution extends Disposable {
 		if (!picked) {
 			return;
 		}
-		this._configuredAwake = picked.mode;
-		this._renderAwake();
 		try {
-			await this._orca.invoke('settings:set', orcaAwakeSettingsForMode(picked.mode));
+			await this._configurationService.updateValue(AWAKE_SETTING_ID, picked.mode, ConfigurationTarget.USER);
 		} catch (error) {
 			this._logService.error('[kingu-footer] could not set keep awake', error);
 		}

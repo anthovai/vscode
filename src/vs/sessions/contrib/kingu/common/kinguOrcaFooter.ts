@@ -201,13 +201,3 @@ export function normalizeOrcaAwakeMode(mode: unknown, legacyAutoEnabled?: unknow
 	}
 	return legacyAutoEnabled === true ? 'auto' : 'off';
 }
-
-/**
- * `computerAwakeSettingsForMode`: what to write for a mode.
- *
- * Both keys, as the ADE writes them. Older ADE builds read only the boolean,
- * and approximate `on` with their `auto`.
- */
-export function orcaAwakeSettingsForMode(mode: OrcaAwakeMode): { readonly computerAwakeMode: OrcaAwakeMode; readonly keepComputerAwakeWhileAgentsRun: boolean } {
-	return { computerAwakeMode: mode, keepComputerAwakeWhileAgentsRun: mode !== 'off' };
-}

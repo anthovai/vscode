@@ -6,33 +6,41 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { Extensions as ConfigurationExtensions, IConfigurationNode, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { KINGU_BRIDGED_SETTINGS } from '../../../../platform/kinguSettings/common/kinguSettings.js';
+import { Extensions as ConfigurationExtensions, IConfigurationDefaults, IConfigurationNode, IConfigurationPropertySchema, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { orcaSettingId, orcaSettingsById, orcaSettingsPatch } from '../common/kinguOrcaSettings.js';
+import { KINGU_ORCA_SETTINGS, KINGU_ORCA_SETTINGS_PAGES } from '../common/kinguOrcaSettingsSchema.js';
 import './kinguOrcaService.js';
 
+const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
 /**
- * The ADE's settings, in this window's Settings editor.
+ * The ADE's settings, in this window's Settings editor — all of the ones the
+ * ADE's own settings pages offer, under those pages' names.
  *
  * Registered as ordinary configuration so they behave the way every other
- * setting in this window behaves — searchable, typed, overridable per profile,
- * editable as JSON. Nothing about them announces that the thing they change
- * lives in the ADE, which is the point of merging the two.
+ * setting here behaves: searchable, typed, editable as JSON. Nothing about them
+ * announces that what they change lives in the ADE, which is the point.
  *
- * The user's settings are the source of truth, and this pushes them down. The
- * other direction is carried too, but only to keep the editor honest: a
- * setting changed inside the ADE is written back so Settings does not go on
- * showing a value nothing holds any more.
+ * **Defaults come from the running ADE.** Several of the ADE's defaults depend
+ * on the machine — the workspace folder, the platform's fonts — so the schema
+ * carries none, and once the ADE answers, each setting's default becomes the
+ * value the ADE holds. The Settings editor then shows what is in force, and
+ * `settings.json` contains only what the user changed.
+ *
+ * **What the user sets wins, and goes down through `settings:set`** — the
+ * ADE's own handler rather than its store, because the handler is where a value
+ * is acted on (hooks installed, a proxy applied), not just saved.
  */
 class KinguSettingsBridgeContribution extends Disposable {
 
 	static readonly ID = 'kingu.contrib.settingsBridge';
 
-	/** Keys this window is mid-write on, so the echo back does not loop. */
-	private readonly _writing = new Set<string>();
+	/** The default override in force per id, kept so it can be withdrawn when the ADE's value moves. */
+	private readonly _defaults = new Map<string, IConfigurationDefaults>();
 
 	constructor(
 		@IKinguOrcaService private readonly _orca: IKinguOrcaService,
@@ -41,17 +49,19 @@ class KinguSettingsBridgeContribution extends Disposable {
 	) {
 		super();
 
-		// Adopt what the ADE already holds before listening, so a first run shows
-		// the ADE's real values rather than this window's defaults — and so the
-		// first edit is a change from what the user had, not from a default they
-		// never chose.
-		void this._adopt();
+		void this._reconcile();
 
 		this._register(this._configurationService.onDidChangeConfiguration(event => {
+			// A default moving is the ADE telling us its value; only what the user
+			// wrote goes back down.
+			if (event.source === ConfigurationTarget.DEFAULT) {
+				return;
+			}
 			const changed: Record<string, unknown> = {};
-			for (const setting of KINGU_BRIDGED_SETTINGS) {
-				if (event.affectsConfiguration(setting.id) && !this._writing.has(setting.id)) {
-					changed[setting.id] = this._configurationService.getValue(setting.id);
+			for (const setting of KINGU_ORCA_SETTINGS) {
+				const id = orcaSettingId(setting);
+				if (event.affectsConfiguration(id) && this._configurationService.inspect(id).user !== undefined) {
+					changed[id] = this._configurationService.getValue(id);
 				}
 			}
 			if (Object.keys(changed).length > 0) {
@@ -62,128 +72,91 @@ class KinguSettingsBridgeContribution extends Disposable {
 		// The ADE tells every window but the one that wrote, so this carries only
 		// changes made elsewhere — by the ADE itself, or by a migration.
 		this._register(this._orca.onPush('settings:changed')(([updates]) => {
-			void this._apply(toIds(updates as Record<string, unknown>));
+			this._adoptDefaults(orcaSettingsById(updates as Record<string, unknown>));
 		}));
+
+		this._register({ dispose: () => registry.deregisterDefaultConfigurations([...this._defaults.values()]) });
 	}
 
 	/**
-	 * Reconciles the two stores once, at startup, and the direction is per key.
-	 *
-	 * **A key the user has set wins**, and is pushed down to the ADE. The first
-	 * version of this adopted every key the other way and silently rewrote
-	 * `settings.json` with the ADE's values — so a setting the user had changed
-	 * by hand was reverted by opening the window, which is the worst way for a
-	 * settings bridge to be wrong.
-	 *
-	 * **A key the user has never set adopts the ADE's value**, so Settings shows
-	 * what is actually in force rather than a default nothing holds. Nothing is
-	 * written where the two already agree, so this does not turn every ADE
-	 * default into an explicit user setting.
+	 * Once, at startup: the ADE's values become the defaults, and anything the
+	 * user has set is sent down, since theirs is the value that should hold.
 	 */
-	private async _adopt(): Promise<void> {
+	private async _reconcile(): Promise<void> {
 		try {
-			const fromOrca = toIds(await this._orca.invoke<Record<string, unknown>>('settings:get'));
-			const toOrca: Record<string, unknown> = {};
-			const toWindow: Record<string, unknown> = {};
-			for (const setting of KINGU_BRIDGED_SETTINGS) {
-				const userValue = this._configurationService.inspect(setting.id).user?.value;
-				if (userValue !== undefined) {
-					toOrca[setting.id] = userValue;
-				} else if (fromOrca[setting.id] !== undefined) {
-					toWindow[setting.id] = fromOrca[setting.id];
+			this._adoptDefaults(orcaSettingsById(await this._orca.invoke<Record<string, unknown>>('settings:get')));
+			const userValues: Record<string, unknown> = {};
+			for (const setting of KINGU_ORCA_SETTINGS) {
+				const id = orcaSettingId(setting);
+				const value = this._configurationService.inspect(id).userValue;
+				if (value !== undefined) {
+					userValues[id] = value;
 				}
 			}
-			await this._apply(toWindow);
-			if (Object.keys(toOrca).length > 0) {
-				await this._write(toOrca);
+			if (Object.keys(userValues).length > 0) {
+				await this._write(userValues);
 			}
 		} catch (error) {
 			this._logService.error('[kingu-settings] could not reconcile the ADE settings', error);
 		}
 	}
 
-	/**
-	 * Sends a change to the ADE through its own `settings:set`.
-	 *
-	 * The handler, not the store: `settings:set` is where the ADE sanitizes a
-	 * value and then acts on it — installs or removes the agent status hooks,
-	 * applies a proxy, switches the app icon. Writing the store directly would
-	 * change what is saved and none of what happens.
-	 */
+	/** Makes the ADE's values this window's defaults, replacing any earlier ones. */
+	private _adoptDefaults(valuesById: Record<string, unknown>): void {
+		const withdrawn: IConfigurationDefaults[] = [];
+		const added: IConfigurationDefaults[] = [];
+		for (const [id, value] of Object.entries(valuesById)) {
+			const previous = this._defaults.get(id);
+			if (previous && previous.overrides[id] === value) {
+				continue;
+			}
+			if (previous) {
+				withdrawn.push(previous);
+			}
+			const next: IConfigurationDefaults = { overrides: { [id]: value }, donotCache: true };
+			this._defaults.set(id, next);
+			added.push(next);
+		}
+		if (withdrawn.length > 0) {
+			registry.deregisterDefaultConfigurations(withdrawn);
+		}
+		if (added.length > 0) {
+			registry.registerDefaultConfigurations(added);
+		}
+	}
+
 	private async _write(updatesById: Record<string, unknown>): Promise<void> {
 		try {
-			await this._orca.invoke('settings:set', toKeys(updatesById));
+			await this._orca.invoke('settings:set', orcaSettingsPatch(updatesById));
 		} catch (error) {
 			this._logService.error('[kingu-settings] could not write the ADE settings', error);
 		}
 	}
-
-	/**
-	 * Writes the ADE's values into this window's configuration.
-	 *
-	 * Skipped where they already agree: writing an identical value still stamps
-	 * the key into `settings.json`, which would turn every default the ADE
-	 * happens to hold into an explicit user setting the first time this ran.
-	 */
-	private async _apply(values: Record<string, unknown>): Promise<void> {
-		for (const [id, value] of Object.entries(values)) {
-			if (this._configurationService.getValue(id) === value) {
-				continue;
-			}
-			this._writing.add(id);
-			try {
-				await this._configurationService.updateValue(id, value, ConfigurationTarget.USER);
-			} catch (error) {
-				this._logService.error(`[kingu-settings] could not apply ${id}`, error);
-			} finally {
-				this._writing.delete(id);
-			}
-		}
-	}
 }
 
-const idByKey = new Map(KINGU_BRIDGED_SETTINGS.map(setting => [setting.key, setting.id]));
-const keyById = new Map(KINGU_BRIDGED_SETTINGS.map(setting => [setting.id, setting.key]));
-
-/** The ADE's settings object, as this window's setting ids; unbridged keys are dropped. */
-function toIds(settings: Record<string, unknown>): Record<string, unknown> {
-	const byId: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(settings ?? {})) {
-		const id = idByKey.get(key);
-		if (id !== undefined && value !== undefined) {
-			byId[id] = value;
+/**
+ * One configuration node per ADE settings page, in the ADE's order, so the
+ * Settings editor files each setting where the ADE does.
+ */
+const nodes: IConfigurationNode[] = KINGU_ORCA_SETTINGS_PAGES.map((page, index) => {
+	const properties: Record<string, IConfigurationPropertySchema> = {};
+	for (const setting of KINGU_ORCA_SETTINGS) {
+		if (setting.page !== page.id) {
+			continue;
 		}
+		properties[orcaSettingId(setting)] = {
+			type: setting.type as IConfigurationPropertySchema['type'],
+			...(setting.enum ? { enum: [...setting.enum] } : {}),
+			...(setting.description ? { description: setting.description } : {}),
+		};
 	}
-	return byId;
-}
-
-/** The reverse of {@link toIds}. */
-function toKeys(updatesById: Record<string, unknown>): Record<string, unknown> {
-	const byKey: Record<string, unknown> = {};
-	for (const [id, value] of Object.entries(updatesById)) {
-		const key = keyById.get(id);
-		if (key !== undefined) {
-			byKey[key] = value;
-		}
-	}
-	return byKey;
-}
-
-const properties: IConfigurationNode['properties'] = {};
-for (const setting of KINGU_BRIDGED_SETTINGS) {
-	properties[setting.id] = {
-		type: setting.type,
-		default: setting.default,
-		description: setting.description,
-		...(setting.enum ? { enum: [...setting.enum] } : {}),
-		...(setting.enumDescriptions ? { enumDescriptions: [...setting.enumDescriptions] } : {}),
+	return {
+		id: `kingu.${page.id}`,
+		title: localize('kingu.settings.pageTitle', "Kingu: {0}", page.title),
+		order: index,
+		properties,
 	};
-}
-
-Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
-	id: 'kingu',
-	title: localize('kingu.settings.title', "Kingu"),
-	properties,
 });
+registry.registerConfigurations(nodes);
 
 registerWorkbenchContribution2(KinguSettingsBridgeContribution.ID, KinguSettingsBridgeContribution, WorkbenchPhase.AfterRestored);

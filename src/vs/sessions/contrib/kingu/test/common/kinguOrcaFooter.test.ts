@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { formatFooterWindow, formatOrcaMemory, formatOrcaWindowLabel, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, orcaAwakeSettingsForMode, providerFooterWindows, tightestFooterWindow } from '../../common/kinguOrcaFooter.js';
+import { formatFooterWindow, formatOrcaMemory, formatOrcaWindowLabel, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, providerFooterWindows, tightestFooterWindow } from '../../common/kinguOrcaFooter.js';
 
 const NOW = 1_000_000_000_000;
 const HOUR = 3_600_000;
@@ -71,9 +71,9 @@ suite('kinguOrcaFooter', () => {
 			['5h', 'wk', '2wk', '3d', '90m', '2.61 GB', '840.0 MB', '900 KB']);
 	});
 
-	test('reads the legacy keep-awake boolean as auto, and writes both keys', () => {
+	test('reads the legacy keep-awake boolean as auto', () => {
 		assert.deepStrictEqual(
-			[normalizeOrcaAwakeMode(undefined, true), normalizeOrcaAwakeMode(undefined, false), normalizeOrcaAwakeMode('on', false), orcaAwakeSettingsForMode('off'), orcaAwakeSettingsForMode('on')],
-			['auto', 'off', 'on', { computerAwakeMode: 'off', keepComputerAwakeWhileAgentsRun: false }, { computerAwakeMode: 'on', keepComputerAwakeWhileAgentsRun: true }]);
+			[normalizeOrcaAwakeMode(undefined, true), normalizeOrcaAwakeMode(undefined, false), normalizeOrcaAwakeMode('on', false)],
+			['auto', 'off', 'on']);
 	});
 });
