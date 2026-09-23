@@ -269,6 +269,8 @@ import './contrib/kingu/electron-browser/kinguTasksPage.contribution.js';
 // Kingu: the vault's desktop-only knowledge (shell environment, WSL distributions)
 import './contrib/kingu/electron-browser/kinguVaultEnvironment.contribution.js';
 import './contrib/kingu/electron-browser/kinguWorkbench.contribution.js';
+// Kingu: the ADE's settings, offered in this window's Settings editor
+import './contrib/kingu/electron-browser/kinguSettingsBridge.contribution.js';
 
 //#endregion
 
