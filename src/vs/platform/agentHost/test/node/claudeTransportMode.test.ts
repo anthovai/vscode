@@ -58,6 +58,9 @@ suite('claudeTransportMode', () => {
 			// An API key reports through `apiKeySource` and leaves `tokenSource`
 			// at its `'none'` sentinel, so testing `tokenSource` alone misses it.
 			['api key', { tokenSource: 'none', apiKeySource: 'ANTHROPIC_API_KEY', apiProvider: 'firstParty' }, true],
+			// SDK 0.3.258 with a `claude login` subscription on Windows: no
+			// `tokenSource` at all, only the subscription and its account.
+			['subscription login, no token source', { email: 'a@example.com', organization: 'Org', subscriptionType: 'Claude Team', apiProvider: 'firstParty' }, true],
 			// The rows a later "simplification" silently breaks: for third-party
 			// backends the SDK documents the credential fields as absent, because
 			// auth is external (AWS creds, gcloud ADC).

@@ -98,6 +98,10 @@ export function isClaudeAccountSetUp(account: AccountInfo | undefined): boolean 
 	}
 	// `tokenSource` spells "no credential" as `'none'` rather than absence;
 	// `apiKeySource` has only ever been observed absent in that case.
+	// Kingu: SDK 0.3.258 reports a `claude login` subscription by its
+	// `subscriptionType` (and `email`) with `tokenSource` absent, while an empty
+	// home still reports `tokenSource: 'none'` and no subscription.
 	return (account.tokenSource !== undefined && account.tokenSource !== 'none')
-		|| account.apiKeySource !== undefined;
+		|| account.apiKeySource !== undefined
+		|| !!account.subscriptionType;
 }
