@@ -8,7 +8,9 @@ import { $, addDisposableListener, append, clearNode, EventType, isHTMLElement }
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { SelectBox } from '../../../../base/browser/ui/selectBox/selectBox.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { constObservable, IObservable } from '../../../../base/common/observable.js';
+import { constObservable, IObservable, waitForState } from '../../../../base/common/observable.js';
+import { timeout } from '../../../../base/common/async.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { isLinux, isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
@@ -22,6 +24,7 @@ import { defaultSelectBoxStyles } from '../../../../platform/theme/browser/defau
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { AbstractCustomView } from '../../../services/customView/browser/customView.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
+import { ISessionsRecentWorkspacesService } from '../../../services/sessions/browser/sessionsRecentWorkspacesService.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
 import {
 	getLocalHostLabel,
@@ -43,7 +46,7 @@ import {
 	reasonLabel,
 	resolveVisibleTaskProvider,
 } from '../common/kinguTasks.js';
-import { getRepoBackedSummary, getRepoHostId, IKinguRepo, isTaskEligibleRepo, resolveRepoSelection } from '../common/kinguTasksGitHub.js';
+import { getRepoBackedSummary, getRepoGitHubSlug, getRepoHostId, IKinguGitHubSlug, IKinguRepo, isTaskEligibleRepo, resolveRepoSelection } from '../common/kinguTasksGitHub.js';
 import { KINGU_PROVIDER_LOGOS, IKinguProviderLogo } from '../common/kinguProviderLogos.js';
 import { lucideIcon, logoIcon } from './kinguOrcaFooterParts.js';
 import { KinguTasksGitHubList } from './kinguTasksGitHubList.js';
@@ -83,6 +86,14 @@ function labelOf(provider: KinguTaskProvider): string {
 	return optionOf(provider).label;
 }
 
+/** Folders the ADE refused as projects (not git repositories), not offered again this session. */
+const refusedFolders = new Set<string>();
+
+/** One spelling for a local path, as both the ADE (`E:/a/b`) and a file URI (`e:\a\b`) write it. */
+function normalizeRepoPath(path: string): string {
+	return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
 const HOST_LABEL = getLocalHostLabel(isMacintosh ? 'mac' : isWindows ? 'windows' : isLinux ? 'linux' : 'other');
 
 /**
@@ -104,6 +115,7 @@ class KinguTasksView extends AbstractCustomView {
 	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList | KinguTasksGitHubList>());
 	private _repos: readonly IKinguRepo[] = [];
 	private _repoSelection: readonly string[] = [];
+	private readonly _repoSources = new Map<string, IKinguGitHubSlug>();
 	private _listKey: string | undefined;
 	private _container: HTMLElement | undefined;
 	private _bar: HTMLElement | undefined;
@@ -123,6 +135,7 @@ class KinguTasksView extends AbstractCustomView {
 		@INotificationService private readonly _notificationService: INotificationService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ICustomViewService private readonly _customViewService: ICustomViewService,
+		@ISessionsRecentWorkspacesService private readonly _recentWorkspacesService: ISessionsRecentWorkspacesService,
 	) {
 		super();
 		this._register(this._orca.onPush('settings:changed')(([updates]) => {
@@ -157,7 +170,11 @@ class KinguTasksView extends AbstractCustomView {
 			this._orca.invoke<IKinguJiraStatus>('jira:status'),
 			this._orca.invoke<IKinguRepo[]>('repos:list'),
 		]);
-		this._repos = repos.status === 'fulfilled' ? (repos.value ?? []).filter(isTaskEligibleRepo) : [];
+		let allRepos = repos.status === 'fulfilled' ? repos.value ?? [] : [];
+		if (await this._addAgentsFolders(allRepos)) {
+			allRepos = await this._orca.invoke<IKinguRepo[]>('repos:list').catch(() => allRepos) ?? allRepos;
+		}
+		this._repos = allRepos.filter(isTaskEligibleRepo);
 		this._settings = settings.status === 'fulfilled' ? settings.value ?? {} : {};
 		this._preflight = preflight.status === 'fulfilled' ? preflight.value : undefined;
 		this._linear = linear.status === 'fulfilled' ? linear.value : undefined;
@@ -165,6 +182,44 @@ class KinguTasksView extends AbstractCustomView {
 		this._repoSelection = resolveRepoSelection(this._repos, this._settings.defaultRepoSelection);
 		this._loaded = true;
 		this._draw();
+	}
+
+	/**
+	 * The Agents window's folders are this program's projects, so the ADE should
+	 * know them: any local folder it does not have yet is added the way the ADE's
+	 * own Add Project does (`repos:add`), which is also what its GitHub reads
+	 * require of a path. A folder that is not a git repository is refused there
+	 * and not asked about again this session.
+	 */
+	private async _addAgentsFolders(repos: readonly IKinguRepo[]): Promise<boolean> {
+		await Promise.race([
+			waitForState(this._recentWorkspacesService.historyLoadState, state => state !== 'loading'),
+			timeout(5000),
+		]);
+		const known = new Set(repos.map(repo => normalizeRepoPath(repo.path)));
+		const folders = new Map<string, string>();
+		for (const recent of this._recentWorkspacesService.getRecentWorkspaces(false, true)) {
+			for (const folder of recent.workspace.folders) {
+				const key = normalizeRepoPath(folder.root.fsPath);
+				if (folder.root.scheme === Schemas.file && !known.has(key) && !refusedFolders.has(key)) {
+					folders.set(key, folder.root.fsPath);
+				}
+			}
+		}
+		let added = false;
+		for (const [key, path] of folders) {
+			try {
+				const result = await this._orca.invoke<{ repo?: IKinguRepo; error?: unknown }>('repos:add', { path, kind: 'git' });
+				if (result?.repo) {
+					added = true;
+				} else {
+					refusedFolders.add(key);
+				}
+			} catch {
+				refusedFolders.add(key);
+			}
+		}
+		return added;
 	}
 
 	private _visibleProviders(): KinguTaskProvider[] {
@@ -202,7 +257,11 @@ class KinguTasksView extends AbstractCustomView {
 		this._orca.invoke('settings:set', { defaultRepoSelection }).catch(() => {
 			this._notificationService.error(localize('kingu.tasks.saveProjectsFailed', "Failed to save the selected projects."));
 		});
-		// Only the bar's summary changes; redrawing the list would take focus from its open picker.
+		this._redrawBar();
+	}
+
+	/** Only the bar's summary changes; redrawing the list would take focus from its open picker. */
+	private _redrawBar(): void {
 		const bar = this._bar;
 		if (bar) {
 			this._drawn.clear();
@@ -261,7 +320,7 @@ class KinguTasksView extends AbstractCustomView {
 		const reason = this._reason(taskSource);
 		const selected = this._selectedRepos();
 		const summary = taskSource === 'github' || taskSource === 'gitlab'
-			? getRepoBackedSummary(labelOf(taskSource), [...new Set(selected.map(repo => this._hostLabel(repo)))], reason ? reasonLabel(reason) : undefined, selected)
+			? getRepoBackedSummary(labelOf(taskSource), [...new Set(selected.map(repo => this._hostLabel(repo)))], reason ? reasonLabel(reason) : undefined, selected, repo => this._repoSources.get(repo.id) ?? getRepoGitHubSlug(repo))
 			: getTaskSourceSummary({
 				provider: taskSource,
 				providerLabel: labelOf(taskSource),
@@ -362,6 +421,13 @@ class KinguTasksView extends AbstractCustomView {
 					repos: this._repos,
 					hostLabel: repo => this._hostLabel(repo),
 					setSelection: ids => this._setRepoSelection(ids),
+					setSource: (repoId, source) => {
+						const known = this._repoSources.get(repoId);
+						if (known?.owner !== source.owner || known?.repo !== source.repo || known?.host !== source.host) {
+							this._repoSources.set(repoId, source);
+							this._redrawBar();
+						}
+					},
 				}, this._repoSelection);
 			}
 			content.appendChild(this._list.value.element);

@@ -1416,6 +1416,26 @@ suite('ClaudeAgent', () => {
 		});
 	});
 
+	test('fromSdkModelInfo names subscription models by version, as their description does', () => {
+		const models = [
+			{ value: 'opus[1m]', displayName: 'Opus (1M context)', description: 'Opus 5 with 1M context · Best for everyday, complex tasks' },
+			{ value: 'claude-fable-5[1m]', displayName: 'Fable', description: 'Fable 5 · Most capable for your hardest and longest-running tasks · $10/$50 per Mtok' },
+			{ value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 5 · Efficient for routine tasks' },
+			{ value: 'haiku', displayName: 'Haiku', description: 'Haiku 4.5 · Fastest for quick answers' },
+			{ value: 'custom', displayName: 'My Model', description: 'Something else entirely' },
+		];
+		assert.deepStrictEqual(models.map(m => {
+			const projected = fromSdkModelInfo(m, 'claude');
+			return [projected.name, projected.maxContextWindow];
+		}), [
+			['Opus 5 (1M context)', 1_000_000],
+			['Fable 5', 1_000_000],
+			['Sonnet 5', undefined],
+			['Haiku 4.5', undefined],
+			['My Model', undefined],
+		]);
+	});
+
 	test('signed-in probe flips inferred-native to proxy (allowSignedOutWhenUsable)', async () => {
 		// The fix for the startup catch-22: with the exp flag on and the SDK
 		// reporting a Claude account, a signed-OUT user resolves to native — which

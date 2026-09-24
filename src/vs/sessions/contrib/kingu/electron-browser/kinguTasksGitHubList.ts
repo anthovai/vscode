@@ -51,6 +51,8 @@ export interface IKinguGitHubListHost {
 	hostLabel(repo: IKinguRepo): string;
 	/** The reader changed the picked projects; `undefined` is "All projects". */
 	setSelection(ids: readonly string[] | undefined): void;
+	/** The repo a project's list was read from, which for a fork can differ from its parent. */
+	setSource(repoId: string, source: IKinguGitHubSlug): void;
 }
 
 /**
@@ -398,8 +400,12 @@ export class KinguTasksGitHubList extends Disposable {
 							// The first page carries no `page`, as the ADE sends it.
 							...(page > 1 ? { page } : {}),
 						});
+						const source = (this._kind === 'prs' ? result?.sources?.prs ?? result?.sources?.issues : result?.sources?.issues ?? result?.sources?.prs) ?? undefined;
+						if (source) {
+							this._host.setSource(repo.id, source);
+						}
 						if (repos.length === 1) {
-							this._sources = (this._kind === 'prs' ? result?.sources?.prs ?? result?.sources?.issues : result?.sources?.issues ?? result?.sources?.prs) ?? undefined;
+							this._sources = source;
 						}
 						const error = result?.errors?.[this._kind === 'prs' ? 'prs' : 'issues']?.message;
 						return { items: (result?.items ?? []).map(item => ({ ...item, repoId: repo.id })), error };

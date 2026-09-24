@@ -280,9 +280,9 @@ export function getWorkItemStatus(item: IKinguGitHubWorkItem): { tone: 'open' | 
 }
 
 /** The repo-backed summary chip (`getRepoBackedTaskSourceSummary`). */
-export function getRepoBackedSummary(providerLabel: string, hostLabels: readonly string[], availability: string | undefined, selected: readonly IKinguRepo[]): { label: string; title: string } {
+export function getRepoBackedSummary(providerLabel: string, hostLabels: readonly string[], availability: string | undefined, selected: readonly IKinguRepo[], sourceOf: (repo: IKinguRepo) => IKinguGitHubSlug | undefined = getRepoGitHubSlug): { label: string; title: string } {
 	const identities = [...new Set(selected.map(repo => {
-		const github = getRepoGitHubSlug(repo);
+		const github = sourceOf(repo);
 		return github ? `${github.owner}/${github.repo}` : undefined;
 	}).filter((value): value is string => !!value))];
 	const hostLabel = hostLabels.length === 0

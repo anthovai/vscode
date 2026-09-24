@@ -173,10 +173,30 @@ export function fromSdkModelInfo(m: ModelInfo, provider: AgentProvider): IAgentM
 		// SDK-canonical id (`m.value`, e.g. `claude-sonnet-4-5-20250929`). Native
 		// ids are SDK format end to end; `toSdkModelId` is identity at this seam.
 		id: m.value,
-		name: m.displayName,
+		name: claudeModelDisplayName(m),
+		...(isOneMillionContext(m) ? { maxContextWindow: 1_000_000 } : {}),
 		supportsVision: false,
 		...(configSchema ? { configSchema } : {}),
 	};
+}
+
+/**
+ * Kingu: the SDK names subscription models by family alone ("Opus (1M context)",
+ * "Sonnet"), which leaves a picker unable to say which Opus it is. Its
+ * description leads with the versioned name ("Opus 5 with 1M context · …"), so
+ * that is used when it names the same family; anything else keeps the SDK's name.
+ */
+export function claudeModelDisplayName(m: Pick<ModelInfo, 'displayName' | 'description'>): string {
+	const head = m.description?.split(' · ')[0]?.trim();
+	const family = m.displayName.split(/[\s(]/)[0]?.toLowerCase();
+	if (!head || !family || !head.toLowerCase().startsWith(`${family} `) || !/\d/.test(head)) {
+		return m.displayName;
+	}
+	return head.replace(/ with (?<context>\S+ context)$/i, ' ($<context>)');
+}
+
+function isOneMillionContext(m: Pick<ModelInfo, 'value' | 'displayName'>): boolean {
+	return /\[1m\]$/i.test(m.value) || /1M context/i.test(m.displayName);
 }
 
 // Narrowing an arbitrary runtime value to the closed `ClaudePermissionMode`
