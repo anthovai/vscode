@@ -13,10 +13,14 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
  * - Voice Mode is off: it streams audio to Microsoft's voice service, which
  *   Kingu does not use (`product.json` carries no `voiceWsUrl`), so its button
  *   stays out of the chat input. On-device dictation is unaffected.
+ * - The color themes are Kingu's (extensions/theme-kingu), in the ADE's palette.
  */
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerDefaultConfigurations([{
 	overrides: {
 		'agents.voice.enabled': false,
 		'agents.voice.showButton': false,
+		'workbench.colorTheme': 'Kingu Dark',
+		'workbench.preferredDarkColorTheme': 'Kingu Dark',
+		'workbench.preferredLightColorTheme': 'Kingu Light',
 	},
 }]);

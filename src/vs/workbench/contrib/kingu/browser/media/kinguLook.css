@@ -1,0 +1,43 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * Kingu's look over the workbench, in both windows: the ADE's type and shape.
+ * Colors are the Kingu Dark / Kingu Light themes (extensions/theme-kingu); this
+ * holds what a color theme cannot set. Kept in Kingu's own file so a VS Code
+ * sync never conflicts on it.
+ */
+
+/* The ADE's UI face (OFL, see fonts/Geist-OFL.txt). Scripts it lacks, Thai among them, fall back to the system face. */
+@font-face {
+	font-family: 'Geist';
+	src: url('./fonts/Geist-Variable.woff2') format('woff2');
+	font-weight: 100 900;
+	font-display: block;
+}
+
+/*
+ * `body` outranks the workbench's own `.monaco-workbench.windows` (which loads
+ * after this file) while its `:lang(zh-Hans)`-style rules still outrank this,
+ * so Chinese, Japanese and Korean keep their system faces.
+ */
+body .monaco-workbench.windows,
+body .monaco-workbench.mac,
+body .monaco-workbench.linux {
+	font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/*
+ * The ADE's radius scale (`--radius: 0.625rem`, sm 0.6x, md 0.8x, lg 1x, xl 1.4x)
+ * on the workbench's corner-radius tokens, which the theme service writes on
+ * `.monaco-workbench`; the doubled class outranks it.
+ */
+.monaco-workbench.monaco-workbench {
+	--vscode-cornerRadius-xSmall: 4px;
+	--vscode-cornerRadius-small: 6px;
+	--vscode-cornerRadius-medium: 8px;
+	--vscode-cornerRadius-large: 10px;
+	--vscode-cornerRadius-xLarge: 14px;
+}

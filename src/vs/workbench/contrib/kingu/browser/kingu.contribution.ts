@@ -17,6 +17,7 @@ import { KINGU_SETUP_COMMAND_ID, KINGU_VENDOR_ID, kinguVendorConfigurationSchema
 import { KinguLanguageModelProvider } from './kinguLanguageModelProvider.js';
 import { runKinguSetupFlow } from './kinguSetupFlow.js';
 import '../common/kinguProductDefaults.js';
+import './media/kinguLook.css';
 
 /**
  * Publishes Kingu's own model vendor.
