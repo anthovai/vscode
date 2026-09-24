@@ -21,6 +21,7 @@ last are pasted into `chatWorkingLogo.ts` and the aquarium's `logoPath.ts`.
 
 import io
 import os
+import re
 import struct
 import sys
 
@@ -226,6 +227,8 @@ COPILOT_GLYPHS = ['copilot', 'copilot-warning', 'copilot-large', 'copilot-warnin
 	'copilot-not-connected', 'copilot-unavailable', 'copilot-in-progress', 'copilot-error', 'copilot-success',
 	'copilot-snooze', 'copilot-compact', 'copilot-dot', 'copilot-dot-compact']
 VSCODE_GLYPHS = ['vscode', 'vscode-insiders', 'vscode-insiders-outline']
+# Snap (Extensions renamed) shows the zap bolt, so its icon is not VS Code's four squares.
+BORROWED_GLYPHS = {'extensions': 'zap', 'extensions-large': 'zap'}
 
 
 class PolyPen(BasePen):
@@ -264,7 +267,10 @@ class Codicons:
 	def __init__(self, ttf):
 		self.font = TTFont(ttf)
 		self.cmap = self.font.getBestCmap()
-		self.by_name = {name: code for code, name in self.cmap.items()}
+		# Codicon names by codepoint as the product registers them; the font's own glyph names differ for some (zap).
+		with open(path('src', 'vs', 'base', 'common', 'codiconsLibrary.ts'), encoding='utf8') as library:
+			registered = {name: int(code, 16) for name, code in re.findall(r"register\('([\w-]+)', 0x([0-9a-fA-F]+)\)", library.read())}
+		self.by_name = {**{name: code for code, name in self.cmap.items()}, **registered}
 		self.glyph_set = self.font.getGlyphSet()
 		self.n = UPM * FONT_RASTER
 
@@ -323,8 +329,11 @@ def glyph_from_raster(image):
 	return pen.glyph()
 
 
-def marks_font(family, codicons, glyph_marks):
-	"""A font with each named codicon glyph drawn as its mark: `glyph_marks` maps a mark to the glyph names it takes."""
+def marks_font(family, codicons, glyph_marks, borrowed=None):
+	"""
+	A font with each named codicon glyph drawn as its mark: `glyph_marks` maps a mark to the glyph names it takes.
+	`borrowed` maps a glyph name to another codicon's, whose outline it takes as it is.
+	"""
 	n = codicons.n
 	gap = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (32 * FONT_RASTER + 1, 32 * FONT_RASTER + 1))
 	order, glyphs, char_map = ['.notdef'], {'.notdef': TTGlyphPen(None).glyph()}, {}
@@ -337,6 +346,14 @@ def marks_font(family, codicons, glyph_marks):
 		image = plain if badge is None else cv2.bitwise_or(cv2.bitwise_and(plain, cv2.bitwise_not(cv2.dilate(badge, gap))), badge)
 		glyph_name = f'uni{code:04X}'
 		glyphs[glyph_name] = glyph_from_raster(image)
+		order.append(glyph_name)
+		char_map[code] = glyph_name
+	for name, source in (borrowed or {}).items():
+		code = codicons.by_name[name]
+		pen = TTGlyphPen(codicons.glyph_set)
+		codicons.glyph_set[codicons.cmap[codicons.by_name[source]]].draw(pen)
+		glyph_name = f'uni{code:04X}'
+		glyphs[glyph_name] = pen.glyph()
 		order.append(glyph_name)
 		char_map[code] = glyph_name
 	builder = FontBuilder(UPM, isTTF=True)
@@ -472,7 +489,7 @@ def main():
 
 	# The codicon overlay, in both windows: Arkai where Copilot was, the IDE where VS Code was.
 	codicons = Codicons(path('node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'))
-	font, ranges = marks_font('kingu-marks', codicons, [(arkai, COPILOT_GLYPHS), (ide, VSCODE_GLYPHS)])
+	font, ranges = marks_font('kingu-marks', codicons, [(arkai, COPILOT_GLYPHS), (ide, VSCODE_GLYPHS)], BORROWED_GLYPHS)
 	write('src/vs/base/browser/ui/codicons/codicon/kingu-marks.ttf', font)
 	print('\nunicode-range:', ranges)
 

@@ -1,4 +1,8 @@
 * text=auto eol=lf
 
+# Kingu: images and fonts are binary; under text=auto a PNG was stored with the CR stripped from its signature.
+*.png binary
+*.woff binary
+
 # Enable Git LFS for SQLite database files
 *.sqlite filter=lfs diff=lfs merge=lfs -text
