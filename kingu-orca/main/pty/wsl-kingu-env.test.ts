@@ -63,12 +63,14 @@ describe('addKinguWslInteropEnv', () => {
       KINGU_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Kingu',
       KINGU_CLI_COMMAND: 'kingu-ide',
       KINGU_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Kingu\\resources\\bin\\kingu.exe',
+      KINGU_OMP_FRESH_CONFIG: 'C:\\Kingu\\fresh-session.yml',
       KINGU_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\kingu-agent-status.ts',
       KINGU_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\kingu-agent-status.ts',
       KINGU_PANE_KEY: 'tab-1:leaf-1',
       KINGU_TAB_ID: 'tab-1',
       KINGU_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
       KINGU_AGENT_LAUNCH_TOKEN: 'launch-secret',
+      KINGU_OPENCODE_AGENT: 'opencode2',
       KINGU_AGENT_HOOK_PORT: '4567',
       KINGU_AGENT_HOOK_TOKEN: 'token',
       KINGU_AGENT_HOOK_ENV: 'dev',
@@ -87,11 +89,13 @@ describe('addKinguWslInteropEnv', () => {
     expect(env.WSLENV).toContain('KINGU_CLI_COMMAND/u')
     expect(env.WSLENV).toContain('KINGU_CODEX_LAUNCH_PREFLIGHT/p')
     expect(env.WSLENV).toContain('KINGU_OMP_STATUS_EXTENSION/p')
+    expect(env.WSLENV).toContain('KINGU_OMP_FRESH_CONFIG/p')
     expect(env.WSLENV).not.toContain('KINGU_PRIME_AGENT_STATUS_EXTENSION')
     expect(env.WSLENV).toContain('KINGU_PANE_KEY/u')
     expect(env.WSLENV).toContain('KINGU_TAB_ID/u')
     expect(env.WSLENV).toContain('KINGU_WORKTREE_ID/u')
     expect(env.WSLENV).toContain('KINGU_AGENT_LAUNCH_TOKEN/u')
+    expect(env.WSLENV).toContain('KINGU_OPENCODE_AGENT/u')
     expect(env.WSLENV).toContain('KINGU_AGENT_HOOK_PORT/u')
     expect(env.WSLENV).toContain('KINGU_AGENT_HOOK_TOKEN/u')
     expect(env.WSLENV).toContain('KINGU_AGENT_HOOK_ENV/u')
@@ -205,6 +209,12 @@ describe('addKinguWslInteropEnv', () => {
     addKinguWslInteropEnv(env)
 
     expect(env.WSLENV).toBe('KINGU_TERMINAL_HANDLE/u:KINGU_SHELL_READY_ROOT/p')
+  })
+
+  it('crosses the inline-image protocol hint into the guest untranslated (/u)', () => {
+    const env: Record<string, string> = { KINGU_IMAGE_PROTOCOL: 'kitty' }
+    addKinguWslInteropEnv(env)
+    expect(env.WSLENV).toContain('KINGU_IMAGE_PROTOCOL/u')
   })
 
   it('marks the WSL hook relay version for import on relay spawn envs', () => {

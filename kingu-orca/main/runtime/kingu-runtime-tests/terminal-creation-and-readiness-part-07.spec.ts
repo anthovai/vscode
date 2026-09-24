@@ -3,9 +3,10 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
-  getAgentPromptSubmitDelayMs
+  resolveAgentPromptSubmitDelayForAgent
 } from '../../../shared/agent-prompt-injection'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { KINGU_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/kingu-dispatch-status-prompt'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { KinguRuntimeService } from '../kingu-runtime'
 import { acknowledgeAgentPromptSubmit } from '../kingu-runtime-test-mocks.spec'
@@ -509,6 +510,46 @@ describe('KinguRuntimeService', () => {
     }
   })
 
+  it.each([
+    ['claude', true],
+    ['an unknown agent', true],
+    ['codex', false]
+  ] as const)('types the lead line for %s: %s', async (agent, typesLead) => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new KinguRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(
+        `path:${TEST_WORKTREE_PATH}`,
+        agent === 'an unknown agent' ? undefined : { launchAgent: agent }
+      )
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'the brief', {
+        leadLine: KINGU_DISPATCH_PROMPT_LEAD_LINE
+      })
+      await vi.runAllTimersAsync()
+      await sendPromise
+
+      const paste = buildAgentPromptPasteBytes('the brief')
+      expect(writes).toEqual([
+        typesLead ? `${KINGU_DISPATCH_PROMPT_LEAD_LINE} ${paste}` : paste,
+        '\r'
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['claude', 'codex'] as const)(
     'waits for %s composer output frames to settle before one submit',
     async (agent) => {
@@ -587,7 +628,7 @@ describe('KinguRuntimeService', () => {
     (Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]).filter(
       (agent) => agent !== 'claude' && agent !== 'codex'
     )
-  )('holds Enter for the full open-loop submit delay for %s', async (agent) => {
+  )('submits through the agent-specific PTY timing policy for %s', async (agent) => {
     vi.useFakeTimers()
     try {
       const writes: string[] = []
@@ -596,7 +637,11 @@ describe('KinguRuntimeService', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
           writes.push(data)
-          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+          if (agent === 'omp' && data.endsWith('\r')) {
+            runtime.onPtyData('pty-bg', '\x1b]0;Codex working\x07', Date.now())
+          } else {
+            acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+          }
           return true
         },
         kill: () => true,
@@ -606,11 +651,21 @@ describe('KinguRuntimeService', () => {
         launchAgent: agent
       })
 
-      const submitDelayMs = getAgentPromptSubmitDelayMs(
+      // The agent's own policy, not the byte-only delay: antigravity adds a per-line settle
+      // (#21665), and advancing fake timers by less than the policy waits leaves the submit
+      // pending until the real 30 s timeout.
+      const submitDelayMs = resolveAgentPromptSubmitDelayForAgent(
         process.platform,
-        Buffer.byteLength(buildAgentPromptPasteBytes('review this change'), 'utf8')
+        'review this change',
+        agent
       )
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      if (agent === 'omp') {
+        await sendPromise
+        expect(writes).toEqual([`${buildAgentPromptPasteBytes('review this change')}\r`])
+        return
+      }
+
       await vi.advanceTimersByTimeAsync(submitDelayMs - 1)
       expect(writes).not.toContain('\r')
 

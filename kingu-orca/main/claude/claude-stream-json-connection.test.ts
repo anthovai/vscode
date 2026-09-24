@@ -209,6 +209,20 @@ describe('Claude stream-json connection', () => {
     expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
   })
 
+  it("drops a CLAUDE_CONFIG_DIR from Kingu's own process env: only the launch may name a home", async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/kingu/process/claude')
+    vi.stubEnv('KINGU_CONNECTION_MARKER', 'inherited')
+    const scenario = scriptScenario([HOLD_OPEN])
+    await open(launchFor(scenario))
+
+    await until(() => readReportSafely(scenario), 'the scripted CLI report')
+    expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
+    expect(childEnv().KINGU_CONNECTION_MARKER).toBe('inherited')
+
+    await open(launchFor(scenario, { CLAUDE_CONFIG_DIR: '/accounts/managed/home' }))
+    expect(childEnv().CLAUDE_CONFIG_DIR).toBe('/accounts/managed/home')
+  })
+
   it('settles a send only once the frame reached the child, and replays reach onMessage', async () => {
     const replay = {
       type: 'user',

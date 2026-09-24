@@ -1,8 +1,19 @@
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { KinguRuntimeWithResolveWaiter } from './kingu-runtime-resolve-waiter'
 import type { RuntimeCommandSurfaceHost } from './kingu-runtime-core'
+import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
+import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 
-class KinguRuntimeService extends KinguRuntimeWithResolveWaiter {}
+class KinguRuntimeService extends KinguRuntimeWithResolveWaiter {
+  constructor(...args: ConstructorParameters<typeof KinguRuntimeWithResolveWaiter>) {
+    super(...args)
+    // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
+    // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC
+    // module registers the generation bump at load; a headless host never loads it.
+    registerDetectedWorktreeScanInvalidation()
+    registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+  }
+}
 type KinguRuntimeServiceExport = RuntimeCommandSurfaceHost<KinguRuntimeService>
 const KinguRuntimeServiceExport = KinguRuntimeService as unknown as {
   new (...args: ConstructorParameters<typeof KinguRuntimeService>): KinguRuntimeServiceExport

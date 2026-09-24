@@ -3,6 +3,7 @@ import {
   extractDetailsSummaryHtml,
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
+  normalizeDetailsOpeningTag,
   parseDetailsAttributes,
   parseToggleHeadingVariant,
   type DetailsHtmlBlock
@@ -26,6 +27,45 @@ afterEach(() => {
 })
 
 describe('details markdown html', () => {
+  it.each([
+    ['<details>', '<details class="kingu-details">'],
+    ['<details open="open">', '<details class="kingu-details" open>'],
+    ['<details CLASS="kingu-details">', '<details class="kingu-details">'],
+    ["<details Class='kingu-details'>", '<details class="kingu-details">'],
+    ['<details cLaSs=kingu-details>', '<details class="kingu-details">'],
+    [
+      "<details open data-kingu-toggle = 'heading-2' class='kingu-details'>",
+      '<details class="kingu-details" data-kingu-toggle="heading-2" open>'
+    ]
+  ])('normalizes supported opening tag %s like the serializer', (input, expected) => {
+    expect(normalizeDetailsOpeningTag(input)).toBe(expected)
+  })
+
+  it.each([
+    '<details id="keep">',
+    '<details class="custom">',
+    '<details class="KINGU-DETAILS">',
+    "<details CLASS='Kingu-Details'>",
+    '<details Class=KINGU-DETAILS>',
+    '<details data-kingu-toggle="heading-6">',
+    '<details open="false">',
+    '<detailsish>',
+    '</details>',
+    '<summary>',
+    '<!-- <details> -->'
+  ])('leaves noncanonical or unrelated fragment %s unchanged', (fragment) => {
+    expect(normalizeDetailsOpeningTag(fragment)).toBe(fragment)
+  })
+
+  it.each(['KINGU-DETAILS', 'Kingu-Details'])(
+    'keeps case-sensitive class %s out of editable details nodes',
+    (className) => {
+      expect(
+        isEditableHtml(`<details class="${className}"><summary>Toggle</summary>Body</details>`)
+      ).toBe(false)
+    }
+  )
+
   it('extracts leading summary html without regex capture', () => {
     const matchSpy = vi.spyOn(String.prototype, 'match')
     const inner = `\n<SUMMARY>${'Heading line\n'.repeat(1_000)}</SUMMARY><p>Body</p>`

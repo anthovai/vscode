@@ -9,6 +9,8 @@ import {
   store
 } from '../kingu-runtime-test-fixtures.spec'
 
+const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
+
 describe('KinguRuntimeService', () => {
   it('strips Kingu provenance fields from runtime metadata updates', async () => {
     const metaById: Record<string, WorktreeMeta> = {
@@ -292,6 +294,7 @@ describe('KinguRuntimeService', () => {
       repoId: TEST_REPO_ID,
       authoritative: false,
       source: 'metadata-fallback',
+      catalogVersion: anyCatalogVersion,
       worktrees: []
     })
 

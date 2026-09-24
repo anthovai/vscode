@@ -19,6 +19,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   codex: 'codex',
   autohand: 'autohand-code',
   opencode: 'opencode',
+  opencode2: 'opencode',
   'mimo-code': null,
   pi: 'pi',
   omp: null,
@@ -49,7 +50,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   devin: 'devin',
   ante: null,
   // Why: Kingu detects trae by `traecli`, an alias only TRAE CN ships.
-  trae: 'trae-cn'
+  trae: 'trae-cn',
+  muse: null
 } satisfies Record<TuiAgent, string | null>
 
 /**

@@ -1,11 +1,10 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import {
+  findKinguDispatchPreambleStart,
   findKinguDispatchTaskMarkerIndex,
-  KINGU_DISPATCH_STATUS_PREAMBLE_PREFIX,
   KINGU_DISPATCH_STATUS_TASK_MARKER
 } from '../../../shared/kingu-dispatch-status-prompt'
 
-export const KINGU_DISPATCH_PREAMBLE_PREFIX = KINGU_DISPATCH_STATUS_PREAMBLE_PREFIX
 const KINGU_DISPATCH_TASK_MARKER = KINGU_DISPATCH_STATUS_TASK_MARKER
 const KINGU_DISPATCH_TASK_ID_MARKER = 'Your task ID is:'
 // Why: match deriveGeneratedTabTitle's scan budget — previews only need the
@@ -19,7 +18,7 @@ const KINGU_DISPATCH_TASK_MARKER_SCAN_LIMIT = 32_768
 
 /** True when the live prompt is still an Kingu dispatch turn (not sticky metadata alone). */
 export function isKinguDispatchPrompt(prompt: string): boolean {
-  return prompt.trimStart().startsWith(KINGU_DISPATCH_PREAMBLE_PREFIX)
+  return findKinguDispatchPreambleStart(prompt) !== -1
 }
 
 /**
@@ -77,10 +76,11 @@ export function getAgentRowGeneratedTitleText(
 }
 
 export function getKinguDispatchTaskId(prompt: string): string | null {
-  if (!isKinguDispatchPrompt(prompt)) {
+  const start = findKinguDispatchPreambleStart(prompt)
+  if (start === -1) {
     return null
   }
-  const scan = prompt.trimStart().slice(0, KINGU_DISPATCH_TASK_ID_SCAN_LIMIT)
+  const scan = prompt.slice(start, start + KINGU_DISPATCH_TASK_ID_SCAN_LIMIT)
   const markerIndex = scan.indexOf(KINGU_DISPATCH_TASK_ID_MARKER)
   if (markerIndex === -1) {
     return null
@@ -102,12 +102,14 @@ function getKinguDispatchTaskPreview(prompt: string): string {
   // spaces) and capped ~200 chars by normalizePromptField, which preserves
   // `=== TASK ===` + body. Prefer the first non-empty line so multi-line raw
   // preambles still work; a single-line fold is one "line" after the marker.
-  if (!isKinguDispatchPrompt(prompt)) {
+  const start = findKinguDispatchPreambleStart(prompt)
+  if (start === -1) {
     return ''
   }
-  const scan = prompt
-    .trimStart()
-    .slice(0, KINGU_DISPATCH_TASK_MARKER_SCAN_LIMIT + KINGU_DISPATCH_TASK_PREVIEW_SCAN_LIMIT)
+  const scan = prompt.slice(
+    start,
+    start + KINGU_DISPATCH_TASK_MARKER_SCAN_LIMIT + KINGU_DISPATCH_TASK_PREVIEW_SCAN_LIMIT
+  )
   // Why: share the normalizer's standalone-line marker rule. A naive indexOf
   // would treat base-drift commit subjects that mention `=== TASK ===` as the
   // real separator when helpers are called with raw multi-line preambles.

@@ -12,6 +12,7 @@ import {
   MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
   isClientDisconnectedError
 } from './kingu-runtime-core'
+import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 
 export class KinguRuntimeWithRunCreateMobileSessionTerminal extends KinguRuntimeWithCreateMobileSessionTerminal {
   protected async runCreateMobileSessionTerminal(
@@ -90,7 +91,7 @@ export class KinguRuntimeWithRunCreateMobileSessionTerminal extends KinguRuntime
       throw new Error('runtime_unavailable')
     }
     const releasePublicationThrottle = pairedCreate
-      ? this.rendererPublicationThrottle.acquire(win.webContents)
+      ? rendererPublicationThrottle.acquire(win.webContents)
       : () => {}
     try {
       const requestId = randomUUID()

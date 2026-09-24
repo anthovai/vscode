@@ -270,3 +270,18 @@ Still open: the updater logs 404s against an endpoint that is not ours, and the
 cloud-backed surfaces (artifacts, skill share/install) still point at the ADE's
 production host rather than the `cloud/` workspace in this repo, so they stay
 switched off until that is stood up here.
+
+## Updating from the ADE
+
+The copy here is `anthovai/kingu-intelligence` at **`6827fbe3c`** (upstream
+`stablyai/orca` `122b8c25d`, 2026-09-24). To move it forward:
+
+1. In `kingu-intelligence`, sync upstream: `git merge -s ours --no-commit <upstream>`,
+   then `node config/scripts/kingu-sync-upstream.mjs <last-upstream> <upstream>`,
+   resolve what it lists, commit.
+2. Here: `node build/kingu-orca/revendor.ts ../kingu-intelligence <vendored-commit> <new-commit>`.
+   It keeps the fork's edits to vendored files (`preload/index.ts`'s host bridge,
+   the title-bar entry in `shared/telemetry-property-schemas.ts`) and reports any
+   file both sides changed. Then update the commit above.
+3. Add any dependency the ADE's renderer gained to `kingu-orca/package.json`, run the
+   `generate-*.mjs` scripts, then `build/kingu-brand/rename-*.ts`, and `npm run build-kingu-orca`.

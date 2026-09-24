@@ -505,7 +505,7 @@ describe('registerPtyHandlers', () => {
         'KINGU_AGENT_HOOK_PORT/u',
         'KINGU_AGENT_HOOK_TOKEN/u',
         // Why: bare WSL shells no longer create ~/.omp; only status extension is exported (#10196).
-        'KINGU_OMP_STATUS_EXTENSION/p',
+        'KINGU_OMP_STATUS_EXTENSION/u',
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])
     )

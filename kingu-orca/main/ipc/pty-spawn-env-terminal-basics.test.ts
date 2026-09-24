@@ -1,5 +1,6 @@
+import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
+import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { delimiter } from 'node:path'
@@ -58,6 +59,71 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it('does not install managed Pi extensions when Pi is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      buildPtyHostEnv(
+        'pty-pi-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/kingu-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['pi']
+        }
+      )
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
+
+    it('does not install managed OMP extensions when OMP is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      const env = buildPtyHostEnv(
+        'pty-omp-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/kingu-user-data',
+          selectedCodexHomePath: null,
+          launchCommand: 'omp',
+          launchAgent: 'omp',
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['omp']
+        }
+      )
+
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.KINGU_OMP_FRESH_CONFIG).toBe('/tmp/kingu-fresh-session.yml')
+    })
+
+    it('threads disabled Pi settings through a bare PTY spawn', async () => {
+      piBuildPtyEnvMock.mockClear()
+
+      await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        agentStatusHooksEnabled: true,
+        disabledTuiAgents: ['pi']
+      }))
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
+    it('prepares fresh OMP settings even when status hooks are disabled', () => {
+      const env = buildPtyHostEnv(
+        'fresh-without-hooks',
+        { KINGU_OMP_FRESH_CONFIG: '/other-host/stale.yml' },
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/kingu-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: false,
+          launchCommand: withFreshOmpLaunch('omp', 'posix')
+        }
+      )
+      expect(env.KINGU_OMP_FRESH_CONFIG).toBe('/tmp/kingu-fresh-session.yml')
+      expect(env.KINGU_OMP_STATUS_EXTENSION).toBeUndefined()
+    })
+
     it('routes headless browser launches through the owning Kingu workspace', () => {
       const inheritedBrowser = process.env.BROWSER
       delete process.env.BROWSER
@@ -132,7 +198,7 @@ describe('registerPtyHandlers', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\kingu\\codex-runtime-home\\home'
       const ensureForDistro = vi
         .spyOn(wslHookRelayManager, 'ensureForDistro')
-        .mockImplementation(() => {})
+        .mockImplementation(async () => {})
 
       try {
         buildPtyHostEnv(
@@ -147,7 +213,7 @@ describe('registerPtyHandlers', () => {
             agentStatusHooksEnabled: true
           }
         )
-        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome)
+        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome, undefined)
       } finally {
         ensureForDistro.mockRestore()
       }
@@ -297,6 +363,10 @@ describe('registerPtyHandlers', () => {
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Kingu')
+    })
+    it('hints inline-image support to agents via KINGU_IMAGE_PROTOCOL', async () => {
+      const env = await spawnAndGetEnv()
+      expect(env.KINGU_IMAGE_PROTOCOL).toBe('kitty')
     })
     it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')

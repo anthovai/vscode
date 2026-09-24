@@ -13,6 +13,10 @@ import {
 } from '../../../shared/git-credential-prompt-env'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/terminal-git-credential-guard'
 import {
+  KINGU_IMAGE_PROTOCOL_ENV,
+  KINGU_IMAGE_PROTOCOL_VALUE
+} from '../../../shared/terminal-image-protocol'
+import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
@@ -141,8 +145,9 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Kingu',
     TERM_PROGRAM_VERSION: process.env.KINGU_APP_VERSION ?? '0.0.0-dev',
-    FORCE_HYPERLINK: '1'
-  } as Record<string, string>
+    FORCE_HYPERLINK: '1',
+    [KINGU_IMAGE_PROTOCOL_ENV]: KINGU_IMAGE_PROTOCOL_VALUE
+  } satisfies Record<string, string>
   stripLegacyTerminalShimEnv(env, process.platform)
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
