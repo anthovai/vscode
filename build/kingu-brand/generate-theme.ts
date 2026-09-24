@@ -44,8 +44,8 @@ interface IPalette {
 	readonly selection: string;
 	readonly hover: string;
 	readonly link: string;
-	/** Lightness a blue accent is moved to. */
-	readonly accentLightness: number;
+	/** Lightness a blue accent is moved to, by what the key paints: a fill, an outline, or text and icons. */
+	readonly accentLightness: { readonly background: number; readonly border: number; readonly foreground: number };
 }
 
 /** `.dark` in the ADE's main.css. */
@@ -66,7 +66,7 @@ const DARK: IPalette = {
 	selection: '#404040',
 	hover: '#262626',
 	link: '#93c5fd',
-	accentLightness: 0.9,
+	accentLightness: { background: 0.25, border: 0.45, foreground: 0.9 },
 };
 
 /** `:root` in the ADE's main.css. */
@@ -87,7 +87,7 @@ const LIGHT: IPalette = {
 	selection: '#e5e5e5',
 	hover: '#f5f5f5',
 	link: '#2563eb',
-	accentLightness: 0.12,
+	accentLightness: { background: 0.9, border: 0.63, foreground: 0.1 },
 };
 
 function parseHex(hex: string): [number, number, number, number] | undefined {
@@ -124,8 +124,18 @@ function hsl(r: number, g: number, b: number): { h: number; s: number; l: number
 	return { h: h * 60, s, l };
 }
 
+type Role = 'background' | 'border' | 'foreground';
+
+/** What a color key paints, read from its name the way the color registry names them. */
+function roleOf(key: string): Role {
+	if (/(background|highlight|shadow|fill|selection|hover)[A-Za-z]*$/i.test(key.split('.').pop() ?? key) && !/foreground/i.test(key)) {
+		return 'background';
+	}
+	return /(border|outline)/i.test(key) ? 'border' : 'foreground';
+}
+
 /** One upstream color in the ADE's palette. */
-function recolor(value: string, palette: IPalette): string {
+function recolor(key: string, value: string, palette: IPalette): string {
 	const rgba = parseHex(value);
 	if (!rgba) {
 		return value;
@@ -138,11 +148,62 @@ function recolor(value: string, palette: IPalette): string {
 		return toHex(grey, grey, grey, a);
 	}
 	if (h >= 180 && h <= 265) {
-		// VS Code's blue accent: the palette's neutral accent, alpha kept.
-		const v = palette.accentLightness * 255;
+		// VS Code's blue accent: the palette's neutral accent for what the key paints, alpha kept.
+		// A fill must stay dark under light text (and light under dark text in the light theme).
+		const v = palette.accentLightness[roleOf(key)] * 255;
 		return toHex(v, v, v, a);
 	}
 	return value;
+}
+
+function luminance([r, g, b]: [number, number, number, number]): number {
+	const channel = (v: number) => {
+		const c = v / 255;
+		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+	};
+	return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+/** A translucent color as it shows over an opaque one. */
+function over(top: [number, number, number, number], under: [number, number, number, number]): [number, number, number, number] {
+	const k = top[3] / 255;
+	return [top[0] * k + under[0] * (1 - k), top[1] * k + under[1] * (1 - k), top[2] * k + under[2] * (1 - k), 255];
+}
+
+function contrast(foreground: string, background: string, base: string): number {
+	const floor = parseHex(base)!;
+	const bg = over(parseHex(background)!, floor);
+	const fg = over(parseHex(foreground)!, bg);
+	const [a, b] = [luminance(fg), luminance(bg)].sort((x, y) => y - x);
+	return (a + 0.05) / (b + 0.05);
+}
+
+/**
+ * Every fill with text on it keeps text readable (WCAG AA, 4.5:1): a
+ * `...Background` key is read with its `...Foreground` sibling, or the default
+ * foreground when the theme has none; a pair below the bar gets whichever of
+ * the palette's foregrounds reads best on it.
+ */
+function fixContrast(colors: Record<string, string>, palette: IPalette, label: string): void {
+	const base = colors['editor.background'] ?? palette.background;
+	for (const [key, background] of Object.entries(colors)) {
+		if (roleOf(key) !== 'background' || !parseHex(background) || /shadow|highlight|lineHighlight|rangeHighlight|findMatch|wordHighlight|selectionHighlight|hoverHighlight|bracketMatch|diff|merge|gutter|minimap|ruler|overview|scrollbar|dropBackground|drag/i.test(key)) {
+			continue;
+		}
+		const sibling = key.replace(/Background$/, 'Foreground').replace(/background$/, 'foreground');
+		const foregroundKey = sibling !== key && colors[sibling] ? sibling : undefined;
+		const foreground = foregroundKey ? colors[foregroundKey] : colors['foreground'] ?? palette.foreground;
+		if (!parseHex(foreground) || contrast(foreground, background, base) >= 4.5) {
+			continue;
+		}
+		// Text meant to recede (inactive, unfocused) stays muted when muted still reads.
+		const dim = /inactive|unfocused|disabled/i.test(key) && contrast(palette.muted, background, base) >= 4.5;
+		const best = dim ? palette.muted : [palette.foreground, palette.primaryForeground].sort((x, y) => contrast(y, background, base) - contrast(x, background, base))[0];
+		if (foregroundKey || contrast(best, background, base) >= 4.5) {
+			colors[foregroundKey ?? sibling] = best;
+			console.log(`  ${label}: ${key} ${background} — ${foregroundKey ?? sibling} ${foreground} -> ${best} (${contrast(best, background, base).toFixed(1)}:1)`);
+		}
+	}
 }
 
 /** The surfaces the ADE defines, set outright. */
@@ -221,6 +282,8 @@ function surfaces(p: IPalette): Record<string, string> {
 		'menu.background': chrome,
 		'menu.border': p.border,
 		'menu.selectionBackground': p.selection,
+		'menu.selectionForeground': p.foreground,
+		'menu.foreground': p.foreground,
 		'dropdown.background': chrome,
 		'dropdown.border': p.input,
 		'notifications.background': chrome,
@@ -268,9 +331,10 @@ function build(upstreamFile: string, label: string, uiTheme: string, palette: IP
 	const upstreamColors = resolve(path.join(ROOT, 'extensions', 'theme-defaults', 'themes', upstreamFile));
 	const colors: Record<string, string> = {};
 	for (const [key, value] of Object.entries(upstreamColors)) {
-		colors[key] = recolor(value, palette);
+		colors[key] = recolor(key, value, palette);
 	}
 	Object.assign(colors, surfaces(palette));
+	fixContrast(colors, palette, label);
 	return {
 		file: `${label.toLowerCase().replace(/\s+/g, '-')}.json`,
 		json: {
@@ -305,6 +369,8 @@ function main(): void {
 		categories: ['Themes'],
 		contributes: {
 			themes: themes.map(t => ({ id: t.label, label: t.label, uiTheme: t.uiTheme, path: `./themes/${t.file}` })),
+			// Written by generate-icons.py: lucide, the ADE's icons, over the codicons.
+			productIconThemes: [{ id: 'kingu-lucide', label: 'Kingu (Lucide)', path: './producticons/kingu-lucide-icon-theme.json' }],
 		},
 	};
 	fs.writeFileSync(path.join(OUT, 'package.json'), JSON.stringify(manifest, null, '\t') + '\n');

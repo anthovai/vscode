@@ -30,6 +30,15 @@ body .monaco-workbench.linux {
 }
 
 /*
+ * Activity bar icons at 20px, between upstream's 24 and compact 16. The part sets
+ * `--activity-bar-icon-size` inline on itself; declaring it on its content, the
+ * icons' nearer ancestor, is what they read.
+ */
+.monaco-workbench .activitybar > .content {
+	--activity-bar-icon-size: 20px;
+}
+
+/*
  * The ADE's radius scale (`--radius: 0.625rem`, sm 0.6x, md 0.8x, lg 1x, xl 1.4x)
  * on the workbench's corner-radius tokens, which the theme service writes on
  * `.monaco-workbench`; the doubled class outranks it.

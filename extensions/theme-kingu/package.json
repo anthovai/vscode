@@ -25,6 +25,13 @@
 				"uiTheme": "vs",
 				"path": "./themes/kingu-light.json"
 			}
+		],
+		"productIconThemes": [
+			{
+				"id": "kingu-lucide",
+				"label": "Kingu (Lucide)",
+				"path": "./producticons/kingu-lucide-icon-theme.json"
+			}
 		]
 	}
 }

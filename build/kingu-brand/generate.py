@@ -365,6 +365,9 @@ def marks_font(family, codicons, glyph_marks, borrowed=None):
 	builder.setupNameTable({'familyName': family, 'styleName': 'Regular'})
 	builder.setupOS2(sTypoAscender=UPM, sTypoDescender=0, usWinAscent=UPM, usWinDescent=0)
 	builder.setupPost()
+	# A fixed timestamp, so re-running writes the same bytes.
+	builder.font['head'].created = builder.font['head'].modified = 3_786_000_000
+	builder.font.recalcTimestamp = False
 	buffer = io.BytesIO()
 	builder.save(buffer)
 	ranges = ', '.join(f'U+{code:04X}' for code in sorted(char_map))
@@ -476,7 +479,8 @@ def main():
 
 	# In the IDE: the app icon (title bar, banner, welcome, update), and the empty editor's letterpress.
 	write('src/vs/workbench/browser/media/code-icon.svg', ide.icon_svg())
-	for theme, root, fill in (('light', ' opacity="0.1"', None), ('dark', ' opacity="0.3"', None), ('hcLight', '', '#D9D9D9'), ('hcDark', '', '#3C3C3C')):
+	# Dark themes draw the mark in white, faintly; light ones in black.
+	for theme, root, fill in (('light', ' opacity="0.1"', None), ('dark', ' opacity="0.2"', '#ffffff'), ('hcLight', '', '#D9D9D9'), ('hcDark', ' opacity="0.3"', '#ffffff')):
 		write(f'src/vs/workbench/browser/parts/editor/media/letterpress-{theme}.svg', ide.mark_svg(root, fill))
 
 	# In the Agents window: its own mark; "Open in VS Code" opens the IDE, so it shows the IDE's icon.
@@ -484,8 +488,8 @@ def main():
 	write('src/vs/sessions/browser/media/sessions-icon.svg', ade.icon_svg())
 	write('src/vs/sessions/browser/media/sessions-logo-dark.svg', ade.mark_svg())
 	write('src/vs/sessions/browser/media/sessions-logo-light.svg', ade.mark_svg('', '#D9D9D9'))
-	for theme, fill in (('light', '#D9D9D9'), ('dark', '#3C3C3C')):
-		write(f'src/vs/sessions/contrib/chat/browser/media/letterpress-sessions-{theme}.svg', ade.mark_svg('', fill))
+	for theme, root, fill in (('light', '', '#D9D9D9'), ('dark', ' opacity="0.2"', '#ffffff')):
+		write(f'src/vs/sessions/contrib/chat/browser/media/letterpress-sessions-{theme}.svg', ade.mark_svg(root, fill))
 
 	# The codicon overlay, in both windows: Arkai where Copilot was, the IDE where VS Code was.
 	codicons = Codicons(path('node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'))
