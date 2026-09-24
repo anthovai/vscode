@@ -627,7 +627,7 @@ registerAction2(class MeasureExtHostLatencyAction extends Action2 {
 	constructor() {
 		super({
 			id: 'editor.action.measureExtHostLatency',
-			title: nls.localize2('measureExtHostLatency', "Measure Extension Host Latency"),
+			title: nls.localize2('measureExtHostLatency', "Measure Snap Host Latency"),
 			category: Categories.Developer,
 			f1: true
 		});

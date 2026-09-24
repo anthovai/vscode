@@ -110,7 +110,7 @@ class ExtensionFeaturesManagementService extends Disposable implements IExtensio
 				const extensionDescription = this.extensionService.extensions.find(e => ExtensionIdentifier.equals(e.identifier, extension));
 				const confirmationResult = await this.dialogService.confirm({
 					title: localize('accessExtensionFeature', "Access '{0}' Feature", feature.label),
-					message: localize('accessExtensionFeatureMessage', "'{0}' extension would like to access the '{1}' feature.", extensionDescription?.displayName ?? extension._lower, feature.label),
+					message: localize('accessExtensionFeatureMessage', "'{0}' snap would like to access the '{1}' feature.", extensionDescription?.displayName ?? extension._lower, feature.label),
 					detail: justification ?? feature.description,
 					custom: true,
 					primaryButton: localize('allow', "Allow"),

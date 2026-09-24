@@ -76,7 +76,7 @@ export class ConfigBasedRecommendations extends ExtensionRecommendations {
 			extension: tip.extensionId,
 			reason: {
 				reasonId: ExtensionRecommendationReason.WorkspaceConfig,
-				reasonText: localize('exeBasedRecommendation', "This extension is recommended because of the current workspace configuration")
+				reasonText: localize('exeBasedRecommendation', "This snap is recommended because of the current workspace configuration")
 			},
 			whenNotInstalled: tip.whenNotInstalled
 		};

@@ -767,7 +767,7 @@ suite('WorkbenchExtensionGalleryManifestService', () => {
 		configurationService.setUserConfiguration(ExtensionGalleryAuthProviderConfigKey, 'github');
 		fireConfigChange(ExtensionGalleryAuthProviderConfigKey);
 
-		assert.deepStrictEqual(restartPrompts, ['The Extensions Marketplace configuration has changed. Please restart to apply the changes.']);
+		assert.deepStrictEqual(restartPrompts, ['The Snaps Marketplace configuration has changed. Please restart to apply the changes.']);
 	});
 
 	test('changing serviceUrl mid-session keeps its own restart message', async () => {

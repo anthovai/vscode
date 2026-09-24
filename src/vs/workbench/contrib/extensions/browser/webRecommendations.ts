@@ -28,7 +28,7 @@ export class WebRecommendations extends ExtensionRecommendations {
 				extension: extensionId.toLowerCase(),
 				reason: {
 					reasonId: ExtensionRecommendationReason.Application,
-					reasonText: localize('reason', "This extension is recommended for {0} for the Web", this.productService.nameLong)
+					reasonText: localize('reason', "This snap is recommended for {0} for the Web", this.productService.nameLong)
 				}
 			}));
 		}

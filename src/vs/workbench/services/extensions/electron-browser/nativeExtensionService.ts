@@ -163,7 +163,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 			if (code === ExtensionHostExitCode.VersionMismatch) {
 				this._notificationService.prompt(
 					Severity.Error,
-					nls.localize('extensionService.versionMismatchCrash', "Extension host cannot start: version mismatch."),
+					nls.localize('extensionService.versionMismatchCrash', "Snap host cannot start: version mismatch."),
 					[{
 						label: nls.localize('relaunch', "Relaunch VS Code"),
 						run: () => {
@@ -184,13 +184,13 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 
 			if (this._localCrashTracker.shouldAutomaticallyRestart()) {
 				this._logService.info(`Automatically restarting the extension host.`);
-				this._notificationService.status(nls.localize('extensionService.autoRestart', "The extension host terminated unexpectedly. Restarting..."), { hideAfter: 5000 });
+				this._notificationService.status(nls.localize('extensionService.autoRestart', "The snap host terminated unexpectedly. Restarting..."), { hideAfter: 5000 });
 				this.startExtensionHosts();
 			} else {
 				const choices: IPromptChoice[] = [];
 				if (this._environmentService.isBuilt) {
 					choices.push({
-						label: nls.localize('startBisect', "Start Extension Bisect"),
+						label: nls.localize('startBisect', "Start Snap Bisect"),
 						run: () => {
 							this._instantiationService.invokeFunction(accessor => {
 								const commandService = accessor.get(ICommandService);
@@ -206,7 +206,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 				}
 
 				choices.push({
-					label: nls.localize('restart', "Restart Extension Host"),
+					label: nls.localize('restart', "Restart Snap Host"),
 					run: () => this.startExtensionHosts()
 				});
 
@@ -222,7 +222,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 					});
 				}
 
-				this._notificationService.prompt(Severity.Error, nls.localize('extensionService.crash', "Extension host terminated unexpectedly 3 times within the last 5 minutes."), choices);
+				this._notificationService.prompt(Severity.Error, nls.localize('extensionService.crash', "Snap host terminated unexpectedly 3 times within the last 5 minutes."), choices);
 			}
 		}
 	}
@@ -306,7 +306,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 		const { confirmed } = await this._dialogService.confirm({
 			type: Severity.Warning,
 			message: nls.localize('remoteConnectionConfirm', "Allow connecting to the remote server '{0}:{1}'?", host, port),
-			detail: nls.localize('remoteConnectionConfirmDetail', "Code is about to connect to '{0}:{1}' to host a remote extension host. Only continue if you trust this server, as it will be able to run code and access files on your behalf.", host, port),
+			detail: nls.localize('remoteConnectionConfirmDetail', "Code is about to connect to '{0}:{1}' to host a remote snap host. Only continue if you trust this server, as it will be able to run code and access files on your behalf.", host, port),
 			primaryButton: nls.localize('remoteConnectionConfirmButton', "Connect")
 		});
 
@@ -500,7 +500,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 		const extension = allExtensions.filter(e => e.identifier.value === resolverExtensionId)[0];
 		if (extension) {
 			if (!extensionIsEnabled(this._logService, this._extensionEnablementService, extension, false)) {
-				const message = nls.localize('enableResolver', "Extension '{0}' is required to open the remote window.\nOK to enable?", recommendation.friendlyName);
+				const message = nls.localize('enableResolver', "Snap '{0}' is required to open the remote window.\nOK to enable?", recommendation.friendlyName);
 				this._notificationService.prompt(Severity.Info, message,
 					[{
 						label: nls.localize('enable', 'Enable and Reload'),
@@ -517,7 +517,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 			}
 		} else {
 			// Install the Extension and reload the window to handle.
-			const message = nls.localize('installResolver', "Extension '{0}' is required to open the remote window.\nDo you want to install the extension?", recommendation.friendlyName);
+			const message = nls.localize('installResolver', "Snap '{0}' is required to open the remote window.\nDo you want to install the snap?", recommendation.friendlyName);
 			this._notificationService.prompt(Severity.Info, message,
 				[{
 					label: nls.localize('install', 'Install and Reload'),
@@ -748,7 +748,7 @@ class RestartExtensionHostAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.restartExtensionHost',
-			title: nls.localize2('restartExtensionHost', "Restart Extension Host"),
+			title: nls.localize2('restartExtensionHost', "Restart Snap Host"),
 			category: Categories.Developer,
 			f1: true
 		});

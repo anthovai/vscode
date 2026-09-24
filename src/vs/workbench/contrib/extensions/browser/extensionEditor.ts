@@ -199,7 +199,7 @@ class VersionWidget extends ExtensionWithDifferentGalleryVersionWidget {
 	) {
 		super();
 		this.element = append(container, $('code.version', undefined, 'pre-release'));
-		this._register(hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), this.element, localize('extension version', "Extension Version")));
+		this._register(hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), this.element, localize('extension version', "Snap Version")));
 		this.render();
 	}
 	render(): void {
@@ -282,7 +282,7 @@ export class ExtensionEditor extends EditorPane {
 		const details = append(header, $('.details'));
 		const title = append(details, $('.title'));
 		const name = append(title, $('span.name.clickable', { role: 'heading', tabIndex: 0 }));
-		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), name, localize('name', "Extension name")));
+		this._register(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), name, localize('name', "Snap name")));
 		const versionWidget = new VersionWidget(title, this.hoverService);
 
 		const preview = append(title, $('span.preview'));
@@ -598,18 +598,18 @@ export class ExtensionEditor extends EditorPane {
 			this.currentIdentifier = extension.identifier.id;
 		}
 
-		template.navbar.push(ExtensionEditorTab.Readme, localize('details', "Details"), localize('detailstooltip', "Extension details, rendered from the extension's 'README.md' file"));
+		template.navbar.push(ExtensionEditorTab.Readme, localize('details', "Details"), localize('detailstooltip', "Snap details, rendered from the snap's 'README.md' file"));
 		if (manifest) {
-			template.navbar.push(ExtensionEditorTab.Features, localize('features', "Features"), localize('featurestooltip', "Lists features contributed by this extension"));
+			template.navbar.push(ExtensionEditorTab.Features, localize('features', "Features"), localize('featurestooltip', "Lists features contributed by this snap"));
 		}
 		if (extension.hasChangelog()) {
-			template.navbar.push(ExtensionEditorTab.Changelog, localize('changelog', "Changelog"), localize('changelogtooltip', "Extension update history, rendered from the extension's 'CHANGELOG.md' file"));
+			template.navbar.push(ExtensionEditorTab.Changelog, localize('changelog', "Changelog"), localize('changelogtooltip', "Snap update history, rendered from the snap's 'CHANGELOG.md' file"));
 		}
 		if (extension.dependencies.length) {
-			template.navbar.push(ExtensionEditorTab.Dependencies, localize('dependencies', "Dependencies"), localize('dependenciestooltip', "Lists extensions this extension depends on"));
+			template.navbar.push(ExtensionEditorTab.Dependencies, localize('dependencies', "Dependencies"), localize('dependenciestooltip', "Lists snaps this snap depends on"));
 		}
 		if (manifest && manifest.extensionPack?.length && !this.shallRenderAsExtensionPack(manifest)) {
-			template.navbar.push(ExtensionEditorTab.ExtensionPack, localize('extensionpack', "Extension Pack"), localize('extensionpacktooltip', "Lists extensions those will be installed together with this extension"));
+			template.navbar.push(ExtensionEditorTab.ExtensionPack, localize('extensionpack', "Snap Pack"), localize('extensionpacktooltip', "Lists snaps those will be installed together with this snap"));
 		}
 
 		if ((<IExtensionEditorOptions | undefined>this.options)?.tab) {
@@ -897,7 +897,7 @@ export class ExtensionEditor extends EditorPane {
 		this.contentDisposables.add(toDisposable(arrays.insert(this.layoutParticipants, { layout })));
 
 		const extensionPackHeader = append(extensionPack, $('div.header'));
-		extensionPackHeader.textContent = localize('extension pack', "Extension Pack ({0})", manifest.extensionPack!.length);
+		extensionPackHeader.textContent = localize('extension pack', "Snap Pack ({0})", manifest.extensionPack!.length);
 		const extensionPackContent = append(extensionPack, $('div', { class: 'extension-pack-content' }));
 		extensionPackContent.setAttribute('tabindex', '0');
 		const readmeContent = append(extensionPackReadme, $('div.readme-content'));

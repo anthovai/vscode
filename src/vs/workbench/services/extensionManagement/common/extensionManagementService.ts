@@ -269,14 +269,14 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 
 	private getDependentsErrorMessage(extension: ILocalExtension, dependents: ILocalExtension[]): string {
 		if (dependents.length === 1) {
-			return localize('singleDependentError', "Cannot uninstall extension '{0}'. Extension '{1}' depends on this.",
+			return localize('singleDependentError', "Cannot uninstall snap '{0}'. Snap '{1}' depends on this.",
 				extension.manifest.displayName || extension.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name);
 		}
 		if (dependents.length === 2) {
-			return localize('twoDependentsError', "Cannot uninstall extension '{0}'. Extensions '{1}' and '{2}' depend on this.",
+			return localize('twoDependentsError', "Cannot uninstall snap '{0}'. Snaps '{1}' and '{2}' depend on this.",
 				extension.manifest.displayName || extension.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name, dependents[1].manifest.displayName || dependents[1].manifest.name);
 		}
-		return localize('multipleDependentsError', "Cannot uninstall extension '{0}'. Extensions '{1}', '{2}' and others depend on this.",
+		return localize('multipleDependentsError', "Cannot uninstall snap '{0}'. Snaps '{1}', '{2}' and others depend on this.",
 			extension.manifest.displayName || extension.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name, dependents[1].manifest.displayName || dependents[1].manifest.name);
 
 	}
@@ -408,7 +408,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 			&& this.extensionManifestPropertiesService.canExecuteOnWeb(manifest)) {
 			return true;
 		}
-		return new MarkdownString().appendText(localize('cannot be installed', "Cannot install the '{0}' extension because it is not available in this setup.", gallery.displayName || gallery.name));
+		return new MarkdownString().appendText(localize('cannot be installed', "Cannot install the '{0}' snap because it is not available in this setup.", gallery.displayName || gallery.name));
 	}
 
 	private async canInstallResourceExtension(extension: IResourceExtension): Promise<true | IMarkdownString> {
@@ -421,7 +421,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		if (this.extensionManagementServerService.webExtensionManagementServer && this.extensionManifestPropertiesService.canExecuteOnWeb(extension.manifest)) {
 			return true;
 		}
-		return new MarkdownString().appendText(localize('cannot be installed', "Cannot install the '{0}' extension because it is not available in this setup.", extension.manifest.displayName ?? extension.identifier.id));
+		return new MarkdownString().appendText(localize('cannot be installed', "Cannot install the '{0}' snap because it is not available in this setup.", extension.manifest.displayName ?? extension.identifier.id));
 	}
 
 	async updateFromGallery(gallery: IGalleryExtension, extension: ILocalExtension, installOptions?: InstallOptions): Promise<ILocalExtension> {
@@ -450,7 +450,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		const manifests = await Promise.all(extensions.map(async ({ extension }) => {
 			const manifest = await this.extensionGalleryService.getManifest(extension, CancellationToken.None);
 			if (!manifest) {
-				throw new Error(localize('Manifest is not found', "Installing Extension {0} failed: Manifest is not found.", extension.displayName || extension.name));
+				throw new Error(localize('Manifest is not found', "Installing Snap {0} failed: Manifest is not found.", extension.displayName || extension.name));
 			}
 			return manifest;
 		}));
@@ -463,7 +463,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 			try {
 				const manifest = await this.extensionGalleryService.getManifest(extension, CancellationToken.None);
 				if (!manifest) {
-					throw new Error(localize('Manifest is not found', "Installing Extension {0} failed: Manifest is not found.", extension.displayName || extension.name));
+					throw new Error(localize('Manifest is not found', "Installing Snap {0} failed: Manifest is not found.", extension.displayName || extension.name));
 				}
 
 				if (options?.context?.[EXTENSION_INSTALL_SOURCE_CONTEXT] !== ExtensionInstallSource.SETTINGS_SYNC) {
@@ -512,7 +512,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 	async installFromGallery(gallery: IGalleryExtension, installOptions?: InstallOptions, servers?: IExtensionManagementServer[]): Promise<ILocalExtension> {
 		const manifest = await this.extensionGalleryService.getManifest(gallery, CancellationToken.None);
 		if (!manifest) {
-			throw new Error(localize('Manifest is not found', "Installing Extension {0} failed: Manifest is not found.", gallery.displayName || gallery.name));
+			throw new Error(localize('Manifest is not found', "Installing Snap {0} failed: Manifest is not found.", gallery.displayName || gallery.name));
 		}
 
 		if (installOptions?.context?.[EXTENSION_INSTALL_SKIP_PUBLISHER_TRUST_CONTEXT] !== true) {
@@ -625,7 +625,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 	async getInstallableServers(gallery: IGalleryExtension): Promise<IExtensionManagementServer[]> {
 		const manifest = await this.extensionGalleryService.getManifest(gallery, CancellationToken.None);
 		if (!manifest) {
-			return Promise.reject(localize('Manifest is not found', "Installing Extension {0} failed: Manifest is not found.", gallery.displayName || gallery.name));
+			return Promise.reject(localize('Manifest is not found', "Installing Snap {0} failed: Manifest is not found.", gallery.displayName || gallery.name));
 		}
 		return this.getInstallableExtensionManagementServers(manifest);
 	}
@@ -677,7 +677,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		const installableServers = this.getInstallableExtensionManagementServers(manifest);
 		for (const server of servers) {
 			if (!installableServers.includes(server)) {
-				const error = new Error(localize('cannot be installed in server', "Cannot install the '{0}' extension because it is not available in the '{1}' setup.", gallery.displayName || gallery.name, server.label));
+				const error = new Error(localize('cannot be installed in server', "Cannot install the '{0}' snap because it is not available in the '{1}' setup.", gallery.displayName || gallery.name, server.label));
 				error.name = ExtensionManagementErrorCode.Unsupported;
 				throw error;
 			}
@@ -701,7 +701,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		}
 
 		if (!servers.length) {
-			const error = new Error(localize('cannot be installed', "Cannot install the '{0}' extension because it is not available in this setup.", gallery.displayName || gallery.name));
+			const error = new Error(localize('cannot be installed', "Cannot install the '{0}' snap because it is not available in this setup.", gallery.displayName || gallery.name));
 			error.name = ExtensionManagementErrorCode.Unsupported;
 			throw error;
 		}
@@ -746,10 +746,10 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		if (this.isExtensionsSyncEnabled()) {
 			const { result } = await this.dialogService.prompt<boolean>({
 				type: Severity.Info,
-				message: extensions.length === 1 ? localize('install extension', "Install Extension") : localize('install extensions', "Install Extensions"),
+				message: extensions.length === 1 ? localize('install extension', "Install Snap") : localize('install extensions', "Install Snaps"),
 				detail: extensions.length === 1
-					? localize('install single extension', "Would you like to install and synchronize '{0}' extension across your devices?", extensions[0].displayName)
-					: localize('install multiple extensions', "Would you like to install and synchronize extensions across your devices?"),
+					? localize('install single extension', "Would you like to install and synchronize '{0}' snap across your devices?", extensions[0].displayName)
+					: localize('install multiple extensions', "Would you like to install and synchronize snaps across your devices?"),
 				buttons: [
 					{
 						label: localize({ key: 'install', comment: ['&& denotes a mnemonic'] }, "&&Install"),
@@ -809,7 +809,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		const manifests = await Promise.all(extensions.map(async ({ extension }) => {
 			const manifest = await this.extensionGalleryService.getManifest(extension, CancellationToken.None);
 			if (!manifest) {
-				throw new Error(localize('Manifest is not found', "Installing Extension {0} failed: Manifest is not found.", extension.displayName || extension.name));
+				throw new Error(localize('Manifest is not found', "Installing Snap {0} failed: Manifest is not found.", extension.displayName || extension.name));
 			}
 			return manifest;
 		}));
@@ -886,21 +886,21 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 			const extension = untrustedExtensions[0];
 			const manifest = untrustedExtensionManifests[0];
 			if (otherUntrustedPublishers.length) {
-				customMessage.appendMarkdown(localize('extension published by message', "The extension {0} is published by {1}.", `[${extension.displayName}](${extension.detailsLink})`, getPublisherLink(extension)));
+				customMessage.appendMarkdown(localize('extension published by message', "The snap {0} is published by {1}.", `[${extension.displayName}](${extension.detailsLink})`, getPublisherLink(extension)));
 				customMessage.appendMarkdown('&nbsp;');
 				const commandUri = createCommandUri('extension.open', extension.identifier.id, manifest.extensionPack?.length ? 'extensionPack' : 'dependencies').toString();
 				if (otherUntrustedPublishers.length === 1) {
-					customMessage.appendMarkdown(localize('singleUntrustedPublisher', "Installing this extension will also install [extensions]({0}) published by {1}.", commandUri, getPublisherLink(otherUntrustedPublishers[0])));
+					customMessage.appendMarkdown(localize('singleUntrustedPublisher', "Installing this snap will also install [snaps]({0}) published by {1}.", commandUri, getPublisherLink(otherUntrustedPublishers[0])));
 				} else {
-					customMessage.appendMarkdown(localize('message3', "Installing this extension will also install [extensions]({0}) published by {1} and {2}.", commandUri, otherUntrustedPublishers.slice(0, otherUntrustedPublishers.length - 1).map(p => getPublisherLink(p)).join(', '), getPublisherLink(otherUntrustedPublishers[otherUntrustedPublishers.length - 1])));
+					customMessage.appendMarkdown(localize('message3', "Installing this snap will also install [snaps]({0}) published by {1} and {2}.", commandUri, otherUntrustedPublishers.slice(0, otherUntrustedPublishers.length - 1).map(p => getPublisherLink(p)).join(', '), getPublisherLink(otherUntrustedPublishers[otherUntrustedPublishers.length - 1])));
 				}
 				customMessage.appendMarkdown('&nbsp;');
-				customMessage.appendMarkdown(localize('firstTimeInstallingMessage', "This is the first time you're installing extensions from these publishers."));
+				customMessage.appendMarkdown(localize('firstTimeInstallingMessage', "This is the first time you're installing snaps from these publishers."));
 			} else {
-				customMessage.appendMarkdown(localize('message1', "The extension {0} is published by {1}. This is the first extension you're installing from this publisher.", `[${extension.displayName}](${extension.detailsLink})`, getPublisherLink(extension)));
+				customMessage.appendMarkdown(localize('message1', "The snap {0} is published by {1}. This is the first snap you're installing from this publisher.", `[${extension.displayName}](${extension.detailsLink})`, getPublisherLink(extension)));
 			}
 		} else {
-			customMessage.appendMarkdown(localize('multiInstallMessage', "This is the first time you're installing extensions from publishers {0} and {1}.", getPublisherLink(allPublishers[0]), getPublisherLink(allPublishers[allPublishers.length - 1])));
+			customMessage.appendMarkdown(localize('multiInstallMessage', "This is the first time you're installing snaps from publishers {0} and {1}.", getPublisherLink(allPublishers[0]), getPublisherLink(allPublishers[allPublishers.length - 1])));
 		}
 
 		if (verifiedPublishers.length || unverfiiedPublishers.length === 1) {
@@ -924,9 +924,9 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 
 		customMessage.appendText('\n');
 		if (allPublishers.length > 1) {
-			customMessage.appendMarkdown(localize('message4', "{0} has no control over the behavior of third-party extensions, including how they manage your personal data. Proceed only if you trust the publishers.", this.productService.nameLong));
+			customMessage.appendMarkdown(localize('message4', "{0} has no control over the behavior of third-party snaps, including how they manage your personal data. Proceed only if you trust the publishers.", this.productService.nameLong));
 		} else {
-			customMessage.appendMarkdown(localize('message2', "{0} has no control over the behavior of third-party extensions, including how they manage your personal data. Proceed only if you trust the publisher.", this.productService.nameLong));
+			customMessage.appendMarkdown(localize('message2', "{0} has no control over the behavior of third-party snaps, including how they manage your personal data. Proceed only if you trust the publisher.", this.productService.nameLong));
 		}
 
 		await this.dialogService.prompt({
@@ -1014,7 +1014,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 			}
 			buttons.push({ label: localize('extensionInstallWorkspaceTrustManageButton', "Learn More"), type: 'Manage' });
 			const trustState = await this.workspaceTrustRequestService.requestWorkspaceTrust({
-				message: localize('extensionInstallWorkspaceTrustMessage', "Enabling this extension requires a trusted workspace."),
+				message: localize('extensionInstallWorkspaceTrustMessage', "Enabling this snap requires a trusted workspace."),
 				buttons
 			});
 
@@ -1062,13 +1062,13 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		};
 
 		const showExtensionsButton: IPromptButton<void> = {
-			label: localize({ key: 'showExtensions', comment: ['&& denotes a mnemonic'] }, "&&Show Extensions"),
+			label: localize({ key: 'showExtensions', comment: ['&& denotes a mnemonic'] }, "&&Show Snaps"),
 			run: () => this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand('extension.open', extension.identifier.id, 'extensionPack'))
 		};
 
 		if (nonWebExtensions.length && hasLimitedSupport) {
 			message = limitedSupportMessage;
-			detail = `${virtualWorkspaceSupportReason ? `${virtualWorkspaceSupportReason}\n` : ''}${localize('non web extensions detail', "Contains extensions which are not supported.")}`;
+			detail = `${virtualWorkspaceSupportReason ? `${virtualWorkspaceSupportReason}\n` : ''}${localize('non web extensions detail', "Contains snaps which are not supported.")}`;
 			buttons = [
 				installAnywayButton,
 				showExtensionsButton
@@ -1082,7 +1082,7 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 		}
 
 		else {
-			message = localize('non web extensions', "'{0}' contains extensions which are not supported in {1}.", extension.displayName || extension.identifier.id, productName);
+			message = localize('non web extensions', "'{0}' contains snaps which are not supported in {1}.", extension.displayName || extension.identifier.id, productName);
 			buttons = [
 				installAnywayButton,
 				showExtensionsButton

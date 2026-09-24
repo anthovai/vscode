@@ -157,13 +157,13 @@ export class ExtensionsViewletViewsContribution extends Disposable implements IW
 		viewRegistry.registerViews(viewDescriptors, this.container);
 
 		viewRegistry.registerViewWelcomeContent('workbench.views.extensions.marketplaceAccess', {
-			content: localize('sign in', "[Sign in to access Extensions Marketplace]({0})", `command:workbench.extensions.actions.gallery.signIn`),
+			content: localize('sign in', "[Sign in to access Snaps Marketplace]({0})", `command:workbench.extensions.actions.gallery.signIn`),
 			when: CONTEXT_EXTENSIONS_GALLERY_STATUS.isEqualTo(ExtensionGalleryManifestStatus.RequiresSignIn)
 		});
 
 		// Access denied applies to every provider (microsoft/github/default), so gate on status alone.
 		viewRegistry.registerViewWelcomeContent('workbench.views.extensions.marketplaceAccess', {
-			content: localize('access denied', "Your account does not have access to the Extensions Marketplace. Please contact your administrator."),
+			content: localize('access denied', "Your account does not have access to the Snaps Marketplace. Please contact your administrator."),
 			when: CONTEXT_EXTENSIONS_GALLERY_STATUS.isEqualTo(ExtensionGalleryManifestStatus.AccessDenied)
 		});
 	}
@@ -221,7 +221,7 @@ export class ExtensionsViewletViewsContribution extends Disposable implements IW
 						super({
 							id: 'workbench.extensions.installLocalExtensions',
 							get title() {
-								return localize2('select and install local extensions', "Install Local Extensions in '{0}'...", server.label);
+								return localize2('select and install local extensions', "Install Local Snaps in '{0}'...", server.label);
 							},
 							category: REMOTE_CATEGORY,
 							icon: installLocalInRemoteIcon,
@@ -245,7 +245,7 @@ export class ExtensionsViewletViewsContribution extends Disposable implements IW
 				constructor() {
 					super({
 						id: 'workbench.extensions.actions.installLocalExtensionsInRemote',
-						title: localize2('install remote in local', 'Install Remote Extensions Locally...'),
+						title: localize2('install remote in local', 'Install Remote Snaps Locally...'),
 						category: REMOTE_CATEGORY,
 						f1: true
 					});
@@ -630,7 +630,7 @@ export class ExtensionsViewPaneContainer extends ViewPaneContainer<IExtensionsVi
 		hide(overlay);
 
 		this.header = append(this.root, $('.header'));
-		const placeholder = localize('searchExtensions', "Search Extensions in Marketplace");
+		const placeholder = localize('searchExtensions', "Search Snaps in Marketplace");
 
 		const searchValue = this.searchViewletState['query.value'] ? this.searchViewletState['query.value'] : '';
 
@@ -943,16 +943,16 @@ export class ExtensionsViewPaneContainer extends ViewPaneContainer<IExtensionsVi
 				break;
 			case 1:
 				if (view) {
-					alert(localize('extensionFoundInSection', "1 extension found in the {0} section.", view.name.value));
+					alert(localize('extensionFoundInSection', "1 snap found in the {0} section.", view.name.value));
 				} else {
-					alert(localize('extensionFound', "1 extension found."));
+					alert(localize('extensionFound', "1 snap found."));
 				}
 				break;
 			default:
 				if (view) {
-					alert(localize('extensionsFoundInSection', "{0} extensions found in the {1} section.", count, view.name.value));
+					alert(localize('extensionsFoundInSection', "{0} snaps found in the {1} section.", count, view.name.value));
 				} else {
-					alert(localize('extensionsFound', "{0} extensions found.", count));
+					alert(localize('extensionsFound', "{0} snaps found.", count));
 				}
 				break;
 		}
@@ -1109,7 +1109,7 @@ export class MaliciousExtensionChecker implements IWorkbenchContribution {
 					const buttons: IPromptChoice[] = [];
 					if (shouldRestartExtensions || shouldReloadWindow) {
 						buttons.push({
-							label: shouldRestartExtensions ? localize('restartNow', "Restart Extensions") : localize('reloadNow', "Reload Now"),
+							label: shouldRestartExtensions ? localize('restartNow', "Restart Snaps") : localize('reloadNow', "Reload Now"),
 							run: () => shouldRestartExtensions ? this.extensionsWorkbenchService.updateRunningExtensions() : this.hostService.reload()
 						});
 					}
@@ -1121,7 +1121,7 @@ export class MaliciousExtensionChecker implements IWorkbenchContribution {
 					}
 					this.notificationService.prompt(
 						Severity.Warning,
-						localize('malicious warning', "The extension '{0}' was found to be problematic and has been uninstalled", extension.manifest.displayName || extension.identifier.id),
+						localize('malicious warning', "The snap '{0}' was found to be problematic and has been uninstalled", extension.manifest.displayName || extension.identifier.id),
 						buttons,
 						{
 							sticky: true,

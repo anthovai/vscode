@@ -542,7 +542,7 @@ export class PromptFilePickers {
 		}
 
 		// By default, extension prompt files are grouped under "Extensions"
-		return localize('separator.extensions', "Extensions");
+		return localize('separator.extensions', "Snaps");
 
 	}
 

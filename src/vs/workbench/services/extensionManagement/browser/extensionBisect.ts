@@ -197,8 +197,8 @@ class ExtensionBisectUi {
 		};
 
 		const message = this._extensionBisectService.disabledCount === 1
-			? localize('bisect.singular', "Extension Bisect is active and has disabled 1 extension. Check if you can still reproduce the problem and proceed by selecting from these options.")
-			: localize('bisect.plural', "Extension Bisect is active and has disabled {0} extensions. Check if you can still reproduce the problem and proceed by selecting from these options.", this._extensionBisectService.disabledCount);
+			? localize('bisect.singular', "Snap Bisect is active and has disabled 1 snap. Check if you can still reproduce the problem and proceed by selecting from these options.")
+			: localize('bisect.plural', "Snap Bisect is active and has disabled {0} snaps. Check if you can still reproduce the problem and proceed by selecting from these options.", this._extensionBisectService.disabledCount);
 
 		this._notificationService.prompt(
 			Severity.Info,
@@ -218,7 +218,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'extension.bisect.start',
-			title: localize2('title.start', 'Start Extension Bisect'),
+			title: localize2('title.start', 'Start Snap Bisect'),
 			category: Categories.Help,
 			f1: true,
 			precondition: ExtensionBisectUi.ctxIsBisectActive.negate(),
@@ -241,9 +241,9 @@ registerAction2(class extends Action2 {
 		const extensions = (await extensionManagement.getInstalled(ExtensionType.User)).filter(ext => extensionEnablementService.isEnabled(ext));
 
 		const res = await dialogService.confirm({
-			message: localize('msg.start', "Extension Bisect"),
-			detail: localize('detail.start', "Extension Bisect will use binary search to find an extension that causes a problem. During the process the window reloads repeatedly (~{0} times). Each time you must confirm if you are still seeing problems.", 2 + Math.log2(extensions.length) | 0),
-			primaryButton: localize({ key: 'msg2', comment: ['&& denotes a mnemonic'] }, "&&Start Extension Bisect")
+			message: localize('msg.start', "Snap Bisect"),
+			detail: localize('detail.start', "Snap Bisect will use binary search to find a snap that causes a problem. During the process the window reloads repeatedly (~{0} times). Each time you must confirm if you are still seeing problems.", 2 + Math.log2(extensions.length) | 0),
+			primaryButton: localize({ key: 'msg2', comment: ['&& denotes a mnemonic'] }, "&&Start Snap Bisect")
 		});
 
 		if (res.confirmed) {
@@ -257,7 +257,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'extension.bisect.next',
-			title: localize2('title.isBad', 'Continue Extension Bisect'),
+			title: localize2('title.isBad', 'Continue Snap Bisect'),
 			category: Categories.Help,
 			f1: true,
 			precondition: ExtensionBisectUi.ctxIsBisectActive
@@ -296,19 +296,19 @@ registerAction2(class extends Action2 {
 		if (done.bad) {
 			// DONE but nothing found
 			await dialogService.info(
-				localize('done.msg', "Extension Bisect"),
-				localize('done.detail2', "Extension Bisect is done but no extension has been identified. This might be a problem with {0}.", productService.nameShort)
+				localize('done.msg', "Snap Bisect"),
+				localize('done.detail2', "Snap Bisect is done but no snap has been identified. This might be a problem with {0}.", productService.nameShort)
 			);
 
 		} else {
 			// DONE and identified extension
 			const res = await dialogService.confirm({
 				type: Severity.Info,
-				message: localize('done.msg', "Extension Bisect"),
+				message: localize('done.msg', "Snap Bisect"),
 				primaryButton: localize({ key: 'report', comment: ['&& denotes a mnemonic'] }, "&&Report Issue & Continue"),
 				cancelButton: localize('continue', "Continue"),
-				detail: localize('done.detail', "Extension Bisect is done and has identified {0} as the extension causing the problem.", done.id),
-				checkbox: { label: localize('done.disbale', "Keep this extension disabled"), checked: true }
+				detail: localize('done.detail', "Snap Bisect is done and has identified {0} as the snap causing the problem.", done.id),
+				checkbox: { label: localize('done.disbale', "Keep this snap disabled"), checked: true }
 			});
 			if (res.checkboxChecked) {
 				await extensionEnablementService.disableExtension({ id: done.id }, undefined);
@@ -324,8 +324,8 @@ registerAction2(class extends Action2 {
 	private async _checkForBad(dialogService: IDialogService, bisectService: IExtensionBisectService): Promise<boolean | undefined | null> {
 		const { result } = await dialogService.prompt<boolean | undefined | null>({
 			type: Severity.Info,
-			message: localize('msg.next', "Extension Bisect"),
-			detail: localize('bisect', "Extension Bisect is active and has disabled {0} extensions. Check if you can still reproduce the problem and proceed by selecting from these options.", bisectService.disabledCount),
+			message: localize('msg.next', "Snap Bisect"),
+			detail: localize('bisect', "Snap Bisect is active and has disabled {0} snaps. Check if you can still reproduce the problem and proceed by selecting from these options.", bisectService.disabledCount),
 			buttons: [
 				{
 					label: localize({ key: 'next.good', comment: ['&& denotes a mnemonic'] }, "I ca&&n't reproduce"),
@@ -353,7 +353,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'extension.bisect.stop',
-			title: localize2('title.stop', 'Stop Extension Bisect'),
+			title: localize2('title.stop', 'Stop Snap Bisect'),
 			category: Categories.Help,
 			f1: true,
 			precondition: ExtensionBisectUi.ctxIsBisectActive

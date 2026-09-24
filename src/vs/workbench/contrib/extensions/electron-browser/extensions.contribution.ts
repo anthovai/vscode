@@ -32,7 +32,7 @@ registerSingleton(IExtensionHostProfileService, ExtensionHostProfileService, Ins
 
 // Running Extensions Editor
 Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane(
-	EditorPaneDescriptor.create(RuntimeExtensionsEditor, RuntimeExtensionsEditor.ID, localize('runtimeExtension', "Running Extensions")),
+	EditorPaneDescriptor.create(RuntimeExtensionsEditor, RuntimeExtensionsEditor.ID, localize('runtimeExtension', "Running Snaps")),
 	[new SyncDescriptor(RuntimeExtensionsInput)]
 );
 

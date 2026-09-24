@@ -557,7 +557,7 @@ export async function createTocTreeForExtensionSettings(extensionService: IExten
 
 		return {
 			id: 'extensions',
-			label: localize('extensions', "Extensions"),
+			label: localize('extensions', "Snap"),
 			children: extGroups
 		};
 	});

@@ -169,7 +169,7 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 				}
 				this.notificationService.prompt(
 					Severity.Info,
-					localize('ignoreExtensionRecommendations', "Do you want to ignore all extension recommendations?"),
+					localize('ignoreExtensionRecommendations', "Do you want to ignore all snap recommendations?"),
 					[{
 						label: localize('ignoreAll', "Yes, Ignore All"),
 						run: () => this.setIgnoreRecommendationsConfig(true)
@@ -242,15 +242,15 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 
 		let extensionsMessage = '';
 		if (extensions.length === 1) {
-			extensionsMessage = localize('extensionFromPublisher', "'{0}' extension from {1}", extensions[0].displayName, extensions[0].publisherDisplayName);
+			extensionsMessage = localize('extensionFromPublisher', "'{0}' snap from {1}", extensions[0].displayName, extensions[0].publisherDisplayName);
 		} else {
 			const publishers = [...extensions.reduce((result, extension) => result.add(extension.publisherDisplayName), new Set<string>())];
 			if (publishers.length > 2) {
-				extensionsMessage = localize('extensionsFromMultiplePublishers', "extensions from {0}, {1} and others", publishers[0], publishers[1]);
+				extensionsMessage = localize('extensionsFromMultiplePublishers', "snaps from {0}, {1} and others", publishers[0], publishers[1]);
 			} else if (publishers.length === 2) {
-				extensionsMessage = localize('extensionsFromPublishers', "extensions from {0} and {1}", publishers[0], publishers[1]);
+				extensionsMessage = localize('extensionsFromPublishers', "snaps from {0} and {1}", publishers[0], publishers[1]);
 			} else {
-				extensionsMessage = localize('extensionsFromPublisher', "extensions from {0}", publishers[0]);
+				extensionsMessage = localize('extensionsFromPublisher', "snaps from {0}", publishers[0]);
 			}
 		}
 
@@ -263,7 +263,7 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 		}
 
 		const donotShowAgainLabel = source === RecommendationSource.WORKSPACE ? localize('donotShowAgain', "Don't Show Again for this Repository")
-			: extensions.length > 1 ? localize('donotShowAgainExtension', "Don't Show Again for these Extensions") : localize('donotShowAgainExtensionSingle', "Don't Show Again for this Extension");
+			: extensions.length > 1 ? localize('donotShowAgainExtension', "Don't Show Again for these Snaps") : localize('donotShowAgainExtensionSingle', "Don't Show Again for this Snap");
 
 		return raceCancellablePromises([
 			this._registerP(this.showRecommendationsNotification(extensions, message, searchValue, donotShowAgainLabel, source, recommendationsNotificationActions)),

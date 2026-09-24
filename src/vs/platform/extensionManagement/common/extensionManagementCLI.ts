@@ -17,8 +17,8 @@ import { ILogger } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
 
 
-const notFound = (id: string) => localize('notFound', "Extension '{0}' not found.", id);
-const useId = localize('useId', "Make sure you use the full extension ID, including the publisher, e.g.: {0}", 'ms-dotnettools.csharp');
+const notFound = (id: string) => localize('notFound', "Snap '{0}' not found.", id);
+const useId = localize('useId', "Make sure you use the full snap ID, including the publisher, e.g.: {0}", 'ms-dotnettools.csharp');
 
 type InstallVSIXInfo = { vsix: URI; installOptions: InstallOptions };
 type InstallGalleryExtensionInfo = { id: string; version?: string; installOptions: InstallOptions };
@@ -62,7 +62,7 @@ export class ExtensionManagementCLI {
 			return;
 		}
 		if (this.location) {
-			this.logger.info(localize('listFromLocation', "Extensions installed on {0}:", this.location));
+			this.logger.info(localize('listFromLocation', "Snaps installed on {0}:", this.location));
 		}
 
 		extensions = extensions.sort((e1, e2) => e1.identifier.id.localeCompare(e2.identifier.id));
@@ -80,7 +80,7 @@ export class ExtensionManagementCLI {
 
 		try {
 			if (extensions.length) {
-				this.logger.info(this.location ? localize('installingExtensionsOnLocation', "Installing extensions on {0}...", this.location) : localize('installingExtensions', "Installing extensions..."));
+				this.logger.info(this.location ? localize('installingExtensionsOnLocation', "Installing snaps on {0}...", this.location) : localize('installingExtensions', "Installing extensions..."));
 			}
 
 			const installVSIXInfos: InstallVSIXInfo[] = [];
@@ -126,12 +126,12 @@ export class ExtensionManagementCLI {
 				failed.push(...failedGalleryExtensions);
 			}
 		} catch (error) {
-			this.logger.error(localize('error while installing extensions', "Error while installing extensions: {0}", getErrorMessage(error)));
+			this.logger.error(localize('error while installing extensions', "Error while installing snaps: {0}", getErrorMessage(error)));
 			throw error;
 		}
 
 		if (failed.length) {
-			throw new Error(localize('installation failed', "Failed Installing Extensions: {0}", failed.join(', ')));
+			throw new Error(localize('installation failed', "Failed Installing Snaps: {0}", failed.join(', ')));
 		}
 	}
 
@@ -145,7 +145,7 @@ export class ExtensionManagementCLI {
 			}
 		}
 
-		this.logger.trace(localize({ key: 'updateExtensionsQuery', comment: ['Placeholder is for the count of extensions'] }, "Fetching latest versions for {0} extensions", installedExtensionsQuery.length));
+		this.logger.trace(localize({ key: 'updateExtensionsQuery', comment: ['Placeholder is for the count of extensions'] }, "Fetching latest versions for {0} snaps", installedExtensionsQuery.length));
 		const availableVersions = await this.extensionGalleryService.getExtensions(installedExtensionsQuery, { compatible: true }, CancellationToken.None);
 
 		const extensionsToUpdate: InstallExtensionInfo[] = [];
@@ -161,18 +161,18 @@ export class ExtensionManagementCLI {
 		}
 
 		if (!extensionsToUpdate.length) {
-			this.logger.info(localize('updateExtensionsNoExtensions', "No extension to update"));
+			this.logger.info(localize('updateExtensionsNoExtensions', "No snap to update"));
 			return;
 		}
 
-		this.logger.info(localize('updateExtensionsNewVersionsAvailable', "Updating extensions: {0}", extensionsToUpdate.map(ext => ext.extension.identifier.id).join(', ')));
+		this.logger.info(localize('updateExtensionsNewVersionsAvailable', "Updating snaps: {0}", extensionsToUpdate.map(ext => ext.extension.identifier.id).join(', ')));
 		const installationResult = await this.extensionManagementService.installGalleryExtensions(extensionsToUpdate);
 
 		for (const extensionResult of installationResult) {
 			if (extensionResult.error) {
-				this.logger.error(localize('errorUpdatingExtension', "Error while updating extension {0}: {1}", extensionResult.identifier.id, getErrorMessage(extensionResult.error)));
+				this.logger.error(localize('errorUpdatingExtension', "Error while updating snap {0}: {1}", extensionResult.identifier.id, getErrorMessage(extensionResult.error)));
 			} else {
-				this.logger.info(localize('successUpdate', "Extension '{0}' v{1} was successfully updated.", extensionResult.identifier.id, extensionResult.local?.manifest.version));
+				this.logger.info(localize('successUpdate', "Snap '{0}' v{1} was successfully updated.", extensionResult.identifier.id, extensionResult.local?.manifest.version));
 			}
 		}
 	}
@@ -188,11 +188,11 @@ export class ExtensionManagementCLI {
 					return false;
 				}
 				if (!force && (!version || (version === 'prerelease' && installedExtension.preRelease))) {
-					this.logger.info(localize('alreadyInstalled-checkAndUpdate', "Extension '{0}' v{1} is already installed. Use '--force' option to update to latest version or provide '@<version>' to install a specific version, for example: '{2}@1.2.3'.", id, installedExtension.manifest.version, id));
+					this.logger.info(localize('alreadyInstalled-checkAndUpdate', "Snap '{0}' v{1} is already installed. Use '--force' option to update to latest version or provide '@<version>' to install a specific version, for example: '{2}@1.2.3'.", id, installedExtension.manifest.version, id));
 					return false;
 				}
 				if (version && installedExtension.manifest.version === version) {
-					this.logger.info(localize('alreadyInstalled', "Extension '{0}' is already installed.", `${id}@${version}`));
+					this.logger.info(localize('alreadyInstalled', "Snap '{0}' is already installed.", `${id}@${version}`));
 					return false;
 				}
 				if (installedExtension.preRelease && version !== 'prerelease') {
@@ -229,15 +229,15 @@ export class ExtensionManagementCLI {
 			const installedExtension = installed.find(e => areSameExtensions(e.identifier, gallery.identifier));
 			if (installedExtension) {
 				if (gallery.version === installedExtension.manifest.version) {
-					this.logger.info(localize('alreadyInstalled', "Extension '{0}' is already installed.", version ? `${id}@${version}` : id));
+					this.logger.info(localize('alreadyInstalled', "Snap '{0}' is already installed.", version ? `${id}@${version}` : id));
 					return;
 				}
-				this.logger.info(localize('updateMessage', "Updating the extension '{0}' to the version {1}", id, gallery.version));
+				this.logger.info(localize('updateMessage', "Updating the snap '{0}' to the version {1}", id, gallery.version));
 			}
 			if (installOptions.isBuiltin) {
-				this.logger.info(version ? localize('installing builtin with version', "Installing builtin extension '{0}' v{1}...", id, version) : localize('installing builtin ', "Installing builtin extension '{0}'...", id));
+				this.logger.info(version ? localize('installing builtin with version', "Installing builtin snap '{0}' v{1}...", id, version) : localize('installing builtin ', "Installing builtin snap '{0}'...", id));
 			} else {
-				this.logger.info(version ? localize('installing with version', "Installing extension '{0}' v{1}...", id, version) : localize('installing', "Installing extension '{0}'...", id));
+				this.logger.info(version ? localize('installing with version', "Installing snap '{0}' v{1}...", id, version) : localize('installing', "Installing snap '{0}'...", id));
 			}
 			extensionsToInstall.push({
 				extension: gallery,
@@ -249,10 +249,10 @@ export class ExtensionManagementCLI {
 			const installationResult = await this.extensionManagementService.installGalleryExtensions(extensionsToInstall);
 			for (const extensionResult of installationResult) {
 				if (extensionResult.error) {
-					this.logger.error(localize('errorInstallingExtension', "Error while installing extension {0}: {1}", extensionResult.identifier.id, getErrorMessage(extensionResult.error)));
+					this.logger.error(localize('errorInstallingExtension', "Error while installing snap {0}: {1}", extensionResult.identifier.id, getErrorMessage(extensionResult.error)));
 					failed.push(extensionResult.identifier.id);
 				} else {
-					this.logger.info(localize('successInstall', "Extension '{0}' v{1} was successfully installed.", extensionResult.identifier.id, extensionResult.local?.manifest.version));
+					this.logger.info(localize('successInstall', "Snap '{0}' v{1} was successfully installed.", extensionResult.identifier.id, extensionResult.local?.manifest.version));
 				}
 			}
 		}
@@ -271,10 +271,10 @@ export class ExtensionManagementCLI {
 		if (valid) {
 			try {
 				await this.extensionManagementService.install(vsix, { ...installOptions, installGivenVersion: true });
-				this.logger.info(localize('successVsixInstall', "Extension '{0}' was successfully installed.", basename(vsix)));
+				this.logger.info(localize('successVsixInstall', "Snap '{0}' was successfully installed.", basename(vsix)));
 			} catch (error) {
 				if (isCancellationError(error)) {
-					this.logger.info(localize('cancelVsixInstall', "Cancelled installing extension '{0}'.", basename(vsix)));
+					this.logger.info(localize('cancelVsixInstall', "Cancelled installing snap '{0}'.", basename(vsix)));
 				} else {
 					throw error;
 				}
@@ -318,7 +318,7 @@ export class ExtensionManagementCLI {
 
 			if (!force) {
 				if (gt(existingExtension.manifest.version, manifest.version)) {
-					this.logger.info(localize('forceDowngrade', "A newer version of extension '{0}' v{1} is already installed. Use '--force' option to downgrade to older version.", existingExtension.identifier.id, existingExtension.manifest.version, manifest.version));
+					this.logger.info(localize('forceDowngrade', "A newer version of snap '{0}' v{1} is already installed. Use '--force' option to downgrade to older version.", existingExtension.identifier.id, existingExtension.manifest.version, manifest.version));
 					return false;
 				}
 			}
@@ -345,11 +345,11 @@ export class ExtensionManagementCLI {
 				throw new Error(`${this.notInstalled(id)}\n${useId}`);
 			}
 			if (extensionsToUninstall.some(e => e.type === ExtensionType.System)) {
-				this.logger.info(localize('builtin', "Extension '{0}' is a Built-in extension and cannot be uninstalled", id));
+				this.logger.info(localize('builtin', "Snap '{0}' is a Built-in snap and cannot be uninstalled", id));
 				return;
 			}
 			if (!force && extensionsToUninstall.some(e => e.isBuiltin)) {
-				this.logger.info(localize('forceUninstall', "Extension '{0}' is marked as a Built-in extension by user. Please use '--force' option to uninstall it.", id));
+				this.logger.info(localize('forceUninstall', "Snap '{0}' is marked as a Built-in snap by user. Please use '--force' option to uninstall it.", id));
 				return;
 			}
 			this.logger.info(localize('uninstalling', "Uninstalling {0}...", id));
@@ -359,9 +359,9 @@ export class ExtensionManagementCLI {
 			}
 
 			if (this.location) {
-				this.logger.info(localize('successUninstallFromLocation', "Extension '{0}' was successfully uninstalled from {1}!", id, this.location));
+				this.logger.info(localize('successUninstallFromLocation', "Snap '{0}' was successfully uninstalled from {1}!", id, this.location));
 			} else {
-				this.logger.info(localize('successUninstall', "Extension '{0}' was successfully uninstalled!", id));
+				this.logger.info(localize('successUninstall', "Snap '{0}' was successfully uninstalled!", id));
 			}
 
 		}
@@ -382,12 +382,12 @@ export class ExtensionManagementCLI {
 	}
 
 	private notInstalled(id: string) {
-		return this.location ? localize('notInstalleddOnLocation', "Extension '{0}' is not installed on {1}.", id, this.location) : localize('notInstalled', "Extension '{0}' is not installed.", id);
+		return this.location ? localize('notInstalleddOnLocation', "Snap '{0}' is not installed on {1}.", id, this.location) : localize('notInstalled', "Snap '{0}' is not installed.", id);
 	}
 
 	private validateBuiltinExtensionEnabledWithAutoUpdates(extension: ILocalExtension): string | undefined {
 		if (extension.isBuiltin && this.productService.builtInExtensionsEnabledWithAutoUpdates.some(e => e.toLowerCase() === extension.identifier.id.toLowerCase()) && !extension.forceAutoUpdate) {
-			return localize('builtinAutoUpdate', "Extension '{0}' is a built-in extension and not allowed to be updated in the current product quality '{1}'.", extension.identifier.id, this.productService.quality);
+			return localize('builtinAutoUpdate', "Snap '{0}' is a built-in snap and not allowed to be updated in the current product quality '{1}'.", extension.identifier.id, this.productService.quality);
 		}
 		return undefined;
 	}

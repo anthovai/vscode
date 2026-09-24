@@ -132,7 +132,7 @@ export class RuntimeExtensionsEditor extends AbstractRuntimeExtensionsEditor {
 
 export class StartExtensionHostProfileAction extends Action2 {
 	static readonly ID = 'workbench.extensions.action.extensionHostProfile';
-	static readonly LABEL = nls.localize('extensionHostProfileStart', "Start Extension Host Profile");
+	static readonly LABEL = nls.localize('extensionHostProfileStart', "Start Snap Host Profile");
 
 	constructor() {
 		super({
@@ -161,7 +161,7 @@ export class StartExtensionHostProfileAction extends Action2 {
 
 export class StopExtensionHostProfileAction extends Action2 {
 	static readonly ID = 'workbench.extensions.action.stopExtensionHostProfile';
-	static readonly LABEL = nls.localize('stopExtensionHostProfileStart', "Stop Extension Host Profile");
+	static readonly LABEL = nls.localize('stopExtensionHostProfileStart', "Stop Snap Host Profile");
 
 	constructor() {
 		super({
@@ -188,7 +188,7 @@ export class StopExtensionHostProfileAction extends Action2 {
 }
 
 export class OpenExtensionHostProfileACtion extends Action2 {
-	static readonly LABEL = nls.localize('openExtensionHostProfile', "Open Extension Host Profile");
+	static readonly LABEL = nls.localize('openExtensionHostProfile', "Open Snap Host Profile");
 	static readonly ID = 'workbench.extensions.action.openExtensionHostProfile';
 
 	constructor() {
@@ -233,7 +233,7 @@ export class OpenExtensionHostProfileACtion extends Action2 {
 
 export class SaveExtensionHostProfileAction extends Action2 {
 
-	static readonly LABEL = nls.localize('saveExtensionHostProfile', "Save Extension Host Profile");
+	static readonly LABEL = nls.localize('saveExtensionHostProfile', "Save Snap Host Profile");
 	static readonly ID = 'workbench.extensions.action.saveExtensionHostProfile';
 
 	constructor() {
@@ -269,7 +269,7 @@ export class SaveExtensionHostProfileAction extends Action2 {
 		fileDialogService: IFileDialogService
 	): Promise<any> {
 		const picked = await fileDialogService.showSaveDialog({
-			title: nls.localize('saveprofile.dialogTitle', "Save Extension Host Profile"),
+			title: nls.localize('saveprofile.dialogTitle', "Save Snap Host Profile"),
 			availableFileSystems: [Schemas.file],
 			defaultUri: joinPath(await fileDialogService.defaultFilePath(), `CPU-${new Date().toISOString().replace(/[\-:]/g, '')}.cpuprofile`),
 			filters: [{

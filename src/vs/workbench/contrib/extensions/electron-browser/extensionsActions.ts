@@ -19,7 +19,7 @@ export class OpenExtensionsFolderAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.extensions.action.openExtensionsFolder',
-			title: localize2('openExtensionsFolder', 'Open Extensions Folder'),
+			title: localize2('openExtensionsFolder', 'Open Snaps Folder'),
 			category: Categories.Developer,
 			f1: true
 		});
@@ -51,7 +51,7 @@ export class CleanUpExtensionsFolderAction extends Action2 {
 	constructor() {
 		super({
 			id: '_workbench.extensions.action.cleanUpExtensionsFolder',
-			title: localize2('cleanUpExtensionsFolder', 'Cleanup Extensions Folder'),
+			title: localize2('cleanUpExtensionsFolder', 'Cleanup Snaps Folder'),
 			category: Categories.Developer,
 			f1: true
 		});

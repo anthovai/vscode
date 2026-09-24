@@ -788,7 +788,7 @@ export class ExtensionsListView extends AbstractExtensionsListView<IExtension> {
 			const localExtensions = this.extensionsWorkbenchService.local.filter(e => !e.isBuiltin && (e.name.toLowerCase().indexOf(searchText) > -1 || e.displayName.toLowerCase().indexOf(searchText) > -1 || e.description.toLowerCase().indexOf(searchText) > -1));
 			if (localExtensions.length) {
 				const message = this.getMessage(error);
-				return { model: new PagedModel(localExtensions), disposables: new DisposableStore(), message: { text: localize('showing local extensions only', "{0} Showing local extensions.", message.text), severity: message.severity } };
+				return { model: new PagedModel(localExtensions), disposables: new DisposableStore(), message: { text: localize('showing local extensions only', "{0} Showing local snaps.", message.text), severity: message.severity } };
 			}
 
 			throw error;
@@ -1116,7 +1116,7 @@ export class ExtensionsListView extends AbstractExtensionsListView<IExtension> {
 					this.bodyTemplate.messageBox.textContent = message.text;
 				} else if (this.count() === 0) {
 					this.bodyTemplate.messageSeverityIcon.className = '';
-					this.bodyTemplate.messageBox.textContent = localize('no extensions found', "No extensions found.");
+					this.bodyTemplate.messageBox.textContent = localize('no extensions found', "No snaps found.");
 				}
 				if (this.bodyTemplate.messageBox.textContent) {
 					alert(this.bodyTemplate.messageBox.textContent);
@@ -1131,7 +1131,7 @@ export class ExtensionsListView extends AbstractExtensionsListView<IExtension> {
 		if (this.isOfflineError(error)) {
 			return { text: localize('offline error', "Unable to search the Marketplace when offline, please check your network connection."), severity: Severity.Warning };
 		} else {
-			return { text: localize('error', "Error while fetching extensions. {0}", getErrorMessage(error)), severity: Severity.Error };
+			return { text: localize('error', "Error while fetching snaps. {0}", getErrorMessage(error)), severity: Severity.Error };
 		}
 	}
 
@@ -1561,7 +1561,7 @@ export class WorkspaceRecommendedExtensionsView extends ExtensionsListView imple
 		} else {
 			this.notificationService.notify({
 				severity: Severity.Info,
-				message: localize('no local extensions', "There are no extensions to install.")
+				message: localize('no local extensions', "There are no snaps to install.")
 			});
 		}
 	}

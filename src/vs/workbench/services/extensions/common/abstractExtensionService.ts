@@ -228,7 +228,7 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 			} else {
 				event.join(this._doStopExtensionHosts(), {
 					id: 'join.stopExtensionHosts',
-					label: nls.localize('stopExtensionHosts', "Stopping Extension Hosts"),
+					label: nls.localize('stopExtensionHosts', "Stopping Snap Hosts"),
 				});
 			}
 		}));
@@ -322,7 +322,7 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 		if (result.removedDueToLooping.length > 0) {
 			this._notificationService.notify({
 				severity: Severity.Error,
-				message: nls.localize('looping', "The following extensions contain dependency loops and have been disabled: {0}", result.removedDueToLooping.map(e => `'${e.identifier.value}'`).join(', '))
+				message: nls.localize('looping', "The following snaps contain dependency loops and have been disabled: {0}", result.removedDueToLooping.map(e => `'${e.identifier.value}'`).join(', '))
 			});
 		}
 
@@ -571,7 +571,7 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 		if (result.removedDueToLooping.length > 0) {
 			this._notificationService.notify({
 				severity: Severity.Error,
-				message: nls.localize('looping', "The following extensions contain dependency loops and have been disabled: {0}", result.removedDueToLooping.map(e => `'${e.identifier.value}'`).join(', '))
+				message: nls.localize('looping', "The following snaps contain dependency loops and have been disabled: {0}", result.removedDueToLooping.map(e => `'${e.identifier.value}'`).join(', '))
 			});
 		}
 
@@ -585,7 +585,7 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 
 		const extensionHostManager = this.findTestExtensionHost(this._environmentService.extensionTestsLocationURI);
 		if (!extensionHostManager) {
-			const msg = nls.localize('extensionTestError', "No extension host found that can launch the test runner at {0}.", this._environmentService.extensionTestsLocationURI.toString());
+			const msg = nls.localize('extensionTestError', "No snap host found that can launch the test runner at {0}.", this._environmentService.extensionTestsLocationURI.toString());
 			console.error(msg);
 			this._notificationService.error(msg);
 			return;
@@ -800,7 +800,7 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 
 				const { confirmed } = await this._dialogService.confirm({
 					type: Severity.Warning,
-					message: nls.localize('extensionStopVetoMessage', "Please confirm restart of extensions."),
+					message: nls.localize('extensionStopVetoMessage', "Please confirm restart of snaps."),
 					detail: vetoReasonsArray.length === 1 ?
 						vetoReasonsArray[0] :
 						vetoReasonsArray.join('\n -'),
@@ -920,12 +920,12 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 
 			if (this._remoteCrashTracker.shouldAutomaticallyRestart()) {
 				this._logService.info(`Automatically restarting the remote extension host.`);
-				this._notificationService.status(nls.localize('extensionService.autoRestart', "The remote extension host terminated unexpectedly. Restarting..."), { hideAfter: 5000 });
+				this._notificationService.status(nls.localize('extensionService.autoRestart', "The remote snap host terminated unexpectedly. Restarting..."), { hideAfter: 5000 });
 				this._startExtensionHostsIfNecessary(false, Array.from(this._allRequestedActivateEvents.keys()));
 			} else {
-				this._notificationService.prompt(Severity.Error, nls.localize('extensionService.crash', "Remote Extension host terminated unexpectedly 3 times within the last 5 minutes."),
+				this._notificationService.prompt(Severity.Error, nls.localize('extensionService.crash', "Remote Snap host terminated unexpectedly 3 times within the last 5 minutes."),
 					[{
-						label: nls.localize('restart', "Restart Remote Extension Host"),
+						label: nls.localize('restart', "Restart Remote Snap Host"),
 						run: () => {
 							this._startExtensionHostsIfNecessary(false, Array.from(this._allRequestedActivateEvents.keys()));
 						}

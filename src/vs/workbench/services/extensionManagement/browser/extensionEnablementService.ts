@@ -139,8 +139,8 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 		// delay notification for extensions disabled until workbench restored
 		if (this.allUserExtensionsDisabled) {
 			this.lifecycleService.when(LifecyclePhase.Eventually).then(() => {
-				this.notificationService.prompt(Severity.Info, localize('extensionsDisabled', "All installed extensions are temporarily disabled."), [{
-					label: localize('Reload', "Reload and Enable Extensions"),
+				this.notificationService.prompt(Severity.Info, localize('extensionsDisabled', "All installed snaps are temporarily disabled."), [{
+					label: localize('Reload', "Reload and Enable Snaps"),
 					run: () => hostService.reload({ disableExtensions: false })
 				}], {
 					sticky: true,
@@ -254,15 +254,15 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 
 	private throwErrorIfCannotChangeEnablement(extension: IExtension, donotCheckDependencies?: boolean): void {
 		if (isLanguagePackExtension(extension.manifest)) {
-			throw new Error(localize('cannot disable language pack extension', "Cannot change enablement of {0} extension because it contributes language packs.", extension.manifest.displayName || extension.identifier.id));
+			throw new Error(localize('cannot disable language pack extension', "Cannot change enablement of {0} snap because it contributes language packs.", extension.manifest.displayName || extension.identifier.id));
 		}
 
 		if (this.isDefaultOrSettingsSyncAuthProviderExtension(extension.manifest)) {
-			throw new Error(localize('cannot disable settings sync auth extension', "Cannot change enablement of {0} extension because Settings Sync depends on it.", extension.manifest.displayName || extension.identifier.id));
+			throw new Error(localize('cannot disable settings sync auth extension', "Cannot change enablement of {0} snap because Settings Sync depends on it.", extension.manifest.displayName || extension.identifier.id));
 		}
 
 		if (this._isEnabledInEnv(extension)) {
-			throw new Error(localize('cannot change enablement environment', "Cannot change enablement of {0} extension because it is enabled in environment", extension.manifest.displayName || extension.identifier.id));
+			throw new Error(localize('cannot change enablement environment', "Cannot change enablement of {0} snap because it is enabled in environment", extension.manifest.displayName || extension.identifier.id));
 		}
 
 		this.throwErrorIfEnablementStateCannotBeChanged(extension, this.getEnablementState(extension), donotCheckDependencies);
@@ -271,17 +271,17 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 	private throwErrorIfEnablementStateCannotBeChanged(extension: IExtension, enablementStateOfExtension: EnablementState, donotCheckDependencies?: boolean): void {
 		switch (enablementStateOfExtension) {
 			case EnablementState.DisabledByEnvironment:
-				throw new Error(localize('cannot change disablement environment', "Cannot change enablement of {0} extension because it is disabled in environment", extension.manifest.displayName || extension.identifier.id));
+				throw new Error(localize('cannot change disablement environment', "Cannot change enablement of {0} snap because it is disabled in environment", extension.manifest.displayName || extension.identifier.id));
 			case EnablementState.DisabledByMalicious:
-				throw new Error(localize('cannot change enablement malicious', "Cannot change enablement of {0} extension because it is malicious", extension.manifest.displayName || extension.identifier.id));
+				throw new Error(localize('cannot change enablement malicious', "Cannot change enablement of {0} snap because it is malicious", extension.manifest.displayName || extension.identifier.id));
 			case EnablementState.DisabledByVirtualWorkspace:
-				throw new Error(localize('cannot change enablement virtual workspace', "Cannot change enablement of {0} extension because it does not support virtual workspaces", extension.manifest.displayName || extension.identifier.id));
+				throw new Error(localize('cannot change enablement virtual workspace', "Cannot change enablement of {0} snap because it does not support virtual workspaces", extension.manifest.displayName || extension.identifier.id));
 			case EnablementState.DisabledByExtensionKind:
-				throw new Error(localize('cannot change enablement extension kind', "Cannot change enablement of {0} extension because of its extension kind", extension.manifest.displayName || extension.identifier.id));
+				throw new Error(localize('cannot change enablement extension kind', "Cannot change enablement of {0} snap because of its snap kind", extension.manifest.displayName || extension.identifier.id));
 			case EnablementState.DisabledByAllowlist:
-				throw new Error(localize('cannot change disallowed extension enablement', "Cannot change enablement of {0} extension because it is disallowed", extension.manifest.displayName || extension.identifier.id));
+				throw new Error(localize('cannot change disallowed extension enablement', "Cannot change enablement of {0} snap because it is disallowed", extension.manifest.displayName || extension.identifier.id));
 			case EnablementState.DisabledByInvalidExtension:
-				throw new Error(localize('cannot change invalid extension enablement', "Cannot change enablement of {0} extension because of it is invalid", extension.manifest.displayName || extension.identifier.id));
+				throw new Error(localize('cannot change invalid extension enablement', "Cannot change enablement of {0} snap because of it is invalid", extension.manifest.displayName || extension.identifier.id));
 			case EnablementState.DisabledByExtensionDependency:
 				if (donotCheckDependencies) {
 					break;
@@ -291,7 +291,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 					if (this.isEnabled(dependency)) {
 						continue;
 					}
-					throw new Error(localize('cannot change enablement dependency', "Cannot enable '{0}' extension because it depends on '{1}' extension that cannot be enabled", extension.manifest.displayName || extension.identifier.id, dependency.manifest.displayName || dependency.identifier.id));
+					throw new Error(localize('cannot change enablement dependency', "Cannot enable '{0}' snap because it depends on '{1}' snap that cannot be enabled", extension.manifest.displayName || extension.identifier.id, dependency.manifest.displayName || dependency.identifier.id));
 				}
 		}
 	}
@@ -302,7 +302,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
 		}
 
 		if (this.isDefaultOrSettingsSyncAuthProviderExtension(extension.manifest)) {
-			throw new Error(localize('cannot disable settings sync auth extension in workspace', "Cannot change enablement of {0} extension in workspace because Settings Sync depends on it.", extension.manifest.displayName || extension.identifier.id));
+			throw new Error(localize('cannot disable settings sync auth extension in workspace', "Cannot change enablement of {0} snap in workspace because Settings Sync depends on it.", extension.manifest.displayName || extension.identifier.id));
 		}
 	}
 

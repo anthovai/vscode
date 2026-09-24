@@ -40,7 +40,7 @@ export const PolicyCategoryData: {
 } = {
 	[PolicyCategory.Extensions]: {
 		name: {
-			key: 'extensionsConfigurationTitle', value: localize('extensionsConfigurationTitle', "Extensions"),
+			key: 'extensionsConfigurationTitle', value: localize('extensionsConfigurationTitle', "Snap"),
 		}
 	},
 	[PolicyCategory.IntegratedTerminal]: {

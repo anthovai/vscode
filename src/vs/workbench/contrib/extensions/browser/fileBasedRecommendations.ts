@@ -63,7 +63,7 @@ export class FileBasedRecommendations extends ExtensionRecommendations {
 					extension: extensionId,
 					reason: {
 						reasonId: ExtensionRecommendationReason.File,
-						reasonText: localize('fileBasedRecommendation', "This extension is recommended based on the files you recently opened.")
+						reasonText: localize('fileBasedRecommendation', "This snap is recommended based on the files you recently opened.")
 					}
 				});
 			});

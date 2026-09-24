@@ -30,7 +30,7 @@ export class ExtensionDependencyChecker extends Disposable implements IWorkbench
 		MenuRegistry.appendMenuItem(MenuId.CommandPalette, {
 			command: {
 				id: 'workbench.extensions.installMissingDependencies',
-				category: localize('extensions', "Extensions"),
+				category: localize('extensions', "Snap"),
 				title: localize('auto install missing deps', "Install Missing Dependencies")
 			}
 		});

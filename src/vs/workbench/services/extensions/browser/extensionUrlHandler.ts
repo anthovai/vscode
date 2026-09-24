@@ -189,9 +189,9 @@ class ExtensionUrlHandler implements IExtensionUrlHandler, IURLHandler {
 			}
 
 			const result = await this.dialogService.confirm({
-				message: localize('confirmUrl', "Allow '{0}' extension to open this URI?", extensionDisplayName),
+				message: localize('confirmUrl', "Allow '{0}' snap to open this URI?", extensionDisplayName),
 				checkbox: {
-					label: localize('rememberConfirmUrl', "Do not ask me again for this extension"),
+					label: localize('rememberConfirmUrl', "Do not ask me again for this snap"),
 				},
 				primaryButton: localize({ key: 'open', comment: ['&& denotes a mnemonic'] }, "&&Open"),
 				custom: {
@@ -275,7 +275,7 @@ class ExtensionUrlHandler implements IExtensionUrlHandler, IURLHandler {
 		try {
 			await this.commandService.executeCommand('workbench.extensions.installExtension', extensionId, {
 				justification: {
-					reason: `${localize('installDetail', "This extension wants to open a URI:")}\n${uri.toString()}`,
+					reason: `${localize('installDetail', "This snap wants to open a URI:")}\n${uri.toString()}`,
 					action: localize('openUri', "Open URI")
 				},
 				enable: true,
@@ -297,7 +297,7 @@ class ExtensionUrlHandler implements IExtensionUrlHandler, IURLHandler {
 		/* Extension cannot be added and require window reload */
 		else {
 			const result = await this.dialogService.confirm({
-				message: localize('reloadAndHandle', "Extension '{0}' is not loaded. Would you like to reload the window to load the extension and open the URL?", extensionId),
+				message: localize('reloadAndHandle', "Snap '{0}' is not loaded. Would you like to reload the window to load the snap and open the URL?", extensionId),
 				primaryButton: localize({ key: 'reloadAndOpen', comment: ['&& denotes a mnemonic'] }, "&&Reload Window and Open")
 			});
 
@@ -393,8 +393,8 @@ class ManageAuthorizedExtensionURIsAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.extensions.action.manageAuthorizedExtensionURIs',
-			title: localize2('manage', 'Manage Authorized Extension URIs...'),
-			category: localize2('extensions', 'Extensions'),
+			title: localize2('manage', 'Manage Authorized Snap URIs...'),
+			category: localize2('extensions', 'Snap'),
 			menu: {
 				id: MenuId.CommandPalette,
 				when: IsWebContext.toNegated()
@@ -409,7 +409,7 @@ class ManageAuthorizedExtensionURIsAction extends Action2 {
 		const items = storage.extensions.map((label): IQuickPickItem => ({ label, picked: true }));
 
 		if (items.length === 0) {
-			await quickInputService.pick([{ label: localize('no', 'There are currently no authorized extension URIs.') }]);
+			await quickInputService.pick([{ label: localize('no', 'There are currently no authorized snap URIs.') }]);
 			return;
 		}
 

@@ -40,8 +40,8 @@ async function getExtensionHostPort(
 	const inspectPorts = await extensionService.getInspectPorts(ExtensionHostKind.LocalProcess, false);
 	if (inspectPorts.length === 0) {
 		const res = await dialogService.confirm({
-			message: nls.localize('restart1', "Debug Extensions"),
-			detail: nls.localize('restart2', "In order to debug extensions a restart is required. Do you want to restart '{0}' now?", productService.nameLong),
+			message: nls.localize('restart1', "Debug Snaps"),
+			detail: nls.localize('restart2', "In order to debug snaps a restart is required. Do you want to restart '{0}' now?", productService.nameLong),
 			primaryButton: nls.localize({ key: 'restart3', comment: ['&& denotes a mnemonic'] }, "&&Restart")
 		});
 		if (res.confirmed) {
@@ -67,7 +67,7 @@ export class DebugExtensionHostInDevToolsAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.extensions.action.devtoolsExtensionHost',
-			title: nls.localize2('openDevToolsForExtensionHost', 'Debug Extension Host In Dev Tools'),
+			title: nls.localize2('openDevToolsForExtensionHost', 'Debug Snap Host In Dev Tools'),
 			category: Categories.Developer,
 			f1: true,
 			icon: Codicon.debugStart,
@@ -99,7 +99,7 @@ export class DebugExtensionHostInDevToolsAction extends Action2 {
 		}
 
 		const selected = await quickInputService.pick<IExtensionHostQuickPickItem>(items, {
-			placeHolder: nls.localize('selectExtensionHost', "Pick extension host"),
+			placeHolder: nls.localize('selectExtensionHost', "Pick snap host"),
 			matchOnDetail: true,
 		});
 
@@ -114,7 +114,7 @@ export class DebugExtensionHostInNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.extensions.action.debugExtensionHost',
-			title: nls.localize2('debugExtensionHost', "Debug Extension Host In New Window"),
+			title: nls.localize2('debugExtensionHost', "Debug Snap Host In New Window"),
 			category: Categories.Developer,
 			f1: true,
 			icon: Codicon.debugStart,
@@ -177,7 +177,7 @@ export class DebugExtensionHostAndRendererAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.debugExtensionHostAndRenderer',
-			title: nls.localize2('debugExtensionHostAndRenderer', "Debug Extension Host and Renderer In New Window"),
+			title: nls.localize2('debugExtensionHostAndRenderer', "Debug Snap Host and Renderer In New Window"),
 			category: Categories.Developer,
 			f1: true,
 		});
@@ -267,12 +267,12 @@ export class DebugExtensionsContribution extends Disposable implements IWorkbenc
 		if (extHostPort !== undefined) {
 			debugPromises.push(_progressService.withProgress({
 				location: ProgressLocation.Notification,
-				title: nls.localize('debugExtensionHost.progress', "Attaching Debugger To Extension Host"),
+				title: nls.localize('debugExtensionHost.progress', "Attaching Debugger To Snap Host"),
 			}, async () => {
 				// eslint-disable-next-line local/code-no-dangerous-type-assertions
 				await this._debugService.startDebugging(undefined, {
 					type: 'node',
-					name: nls.localize('debugExtensionHost.launch.name', "Attach Extension Host"),
+					name: nls.localize('debugExtensionHost.launch.name', "Attach Snap Host"),
 					request: 'attach',
 					port: extHostPort,
 					...defaultDebugConfig,

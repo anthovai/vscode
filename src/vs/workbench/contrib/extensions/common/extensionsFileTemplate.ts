@@ -13,12 +13,12 @@ export const ExtensionsConfigurationSchema: IJSONSchema = {
 	allowComments: true,
 	allowTrailingCommas: true,
 	type: 'object',
-	title: localize('app.extensions.json.title', "Extensions"),
+	title: localize('app.extensions.json.title', "Snaps"),
 	additionalProperties: false,
 	properties: {
 		recommendations: {
 			type: 'array',
-			description: localize('app.extensions.json.recommendations', "List of extensions which should be recommended for users of this workspace. The identifier of an extension is always '${publisher}.${name}'. For example: 'vscode.csharp'."),
+			description: localize('app.extensions.json.recommendations', "List of snaps which should be recommended for users of this workspace. The identifier of a snap is always '${publisher}.${name}'. For example: 'vscode.csharp'."),
 			items: {
 				type: 'string',
 				pattern: EXTENSION_IDENTIFIER_PATTERN,
@@ -27,7 +27,7 @@ export const ExtensionsConfigurationSchema: IJSONSchema = {
 		},
 		unwantedRecommendations: {
 			type: 'array',
-			description: localize('app.extensions.json.unwantedRecommendations', "List of extensions recommended by VS Code that should not be recommended for users of this workspace. The identifier of an extension is always '${publisher}.${name}'. For example: 'vscode.csharp'."),
+			description: localize('app.extensions.json.unwantedRecommendations', "List of snaps recommended by VS Code that should not be recommended for users of this workspace. The identifier of a snap is always '${publisher}.${name}'. For example: 'vscode.csharp'."),
 			items: {
 				type: 'string',
 				pattern: EXTENSION_IDENTIFIER_PATTERN,

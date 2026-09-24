@@ -99,8 +99,8 @@ export class CachedExtensionScanner {
 					this._notificationService.prompt(
 						Severity.Warning,
 						invalidExtensions.length === 1
-							? localize('extensionUnderDevelopment.invalid', "Failed loading extension '{0}' under development because it is invalid: {1}", invalidExtensions[0].location.fsPath, invalidExtensions[0].validations[0][1])
-							: localize('extensionsUnderDevelopment.invalid', "Failed loading extensions {0} under development because they are invalid: {1}", invalidExtensions.map(ext => `'${ext.location.fsPath}'`).join(', '), invalidExtensions.map(ext => `${ext.validations[0][1]}`).join(', ')),
+							? localize('extensionUnderDevelopment.invalid', "Failed loading snap '{0}' under development because it is invalid: {1}", invalidExtensions[0].location.fsPath, invalidExtensions[0].validations[0][1])
+							: localize('extensionsUnderDevelopment.invalid', "Failed loading snaps {0} under development because they are invalid: {1}", invalidExtensions.map(ext => `'${ext.location.fsPath}'`).join(', '), invalidExtensions.map(ext => `${ext.validations[0][1]}`).join(', ')),
 						[]
 					);
 				}
@@ -119,7 +119,7 @@ export class CachedExtensionScanner {
 					disposable.dispose();
 					this._notificationService.prompt(
 						Severity.Error,
-						localize('extensionCache.invalid', "Extensions have been modified on disk. Please reload the window."),
+						localize('extensionCache.invalid', "Snaps have been modified on disk. Please reload the window."),
 						[{
 							label: localize('reloadWindow', "Reload Window"),
 							run: () => this._hostService.reload()

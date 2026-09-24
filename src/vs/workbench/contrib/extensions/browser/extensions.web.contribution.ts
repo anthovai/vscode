@@ -15,7 +15,7 @@ import { ShowRuntimeExtensionsAction } from './abstractRuntimeExtensionsEditor.j
 
 // Running Extensions
 Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane(
-	EditorPaneDescriptor.create(RuntimeExtensionsEditor, RuntimeExtensionsEditor.ID, localize('runtimeExtension', "Running Extensions")),
+	EditorPaneDescriptor.create(RuntimeExtensionsEditor, RuntimeExtensionsEditor.ID, localize('runtimeExtension', "Running Snaps")),
 	[new SyncDescriptor(RuntimeExtensionsInput)]
 );
 

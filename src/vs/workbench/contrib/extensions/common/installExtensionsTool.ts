@@ -16,9 +16,9 @@ export const InstallExtensionsToolData: IToolData = {
 	id: InstallExtensionsToolId,
 	toolReferenceName: 'installExtensions',
 	canBeReferencedInPrompt: true,
-	displayName: localize('installExtensionsTool.displayName', 'Install Extensions'),
+	displayName: localize('installExtensionsTool.displayName', 'Install Snaps'),
 	modelDescription: 'This is a tool for installing extensions in Visual Studio Code. You should provide the list of extension ids to install. The identifier of an extension is \'\${ publisher }.\${ name }\' for example: \'vscode.csharp\'.',
-	userDescription: localize('installExtensionsTool.userDescription', 'Tool for installing extensions'),
+	userDescription: localize('installExtensionsTool.userDescription', 'Tool for installing snaps'),
 	source: ToolDataSource.Internal,
 	inputSchema: {
 		type: 'object',
@@ -48,8 +48,8 @@ export class InstallExtensionsTool implements IToolImpl {
 		const parameters = context.parameters as InputParams;
 		return {
 			confirmationMessages: {
-				title: localize('installExtensionsTool.confirmationTitle', 'Install Extensions'),
-				message: new MarkdownString(localize('installExtensionsTool.confirmationMessage', "Review the suggested extensions and click the **Install** button for each extension you wish to add. Once you have finished installing the selected extensions, click **Continue** to proceed.")),
+				title: localize('installExtensionsTool.confirmationTitle', 'Install Snaps'),
+				message: new MarkdownString(localize('installExtensionsTool.confirmationMessage', "Review the suggested snaps and click the **Install** button for each snap you wish to add. Once you have finished installing the selected snaps, click **Continue** to proceed.")),
 			},
 			toolSpecificData: {
 				kind: 'extensions',
@@ -64,7 +64,7 @@ export class InstallExtensionsTool implements IToolImpl {
 		return {
 			content: [{
 				kind: 'text',
-				value: installed.length ? localize('installExtensionsTool.resultMessage', 'Following extensions are installed: {0}', installed.map(e => e.identifier.id).join(', ')) : localize('installExtensionsTool.noResultMessage', 'No extensions were installed.'),
+				value: installed.length ? localize('installExtensionsTool.resultMessage', 'Following snaps are installed: {0}', installed.map(e => e.identifier.id).join(', ')) : localize('installExtensionsTool.noResultMessage', 'No snaps were installed.'),
 			}]
 		};
 	}

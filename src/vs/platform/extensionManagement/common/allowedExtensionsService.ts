@@ -102,7 +102,7 @@ export class AllowedExtensionsService extends Disposable implements IAllowedExte
 				return extensionValue ? true : extensionReason;
 			}
 			if (extensionValue === 'stable' && prerelease) {
-				return new MarkdownString(nls.localize('extension prerelease not allowed', "the pre-release versions of this extension are not in the [allowed list]({0})", settingsCommandLink));
+				return new MarkdownString(nls.localize('extension prerelease not allowed', "the pre-release versions of this snap are not in the [allowed list]({0})", settingsCommandLink));
 			}
 			if (version !== '*' && Array.isArray(extensionValue) && !extensionValue.some(v => {
 				const match = VersionRegex.exec(v);
@@ -118,7 +118,7 @@ export class AllowedExtensionsService extends Disposable implements IAllowedExte
 				}
 				return false;
 			})) {
-				return new MarkdownString(nls.localize('specific version of extension not allowed', "the version {0} of this extension is not in the [allowed list]({1})", version, settingsCommandLink));
+				return new MarkdownString(nls.localize('specific version of extension not allowed', "the version {0} of this snap is not in the [allowed list]({1})", version, settingsCommandLink));
 			}
 			return true;
 		}
@@ -127,7 +127,7 @@ export class AllowedExtensionsService extends Disposable implements IAllowedExte
 		const publisherValue = this._allowedExtensionsConfigValue[publisherKey];
 		if (!isUndefined(publisherValue)) {
 			if (isBoolean(publisherValue)) {
-				return publisherValue ? true : new MarkdownString(nls.localize('publisher not allowed', "the extensions from this publisher are not in the [allowed list]({1})", publisherKey, settingsCommandLink));
+				return publisherValue ? true : new MarkdownString(nls.localize('publisher not allowed', "the snaps from this publisher are not in the [allowed list]({1})", publisherKey, settingsCommandLink));
 			}
 			if (publisherValue === 'stable' && prerelease) {
 				return new MarkdownString(nls.localize('prerelease versions from this publisher not allowed', "the pre-release versions from this publisher are not in the [allowed list]({1})", publisherKey, settingsCommandLink));

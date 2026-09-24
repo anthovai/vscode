@@ -511,7 +511,7 @@ export class RemoteBadgeWidget extends ExtensionWidget {
 		}
 		let tooltip: string | undefined;
 		if (this.tooltip && this.extensionManagementServerService.remoteExtensionManagementServer) {
-			tooltip = localize('remote extension title', "Extension in {0}", this.extensionManagementServerService.remoteExtensionManagementServer.label);
+			tooltip = localize('remote extension title', "Snap in {0}", this.extensionManagementServerService.remoteExtensionManagementServer.label);
 		}
 		this.remoteBadge.value = this.instantiationService.createInstance(ExtensionIconBadge, remoteIcon, tooltip);
 		append(this.element, this.remoteBadge.value.element);
@@ -640,7 +640,7 @@ export class ExtensionKindIndicatorWidget extends ExtensionWidget {
 				append(this.element, $('span' + ThemeIcon.asCSSSelector(privateExtensionIcon)));
 			}
 			if (!this.small) {
-				append(this.element, $('span.private-extension-label', undefined, localize('privateExtension', "Private Extension")));
+				append(this.element, $('span.private-extension-label', undefined, localize('privateExtension', "Private Snap")));
 			}
 			return;
 		}
@@ -657,7 +657,7 @@ export class ExtensionKindIndicatorWidget extends ExtensionWidget {
 		this.element = append(this.container, $('.extension-kind-indicator'));
 		const workspaceFolder = this.contextService.getWorkspaceFolder(location);
 		if (workspaceFolder && this.extension.isWorkspaceScoped) {
-			this.element.textContent = localize('workspace extension', "Workspace Extension");
+			this.element.textContent = localize('workspace extension', "Workspace Snap");
 			this.element.classList.add('clickable');
 			this.element.setAttribute('role', 'button');
 			this.disposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), this.element, this.uriIdentityService.extUri.relativePath(workspaceFolder.uri, location)));
@@ -666,7 +666,7 @@ export class ExtensionKindIndicatorWidget extends ExtensionWidget {
 			}));
 		} else {
 			this.disposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), this.element, location.path));
-			this.element.textContent = localize('local extension', "Local Extension");
+			this.element.textContent = localize('local extension', "Local Snap");
 		}
 	}
 }
@@ -694,7 +694,7 @@ export class SyncIgnoredWidget extends ExtensionWidget {
 
 		if (this.extension && this.extension.state === ExtensionState.Installed && this.userDataSyncEnablementService.isEnabled() && this.extensionsWorkbenchService.isExtensionIgnoredToSync(this.extension)) {
 			const element = append(this.container, $('span.extension-sync-ignored' + ThemeIcon.asCSSSelector(syncIgnoredIcon)));
-			this.disposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), element, localize('syncingore.label', "This extension is ignored during sync.")));
+			this.disposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), element, localize('syncingore.label', "This snap is ignored during sync.")));
 			element.classList.add(...ThemeIcon.asClassNameArray(syncIgnoredIcon));
 		}
 	}
@@ -860,7 +860,7 @@ export class ExtensionHoverWidget extends ExtensionWidget {
 
 		let addSeparator = false;
 		if (this.extension.private) {
-			markdown.appendMarkdown(`$(${privateExtensionIcon.id}) ${localize('privateExtension', "Private Extension")}`);
+			markdown.appendMarkdown(`$(${privateExtensionIcon.id}) ${localize('privateExtension', "Private Snap")}`);
 			addSeparator = true;
 		}
 		if (this.extension.state === ExtensionState.Installed) {
@@ -895,9 +895,9 @@ export class ExtensionHoverWidget extends ExtensionWidget {
 		const location = this.extension.resourceExtension?.location ?? (this.extension.local?.source === 'resource' ? this.extension.local?.location : undefined);
 		if (location) {
 			if (this.extension.isWorkspaceScoped && this.contextService.isInsideWorkspace(location)) {
-				markdown.appendMarkdown(localize('workspace extension', "Workspace Extension"));
+				markdown.appendMarkdown(localize('workspace extension', "Workspace Snap"));
 			} else {
-				markdown.appendMarkdown(localize('local extension', "Local Extension"));
+				markdown.appendMarkdown(localize('local extension', "Local Snap"));
 			}
 			markdown.appendText(`\n`);
 		}
@@ -1025,7 +1025,7 @@ export class ExtensionHoverWidget extends ExtensionWidget {
 			return undefined;
 		}
 		const preReleaseVersionLink = `[${localize('Show prerelease version', "Pre-Release version")}](${createCommandUri('workbench.extensions.action.showPreReleaseVersion', extension.identifier.id)})`;
-		return localize('has prerelease', "This extension has a {0} available", preReleaseVersionLink);
+		return localize('has prerelease', "This snap has a {0} available", preReleaseVersionLink);
 	}
 
 }
@@ -1113,16 +1113,16 @@ export class ExtensionRecommendationWidget extends ExtensionWidget {
 				return { icon: starEmptyIcon, message: reasonText };
 			}
 		} else if (this.extensionIgnoredRecommendationsService.globalIgnoredRecommendations.indexOf(this.extension.identifier.id.toLowerCase()) !== -1) {
-			return { icon: undefined, message: localize('recommendationHasBeenIgnored', "You have chosen not to receive recommendations for this extension.") };
+			return { icon: undefined, message: localize('recommendationHasBeenIgnored', "You have chosen not to receive recommendations for this snap.") };
 		}
 		return undefined;
 	}
 }
 
-export const extensionRatingIconColor = registerColor('extensionIcon.starForeground', { light: '#DF6100', dark: '#FF8E00', hcDark: '#FF8E00', hcLight: textLinkForeground }, localize('extensionIconStarForeground', "The icon color for extension ratings."), false);
-export const extensionPreReleaseIconColor = registerColor('extensionIcon.preReleaseForeground', { dark: '#1d9271', light: '#1d9271', hcDark: '#1d9271', hcLight: textLinkForeground }, localize('extensionPreReleaseForeground', "The icon color for pre-release extension."), false);
-export const extensionSponsorIconColor = registerColor('extensionIcon.sponsorForeground', { light: '#B51E78', dark: '#D758B3', hcDark: null, hcLight: '#B51E78' }, localize('extensionIcon.sponsorForeground', "The icon color for extension sponsor."), false);
-export const extensionPrivateBadgeBackground = registerColor('extensionIcon.privateForeground', { dark: '#ffffff60', light: '#00000060', hcDark: '#ffffff60', hcLight: '#00000060' }, localize('extensionIcon.private', "The icon color for private extensions."));
+export const extensionRatingIconColor = registerColor('extensionIcon.starForeground', { light: '#DF6100', dark: '#FF8E00', hcDark: '#FF8E00', hcLight: textLinkForeground }, localize('extensionIconStarForeground', "The icon color for snap ratings."), false);
+export const extensionPreReleaseIconColor = registerColor('extensionIcon.preReleaseForeground', { dark: '#1d9271', light: '#1d9271', hcDark: '#1d9271', hcLight: textLinkForeground }, localize('extensionPreReleaseForeground', "The icon color for pre-release snap."), false);
+export const extensionSponsorIconColor = registerColor('extensionIcon.sponsorForeground', { light: '#B51E78', dark: '#D758B3', hcDark: null, hcLight: '#B51E78' }, localize('extensionIcon.sponsorForeground', "The icon color for snap sponsor."), false);
+export const extensionPrivateBadgeBackground = registerColor('extensionIcon.privateForeground', { dark: '#ffffff60', light: '#00000060', hcDark: '#ffffff60', hcLight: '#00000060' }, localize('extensionIcon.private', "The icon color for private snaps."));
 
 registerThemingParticipant((theme, collector) => {
 	const extensionRatingIcon = theme.getColor(extensionRatingIconColor);

@@ -110,7 +110,7 @@ class RuntimeStatusMarkdownRenderer extends Disposable implements IExtensionFeat
 					const description = append(container,
 						$('.feature-chart-description',
 							undefined,
-							localize('chartDescription', "There were {0} {1} requests from this extension in the last 30 days.", accessData?.accessTimes.length, feature.accessDataLabel ?? feature.label)));
+							localize('chartDescription', "There were {0} {1} requests from this snap in the last 30 days.", accessData?.accessTimes.length, feature.accessDataLabel ?? feature.label)));
 					description.style.marginBottom = '8px';
 					this.renderRequestsChart(container, accessData.accessTimes, disposables);
 				}
@@ -419,7 +419,7 @@ export class ExtensionFeaturesTab extends Themable {
 					return extensionFeature?.label ?? '';
 				},
 				getWidgetAriaLabel(): string {
-					return localize('extension features list', "Extension Features");
+					return localize('extension features list', "Snap Features");
 				}
 			},
 			openOnSingleClick: true
@@ -572,8 +572,8 @@ class ExtensionFeatureView extends Disposable {
 				const confirmationResult = await this.dialogService.confirm({
 					title: localize('accessExtensionFeature', "Enable '{0}' Feature", this.feature.label),
 					message: enabled
-						? localize('disableAccessExtensionFeatureMessage', "Would you like to revoke '{0}' extension to access '{1}' feature?", this.manifest.displayName ?? this.extensionId.value, this.feature.label)
-						: localize('enableAccessExtensionFeatureMessage', "Would you like to allow '{0}' extension to access '{1}' feature?", this.manifest.displayName ?? this.extensionId.value, this.feature.label),
+						? localize('disableAccessExtensionFeatureMessage', "Would you like to revoke '{0}' snap to access '{1}' feature?", this.manifest.displayName ?? this.extensionId.value, this.feature.label)
+						: localize('enableAccessExtensionFeatureMessage', "Would you like to allow '{0}' snap to access '{1}' feature?", this.manifest.displayName ?? this.extensionId.value, this.feature.label),
 					custom: true,
 					primaryButton: enabled ? localize('revoke', "Revoke Access") : localize('grant', "Allow Access"),
 					cancelButton: localize('cancel', "Cancel"),

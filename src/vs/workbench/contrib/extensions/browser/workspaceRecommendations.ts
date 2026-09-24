@@ -127,7 +127,7 @@ export class WorkspaceRecommendations extends ExtensionRecommendations {
 							extension: extensionId,
 							reason: {
 								reasonId: ExtensionRecommendationReason.Workspace,
-								reasonText: localize('workspaceRecommendation', "This extension is recommended by users of the current workspace.")
+								reasonText: localize('workspaceRecommendation', "This snap is recommended by users of the current workspace.")
 							}
 						});
 					}
@@ -140,7 +140,7 @@ export class WorkspaceRecommendations extends ExtensionRecommendations {
 				extension,
 				reason: {
 					reasonId: ExtensionRecommendationReason.Workspace,
-					reasonText: localize('workspaceRecommendation', "This extension is recommended by users of the current workspace.")
+					reasonText: localize('workspaceRecommendation', "This snap is recommended by users of the current workspace.")
 				}
 			});
 		}

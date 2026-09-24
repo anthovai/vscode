@@ -74,12 +74,12 @@ export abstract class CommontExtensionManagementService extends Disposable imple
 	async canInstall(extension: IGalleryExtension): Promise<true | IMarkdownString> {
 		const allowedToInstall = this.allowedExtensionsService.isAllowed({ id: extension.identifier.id, publisherDisplayName: extension.publisherDisplayName });
 		if (allowedToInstall !== true) {
-			return new MarkdownString(nls.localize('not allowed to install', "This extension cannot be installed because {0}", allowedToInstall.value));
+			return new MarkdownString(nls.localize('not allowed to install', "This snap cannot be installed because {0}", allowedToInstall.value));
 		}
 
 		if (!(await this.isExtensionPlatformCompatible(extension))) {
 			const learnLink = isWeb ? 'https://aka.ms/vscode-web-extensions-guide' : 'https://aka.ms/vscode-platform-specific-extensions';
-			return new MarkdownString(`${nls.localize('incompatible platform', "The '{0}' extension is not available in {1} for the {2} platform.",
+			return new MarkdownString(`${nls.localize('incompatible platform', "The '{0}' snap is not available in {1} for the {2} platform.",
 				extension.displayName ?? extension.identifier.id, this.productService.nameLong, TargetPlatformToString(await this.getTargetPlatform()))} [${nls.localize('learn why', "Learn Why")}](${learnLink})`);
 		}
 
@@ -706,7 +706,7 @@ export abstract class AbstractExtensionManagementService extends CommontExtensio
 
 		const extensionsControlManifest = await this.getExtensionsControlManifest();
 		if (isMalicious(extension.identifier, extensionsControlManifest.malicious)) {
-			throw new ExtensionManagementError(nls.localize('malicious extension', "Can't install '{0}' extension since it was reported to be problematic.", extension.identifier.id), ExtensionManagementErrorCode.Malicious);
+			throw new ExtensionManagementError(nls.localize('malicious extension', "Can't install '{0}' snap since it was reported to be problematic.", extension.identifier.id), ExtensionManagementErrorCode.Malicious);
 		}
 
 		const deprecationInfo = extensionsControlManifest.deprecated[extension.identifier.id.toLowerCase()];
@@ -714,23 +714,23 @@ export abstract class AbstractExtensionManagementService extends CommontExtensio
 			this.logService.info(`The '${extension.identifier.id}' extension is deprecated, fetching the compatible '${deprecationInfo.extension.id}' extension instead.`);
 			compatibleExtension = (await this.galleryService.getExtensions([{ id: deprecationInfo.extension.id, preRelease: deprecationInfo.extension.preRelease }], { targetPlatform: await this.getTargetPlatform(), compatible: true, productVersion }, CancellationToken.None))[0];
 			if (!compatibleExtension) {
-				throw new ExtensionManagementError(nls.localize('notFoundDeprecatedReplacementExtension', "Can't install '{0}' extension since it was deprecated and the replacement extension '{1}' can't be found.", extension.identifier.id, deprecationInfo.extension.id), ExtensionManagementErrorCode.Deprecated);
+				throw new ExtensionManagementError(nls.localize('notFoundDeprecatedReplacementExtension', "Can't install '{0}' snap since it was deprecated and the replacement snap '{1}' can't be found.", extension.identifier.id, deprecationInfo.extension.id), ExtensionManagementErrorCode.Deprecated);
 			}
 		}
 
 		else {
 			if (await this.canInstall(extension) !== true) {
 				const targetPlatform = await this.getTargetPlatform();
-				throw new ExtensionManagementError(nls.localize('incompatible platform', "The '{0}' extension is not available in {1} for the {2} platform.", extension.identifier.id, this.productService.nameLong, TargetPlatformToString(targetPlatform)), ExtensionManagementErrorCode.IncompatibleTargetPlatform);
+				throw new ExtensionManagementError(nls.localize('incompatible platform', "The '{0}' snap is not available in {1} for the {2} platform.", extension.identifier.id, this.productService.nameLong, TargetPlatformToString(targetPlatform)), ExtensionManagementErrorCode.IncompatibleTargetPlatform);
 			}
 
 			compatibleExtension = await this.getCompatibleVersion(extension, sameVersion, installPreRelease, productVersion);
 			if (!compatibleExtension) {
 				/** If no compatible release version is found, check if the extension has a release version or not and throw relevant error */
 				if (!installPreRelease && extension.hasPreReleaseVersion && extension.properties.isPreReleaseVersion && (await this.galleryService.getExtensions([extension.identifier], CancellationToken.None))[0]) {
-					throw new ExtensionManagementError(nls.localize('notFoundReleaseExtension', "Can't install release version of '{0}' extension because it has no release version.", extension.displayName ?? extension.identifier.id), ExtensionManagementErrorCode.ReleaseVersionNotFound);
+					throw new ExtensionManagementError(nls.localize('notFoundReleaseExtension', "Can't install release version of '{0}' snap because it has no release version.", extension.displayName ?? extension.identifier.id), ExtensionManagementErrorCode.ReleaseVersionNotFound);
 				}
-				throw new ExtensionManagementError(nls.localize('notFoundCompatibleDependency', "Can't install '{0}' extension because it is not compatible with the current version of {1} (version {2}).", extension.identifier.id, this.productService.nameLong, this.productService.version), ExtensionManagementErrorCode.Incompatible);
+				throw new ExtensionManagementError(nls.localize('notFoundCompatibleDependency', "Can't install '{0}' snap because it is not compatible with the current version of {1} (version {2}).", extension.identifier.id, this.productService.nameLong, this.productService.version), ExtensionManagementErrorCode.Incompatible);
 			}
 		}
 
@@ -954,27 +954,27 @@ export abstract class AbstractExtensionManagementService extends CommontExtensio
 	private getDependentsErrorMessage(dependingExtension: ILocalExtension, dependents: ILocalExtension[], extensionToUninstall: ILocalExtension): string {
 		if (extensionToUninstall === dependingExtension) {
 			if (dependents.length === 1) {
-				return nls.localize('singleDependentError', "Cannot uninstall '{0}' extension. '{1}' extension depends on this.",
+				return nls.localize('singleDependentError', "Cannot uninstall '{0}' snap. '{1}' snap depends on this.",
 					extensionToUninstall.manifest.displayName || extensionToUninstall.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name);
 			}
 			if (dependents.length === 2) {
-				return nls.localize('twoDependentsError', "Cannot uninstall '{0}' extension. '{1}' and '{2}' extensions depend on this.",
+				return nls.localize('twoDependentsError', "Cannot uninstall '{0}' snap. '{1}' and '{2}' snaps depend on this.",
 					extensionToUninstall.manifest.displayName || extensionToUninstall.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name, dependents[1].manifest.displayName || dependents[1].manifest.name);
 			}
-			return nls.localize('multipleDependentsError', "Cannot uninstall '{0}' extension. '{1}', '{2}' and other extension depend on this.",
+			return nls.localize('multipleDependentsError', "Cannot uninstall '{0}' snap. '{1}', '{2}' and other snap depend on this.",
 				extensionToUninstall.manifest.displayName || extensionToUninstall.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name, dependents[1].manifest.displayName || dependents[1].manifest.name);
 		}
 		if (dependents.length === 1) {
-			return nls.localize('singleIndirectDependentError', "Cannot uninstall '{0}' extension . It includes uninstalling '{1}' extension and '{2}' extension depends on this.",
+			return nls.localize('singleIndirectDependentError', "Cannot uninstall '{0}' snap . It includes uninstalling '{1}' snap and '{2}' snap depends on this.",
 				extensionToUninstall.manifest.displayName || extensionToUninstall.manifest.name, dependingExtension.manifest.displayName
 			|| dependingExtension.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name);
 		}
 		if (dependents.length === 2) {
-			return nls.localize('twoIndirectDependentsError', "Cannot uninstall '{0}' extension. It includes uninstalling '{1}' extension and '{2}' and '{3}' extensions depend on this.",
+			return nls.localize('twoIndirectDependentsError', "Cannot uninstall '{0}' snap. It includes uninstalling '{1}' snap and '{2}' and '{3}' snaps depend on this.",
 				extensionToUninstall.manifest.displayName || extensionToUninstall.manifest.name, dependingExtension.manifest.displayName
 			|| dependingExtension.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name, dependents[1].manifest.displayName || dependents[1].manifest.name);
 		}
-		return nls.localize('multipleIndirectDependentsError', "Cannot uninstall '{0}' extension. It includes uninstalling '{1}' extension and '{2}', '{3}' and other extensions depend on this.",
+		return nls.localize('multipleIndirectDependentsError', "Cannot uninstall '{0}' snap. It includes uninstalling '{1}' snap and '{2}', '{3}' and other snaps depend on this.",
 			extensionToUninstall.manifest.displayName || extensionToUninstall.manifest.name, dependingExtension.manifest.displayName
 		|| dependingExtension.manifest.name, dependents[0].manifest.displayName || dependents[0].manifest.name, dependents[1].manifest.displayName || dependents[1].manifest.name);
 

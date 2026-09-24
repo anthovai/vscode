@@ -889,7 +889,7 @@ class AbstractProfileResourceTreeRenderer extends Disposable {
 			case ProfileResourceType.Mcp:
 				return localize('mcp', "MCP Servers");
 			case ProfileResourceType.Extensions:
-				return localize('extensions', "Extensions");
+				return localize('extensions', "Snap");
 		}
 		return '';
 	}

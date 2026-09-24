@@ -356,8 +356,8 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 				this._logService.error(`[LocalProcessExtensionHost]: Extension host did not start in 10 seconds (debugBrk: ${this._isExtensionDevDebugBrk})`);
 
 				const msg = this._isExtensionDevDebugBrk
-					? nls.localize('extensionHost.startupFailDebug', "Extension host did not start in 10 seconds, it might be stopped on the first line and needs a debugger to continue.")
-					: nls.localize('extensionHost.startupFail', "Extension host did not start in 10 seconds, that might be a problem.");
+					? nls.localize('extensionHost.startupFailDebug', "Snap host did not start in 10 seconds, it might be stopped on the first line and needs a debugger to continue.")
+					: nls.localize('extensionHost.startupFail', "Snap host did not start in 10 seconds, that might be a problem.");
 
 				this._notificationService.prompt(Severity.Warning, msg,
 					[{
@@ -649,7 +649,7 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 		// to communicate this back to the main side to terminate the debug session
 		if (this._isExtensionDevHost && !this._isExtensionDevTestFromCli && !this._isExtensionDevDebug && this._environmentService.debugExtensionHost.debugId) {
 			this._extensionHostDebugService.terminateSession(this._environmentService.debugExtensionHost.debugId);
-			event.join(timeout(100 /* wait a bit for IPC to get delivered */), { id: 'join.extensionDevelopment', label: nls.localize('join.extensionDevelopment', "Terminating extension debug session") });
+			event.join(timeout(100 /* wait a bit for IPC to get delivered */), { id: 'join.extensionDevelopment', label: nls.localize('join.extensionDevelopment', "Terminating snap debug session") });
 		}
 	}
 }

@@ -87,17 +87,17 @@ export class ExtensionHostProfileService extends Disposable implements IExtensio
 
 		if (visible) {
 			const indicator: IStatusbarEntry = {
-				name: nls.localize('status.profiler', "Extension Profiler"),
-				text: nls.localize('profilingExtensionHost', "Profiling Extension Host"),
+				name: nls.localize('status.profiler', "Snap Profiler"),
+				text: nls.localize('profilingExtensionHost', "Profiling Snap Host"),
 				showProgress: true,
-				ariaLabel: nls.localize('profilingExtensionHost', "Profiling Extension Host"),
+				ariaLabel: nls.localize('profilingExtensionHost', "Profiling Snap Host"),
 				tooltip: nls.localize('selectAndStartDebug', "Click to stop profiling."),
 				command: 'workbench.action.extensionHostProfiler.stop'
 			};
 
 			const timeStarted = Date.now();
 			const handle = disposableWindowInterval(mainWindow, () => {
-				this.profilingStatusBarIndicator?.update({ ...indicator, text: nls.localize('profilingExtensionHostTime', "Profiling Extension Host ({0} sec)", Math.round((new Date().getTime() - timeStarted) / 1000)), });
+				this.profilingStatusBarIndicator?.update({ ...indicator, text: nls.localize('profilingExtensionHostTime', "Profiling Snap Host ({0} sec)", Math.round((new Date().getTime() - timeStarted) / 1000)), });
 			}, 1000);
 			this.profilingStatusBarIndicatorLabelUpdater.value = handle;
 
@@ -124,8 +124,8 @@ export class ExtensionHostProfileService extends Disposable implements IExtensio
 		if (inspectPorts.length === 0) {
 			return this._dialogService.confirm({
 				type: 'info',
-				message: nls.localize('restart1', "Profile Extensions"),
-				detail: nls.localize('restart2', "In order to profile extensions a restart is required. Do you want to restart '{0}' now?", this._productService.nameLong),
+				message: nls.localize('restart1', "Profile Snaps"),
+				detail: nls.localize('restart2', "In order to profile snaps a restart is required. Do you want to restart '{0}' now?", this._productService.nameLong),
 				primaryButton: nls.localize({ key: 'restart3', comment: ['&& denotes a mnemonic'] }, "&&Restart")
 			}).then(res => {
 				if (res.confirmed) {

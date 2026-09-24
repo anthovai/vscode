@@ -707,7 +707,7 @@ export class WebExtensionsScannerService extends Disposable implements IWebExten
 		}
 
 		if (!this.extensionManifestPropertiesService.canExecuteOnWeb(manifest)) {
-			throw new Error(localize('not a web extension', "Cannot add '{0}' because this extension is not a web extension.", manifest.displayName || manifest.name));
+			throw new Error(localize('not a web extension', "Cannot add '{0}' because this snap is not a web snap.", manifest.displayName || manifest.name));
 		}
 
 		if (fallbackPackageNLSUri === undefined) {
@@ -997,7 +997,7 @@ if (isWeb) {
 		constructor() {
 			super({
 				id: 'workbench.extensions.action.openInstalledWebExtensionsResource',
-				title: localize2('openInstalledWebExtensionsResource', 'Open Installed Web Extensions Resource'),
+				title: localize2('openInstalledWebExtensionsResource', 'Open Installed Web Snaps Resource'),
 				category: Categories.Developer,
 				f1: true,
 				precondition: IsWebContext

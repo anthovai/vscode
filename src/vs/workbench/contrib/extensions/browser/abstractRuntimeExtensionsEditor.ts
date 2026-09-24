@@ -363,7 +363,7 @@ export abstract class AbstractRuntimeExtensionsEditor extends EditorPane {
 						}, "Activated by {1} on {0}", activationEvent, activationId);
 					}
 				} else {
-					title = nls.localize('extensionActivating', "Extension is activating...");
+					title = nls.localize('extensionActivating', "Snap is activating...");
 				}
 				data.elementDisposables.push(this._hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), data.activationTime, title));
 
@@ -371,7 +371,7 @@ export abstract class AbstractRuntimeExtensionsEditor extends EditorPane {
 
 				if (this._getUnresponsiveProfile(element.description.identifier)) {
 					const el = $('span', undefined, ...renderLabelWithIcons(` $(alert) Unresponsive`));
-					const extensionHostFreezTitle = nls.localize('unresponsive.title', "Extension has caused the extension host to freeze.");
+					const extensionHostFreezTitle = nls.localize('unresponsive.title', "Snap has caused the snap host to freeze.");
 					data.elementDisposables.push(this._hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), el, extensionHostFreezTitle));
 
 					data.msgContainer.appendChild(el);
@@ -454,7 +454,7 @@ export abstract class AbstractRuntimeExtensionsEditor extends EditorPane {
 			},
 			accessibilityProvider: new class implements IListAccessibilityProvider<IRuntimeExtension> {
 				getWidgetAriaLabel(): string {
-					return nls.localize('runtimeExtensions', "Runtime Extensions");
+					return nls.localize('runtimeExtensions', "Runtime Snaps");
 				}
 				getAriaLabel(element: IRuntimeExtension): string | null {
 					return element.description.name;
@@ -523,7 +523,7 @@ export class ShowRuntimeExtensionsAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.showRuntimeExtensions',
-			title: nls.localize2('showRuntimeExtensions', "Show Running Extensions"),
+			title: nls.localize2('showRuntimeExtensions', "Show Running Snaps"),
 			category: Categories.Developer,
 			f1: true,
 			menu: {

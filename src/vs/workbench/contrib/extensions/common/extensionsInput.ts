@@ -16,7 +16,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 
-const ExtensionEditorIcon = registerIcon('extensions-editor-label-icon', Codicon.extensions, localize('extensionsEditorLabelIcon', 'Icon of the extensions editor label.'));
+const ExtensionEditorIcon = registerIcon('extensions-editor-label-icon', Codicon.extensions, localize('extensionsEditorLabelIcon', 'Icon of the snaps editor label.'));
 
 export interface IExtensionEditorOptions extends IEditorOptions {
 	showPreReleaseVersion?: boolean;
@@ -51,7 +51,7 @@ export class ExtensionsInput extends EditorInput {
 	get extension(): IExtension { return this._extension; }
 
 	override getName(): string {
-		return localize('extensionsInputName', "Extension: {0}", this._extension.displayName);
+		return localize('extensionsInputName', "Snap: {0}", this._extension.displayName);
 	}
 
 	override getIcon(): ThemeIcon | undefined {

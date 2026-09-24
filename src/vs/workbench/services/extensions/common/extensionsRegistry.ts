@@ -165,8 +165,8 @@ const extensionKindSchema: IJSONSchema = {
 		'workspace'
 	],
 	enumDescriptions: [
-		nls.localize('ui', "UI extension kind. In a remote window, such extensions are enabled only when available on the local machine."),
-		nls.localize('workspace', "Workspace extension kind. In a remote window, such extensions are enabled only when available on the remote."),
+		nls.localize('ui', "UI snap kind. In a remote window, such snaps are enabled only when available on the local machine."),
+		nls.localize('workspace', "Workspace snap kind. In a remote window, such snaps are enabled only when available on the remote."),
 	],
 };
 
@@ -179,21 +179,21 @@ export const schema: IJSONSchema = {
 			properties: {
 				'vscode': {
 					type: 'string',
-					description: nls.localize('vscode.extension.engines.vscode', 'For VS Code extensions, specifies the VS Code version that the extension is compatible with. Cannot be *. For example: ^1.105.0 indicates compatibility with a minimum VS Code version of 1.105.0.'),
+					description: nls.localize('vscode.extension.engines.vscode', 'For VS Code snaps, specifies the VS Code version that the snap is compatible with. Cannot be *. For example: ^1.105.0 indicates compatibility with a minimum VS Code version of 1.105.0.'),
 					default: '^1.105.0',
 				}
 			}
 		},
 		publisher: {
-			description: nls.localize('vscode.extension.publisher', 'The publisher of the VS Code extension.'),
+			description: nls.localize('vscode.extension.publisher', 'The publisher of the VS Code snap.'),
 			type: 'string'
 		},
 		displayName: {
-			description: nls.localize('vscode.extension.displayName', 'The display name for the extension used in the VS Code gallery.'),
+			description: nls.localize('vscode.extension.displayName', 'The display name for the snap used in the VS Code gallery.'),
 			type: 'string'
 		},
 		categories: {
-			description: nls.localize('vscode.extension.categories', 'The categories used by the VS Code gallery to categorize the extension.'),
+			description: nls.localize('vscode.extension.categories', 'The categories used by the VS Code gallery to categorize the snap.'),
 			type: 'array',
 			uniqueItems: true,
 			items: {
@@ -224,7 +224,7 @@ export const schema: IJSONSchema = {
 			}
 		},
 		contributes: {
-			description: nls.localize('vscode.extension.contributes', 'All contributions of the VS Code extension represented by this package.'),
+			description: nls.localize('vscode.extension.contributes', 'All contributions of the VS Code snap represented by this package.'),
 			type: 'object',
 			// eslint-disable-next-line local/code-no-any-casts
 			properties: {
@@ -234,14 +234,14 @@ export const schema: IJSONSchema = {
 		},
 		preview: {
 			type: 'boolean',
-			description: nls.localize('vscode.extension.preview', 'Sets the extension to be flagged as a Preview in the Marketplace.'),
+			description: nls.localize('vscode.extension.preview', 'Sets the snap to be flagged as a Preview in the Marketplace.'),
 		},
 		enableProposedApi: {
 			type: 'boolean',
 			deprecationMessage: nls.localize('vscode.extension.enableProposedApi.deprecated', 'Use `enabledApiProposals` instead.'),
 		},
 		enabledApiProposals: {
-			markdownDescription: nls.localize('vscode.extension.enabledApiProposals', 'Enable API proposals to try them out. Only valid **during development**. Extensions **cannot be published** with this property. For more details visit: https://code.visualstudio.com/api/advanced-topics/using-proposed-api'),
+			markdownDescription: nls.localize('vscode.extension.enabledApiProposals', 'Enable API proposals to try them out. Only valid **during development**. Snaps **cannot be published** with this property. For more details visit: https://code.visualstudio.com/api/advanced-topics/using-proposed-api'),
 			type: 'array',
 			uniqueItems: true,
 			items: {
@@ -251,15 +251,15 @@ export const schema: IJSONSchema = {
 			}
 		},
 		api: {
-			markdownDescription: nls.localize('vscode.extension.api', 'Describe the API provided by this extension. For more details visit: https://code.visualstudio.com/api/advanced-topics/remote-extensions#handling-dependencies-with-remote-extensions'),
+			markdownDescription: nls.localize('vscode.extension.api', 'Describe the API provided by this snap. For more details visit: https://code.visualstudio.com/api/advanced-topics/remote-snaps#handling-dependencies-with-remote-snaps'),
 			type: 'string',
 			enum: ['none'],
 			enumDescriptions: [
-				nls.localize('vscode.extension.api.none', "Give up entirely the ability to export any APIs. This allows other extensions that depend on this extension to run in a separate extension host process or in a remote machine.")
+				nls.localize('vscode.extension.api.none', "Give up entirely the ability to export any APIs. This allows other snaps that depend on this snap to run in a separate snap host process or in a remote machine.")
 			]
 		},
 		activationEvents: {
-			description: nls.localize('vscode.extension.activationEvents', 'Activation events for the VS Code extension.'),
+			description: nls.localize('vscode.extension.activationEvents', 'Activation events for the VS Code snap.'),
 			type: 'array',
 			items: {
 				type: 'string',
@@ -311,7 +311,7 @@ export const schema: IJSONSchema = {
 					},
 					{
 						label: 'onStartupFinished',
-						description: nls.localize('vscode.extension.activationEvents.onStartupFinished', 'An activation event emitted after the start-up finished (after all `*` activated extensions have finished activating).'),
+						description: nls.localize('vscode.extension.activationEvents.onStartupFinished', 'An activation event emitted after the start-up finished (after all `*` activated snaps have finished activating).'),
 						body: 'onStartupFinished'
 					},
 					{
@@ -342,7 +342,7 @@ export const schema: IJSONSchema = {
 					{
 						label: 'onUri',
 						body: 'onUri',
-						description: nls.localize('vscode.extension.activationEvents.onUri', 'An activation event emitted whenever a system-wide Uri directed towards this extension is open.'),
+						description: nls.localize('vscode.extension.activationEvents.onUri', 'An activation event emitted whenever a system-wide Uri directed towards this snap is open.'),
 					},
 					{
 						label: 'onOpenExternalUri',
@@ -426,7 +426,7 @@ export const schema: IJSONSchema = {
 					},
 					{
 						label: '*',
-						description: nls.localize('vscode.extension.activationEvents.star', 'An activation event emitted on VS Code startup. To ensure a great end user experience, please use this activation event in your extension only when no other activation events combination works in your use-case.'),
+						description: nls.localize('vscode.extension.activationEvents.star', 'An activation event emitted on VS Code startup. To ensure a great end user experience, please use this activation event in your snap only when no other activation events combination works in your use-case.'),
 						body: '*'
 					}
 				],
@@ -434,7 +434,7 @@ export const schema: IJSONSchema = {
 		},
 		badges: {
 			type: 'array',
-			description: nls.localize('vscode.extension.badges', 'Array of badges to display in the sidebar of the Marketplace\'s extension page.'),
+			description: nls.localize('vscode.extension.badges', 'Array of badges to display in the sidebar of the Marketplace\'s snap page.'),
 			items: {
 				type: 'object',
 				required: ['url', 'href', 'description'],
@@ -474,7 +474,7 @@ export const schema: IJSONSchema = {
 			]
 		},
 		extensionDependencies: {
-			description: nls.localize('vscode.extension.extensionDependencies', 'Dependencies to other extensions. The identifier of an extension is always ${publisher}.${name}. For example: vscode.csharp.'),
+			description: nls.localize('vscode.extension.extensionDependencies', 'Dependencies to other snaps. The identifier of a snap is always ${publisher}.${name}. For example: vscode.csharp.'),
 			type: 'array',
 			uniqueItems: true,
 			items: {
@@ -483,7 +483,7 @@ export const schema: IJSONSchema = {
 			}
 		},
 		extensionAffinity: {
-			description: nls.localize('vscode.extension.extensionAffinity', 'Extensions that this extension should be colocated with in the same extension host process if possible. The identifier of an extension is always ${publisher}.${name}. For example: vscode.git.'),
+			description: nls.localize('vscode.extension.extensionAffinity', 'Snaps that this snap should be colocated with in the same snap host process if possible. The identifier of a snap is always ${publisher}.${name}. For example: vscode.git.'),
 			type: 'array',
 			uniqueItems: true,
 			items: {
@@ -492,7 +492,7 @@ export const schema: IJSONSchema = {
 			}
 		},
 		extensionPack: {
-			description: nls.localize('vscode.extension.contributes.extensionPack', "A set of extensions that can be installed together. The identifier of an extension is always ${publisher}.${name}. For example: vscode.csharp."),
+			description: nls.localize('vscode.extension.contributes.extensionPack', "A set of snaps that can be installed together. The identifier of a snap is always ${publisher}.${name}. For example: vscode.csharp."),
 			type: 'array',
 			uniqueItems: true,
 			items: {
@@ -501,39 +501,39 @@ export const schema: IJSONSchema = {
 			}
 		},
 		extensionKind: {
-			description: nls.localize('extensionKind', "Define the kind of an extension. `ui` extensions are installed and run on the local machine while `workspace` extensions run on the remote."),
+			description: nls.localize('extensionKind', "Define the kind of a snap. `ui` snaps are installed and run on the local machine while `workspace` snaps run on the remote."),
 			type: 'array',
 			items: extensionKindSchema,
 			default: ['workspace'],
 			defaultSnippets: [
 				{
 					body: ['ui'],
-					description: nls.localize('extensionKind.ui', "Define an extension which can run only on the local machine when connected to remote window.")
+					description: nls.localize('extensionKind.ui', "Define a snap which can run only on the local machine when connected to remote window.")
 				},
 				{
 					body: ['workspace'],
-					description: nls.localize('extensionKind.workspace', "Define an extension which can run only on the remote machine when connected remote window.")
+					description: nls.localize('extensionKind.workspace', "Define a snap which can run only on the remote machine when connected remote window.")
 				},
 				{
 					body: ['ui', 'workspace'],
-					description: nls.localize('extensionKind.ui-workspace', "Define an extension which can run on either side, with a preference towards running on the local machine.")
+					description: nls.localize('extensionKind.ui-workspace', "Define a snap which can run on either side, with a preference towards running on the local machine.")
 				},
 				{
 					body: ['workspace', 'ui'],
-					description: nls.localize('extensionKind.workspace-ui', "Define an extension which can run on either side, with a preference towards running on the remote machine.")
+					description: nls.localize('extensionKind.workspace-ui', "Define a snap which can run on either side, with a preference towards running on the remote machine.")
 				},
 				{
 					body: [],
-					description: nls.localize('extensionKind.empty', "Define an extension which cannot run in a remote context, neither on the local, nor on the remote machine.")
+					description: nls.localize('extensionKind.empty', "Define a snap which cannot run in a remote context, neither on the local, nor on the remote machine.")
 				}
 			]
 		},
 		capabilities: {
-			description: nls.localize('vscode.extension.capabilities', "Declare the set of supported capabilities by the extension."),
+			description: nls.localize('vscode.extension.capabilities', "Declare the set of supported capabilities by the snap."),
 			type: 'object',
 			properties: {
 				virtualWorkspaces: {
-					description: nls.localize('vscode.extension.capabilities.virtualWorkspaces', "Declares whether the extension should be enabled in virtual workspaces. A virtual workspace is a workspace which is not backed by any on-disk resources. When false, this extension will be automatically disabled in virtual workspaces. Default is true."),
+					description: nls.localize('vscode.extension.capabilities.virtualWorkspaces', "Declares whether the snap should be enabled in virtual workspaces. A virtual workspace is a workspace which is not backed by any on-disk resources. When false, this snap will be automatically disabled in virtual workspaces. Default is true."),
 					type: ['boolean', 'object'],
 					defaultSnippets: [
 						{ label: 'limited', body: { supported: '${1:limited}', description: '${2}' } },
@@ -542,23 +542,23 @@ export const schema: IJSONSchema = {
 					default: true.valueOf,
 					properties: {
 						supported: {
-							markdownDescription: nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported', "Declares the level of support for virtual workspaces by the extension."),
+							markdownDescription: nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported', "Declares the level of support for virtual workspaces by the snap."),
 							type: ['string', 'boolean'],
 							enum: ['limited', true, false],
 							enumDescriptions: [
-								nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported.limited', "The extension will be enabled in virtual workspaces with some functionality disabled."),
-								nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported.true', "The extension will be enabled in virtual workspaces with all functionality enabled."),
-								nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported.false', "The extension will not be enabled in virtual workspaces."),
+								nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported.limited', "The snap will be enabled in virtual workspaces with some functionality disabled."),
+								nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported.true', "The snap will be enabled in virtual workspaces with all functionality enabled."),
+								nls.localize('vscode.extension.capabilities.virtualWorkspaces.supported.false', "The snap will not be enabled in virtual workspaces."),
 							]
 						},
 						description: {
 							type: 'string',
-							markdownDescription: nls.localize('vscode.extension.capabilities.virtualWorkspaces.description', "A description of how virtual workspaces affects the extensions behavior and why it is needed. This only applies when `supported` is not `true`."),
+							markdownDescription: nls.localize('vscode.extension.capabilities.virtualWorkspaces.description', "A description of how virtual workspaces affects the snaps behavior and why it is needed. This only applies when `supported` is not `true`."),
 						}
 					}
 				},
 				untrustedWorkspaces: {
-					description: nls.localize('vscode.extension.capabilities.untrustedWorkspaces', 'Declares how the extension should be handled in untrusted workspaces.'),
+					description: nls.localize('vscode.extension.capabilities.untrustedWorkspaces', 'Declares how the snap should be handled in untrusted workspaces.'),
 					type: 'object',
 					required: ['supported'],
 					defaultSnippets: [
@@ -566,17 +566,17 @@ export const schema: IJSONSchema = {
 					],
 					properties: {
 						supported: {
-							markdownDescription: nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported', "Declares the level of support for untrusted workspaces by the extension."),
+							markdownDescription: nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported', "Declares the level of support for untrusted workspaces by the snap."),
 							type: ['string', 'boolean'],
 							enum: ['limited', true, false],
 							enumDescriptions: [
-								nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported.limited', "The extension will be enabled in untrusted workspaces with some functionality disabled."),
-								nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported.true', "The extension will be enabled in untrusted workspaces with all functionality enabled."),
-								nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported.false', "The extension will not be enabled in untrusted workspaces."),
+								nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported.limited', "The snap will be enabled in untrusted workspaces with some functionality disabled."),
+								nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported.true', "The snap will be enabled in untrusted workspaces with all functionality enabled."),
+								nls.localize('vscode.extension.capabilities.untrustedWorkspaces.supported.false', "The snap will not be enabled in untrusted workspaces."),
 							]
 						},
 						restrictedConfigurations: {
-							description: nls.localize('vscode.extension.capabilities.untrustedWorkspaces.restrictedConfigurations', "A list of configuration keys contributed by the extension that should not use workspace values in untrusted workspaces."),
+							description: nls.localize('vscode.extension.capabilities.untrustedWorkspaces.restrictedConfigurations', "A list of configuration keys contributed by the snap that should not use workspace values in untrusted workspaces."),
 							type: 'array',
 							items: {
 								type: 'string'
@@ -584,12 +584,12 @@ export const schema: IJSONSchema = {
 						},
 						description: {
 							type: 'string',
-							markdownDescription: nls.localize('vscode.extension.capabilities.untrustedWorkspaces.description', "A description of how workspace trust affects the extensions behavior and why it is needed. This only applies when `supported` is not `true`."),
+							markdownDescription: nls.localize('vscode.extension.capabilities.untrustedWorkspaces.description', "A description of how workspace trust affects the snaps behavior and why it is needed. This only applies when `supported` is not `true`."),
 						}
 					}
 				},
 				agentsWindow: {
-					description: nls.localize('vscode.extension.capabilities.agentsWindow', "Declares whether the extension should be enabled in the Agents window. Requires the `agentsWindowActivation` API proposal and the experimental Agents window capability setting."),
+					description: nls.localize('vscode.extension.capabilities.agentsWindow', "Declares whether the snap should be enabled in the Agents window. Requires the `agentsWindowActivation` API proposal and the experimental Agents window capability setting."),
 					type: 'object',
 					required: ['supported'],
 					defaultSnippets: [
@@ -597,7 +597,7 @@ export const schema: IJSONSchema = {
 					],
 					properties: {
 						supported: {
-							markdownDescription: nls.localize('vscode.extension.capabilities.agentsWindow.supported', "Declares whether the extension supports running in the Agents window. The extension must enable the `agentsWindowActivation` API proposal and the `extensions.experimental.enableAgentsWindowCapability` setting for this property to take effect."),
+							markdownDescription: nls.localize('vscode.extension.capabilities.agentsWindow.supported', "Declares whether the snap supports running in the Agents window. The snap must enable the `agentsWindowActivation` API proposal and the `extensions.experimental.enableAgentsWindowCapability` setting for this property to take effect."),
 							type: 'boolean'
 						}
 					}
@@ -605,14 +605,14 @@ export const schema: IJSONSchema = {
 			}
 		},
 		sponsor: {
-			description: nls.localize('vscode.extension.contributes.sponsor', "Specify the location from where users can sponsor your extension."),
+			description: nls.localize('vscode.extension.contributes.sponsor', "Specify the location from where users can sponsor your snap."),
 			type: 'object',
 			defaultSnippets: [
 				{ body: { url: '${1:https:}' } },
 			],
 			properties: {
 				'url': {
-					description: nls.localize('vscode.extension.contributes.sponsor.url', "URL from where users can sponsor your extension. It must be a valid URL with a HTTP or HTTPS protocol. Example value: https://github.com/sponsors/nvaccess"),
+					description: nls.localize('vscode.extension.contributes.sponsor.url', "URL from where users can sponsor your snap. It must be a valid URL with a HTTP or HTTPS protocol. Example value: https://github.com/sponsors/nvaccess"),
 					type: 'string',
 				}
 			}
@@ -621,11 +621,11 @@ export const schema: IJSONSchema = {
 			type: 'object',
 			properties: {
 				'vscode:prepublish': {
-					description: nls.localize('vscode.extension.scripts.prepublish', 'Script executed before the package is published as a VS Code extension.'),
+					description: nls.localize('vscode.extension.scripts.prepublish', 'Script executed before the package is published as a VS Code snap.'),
 					type: 'string'
 				},
 				'vscode:uninstall': {
-					description: nls.localize('vscode.extension.scripts.uninstall', 'Uninstall hook for VS Code extension. Script that gets executed when the extension is completely uninstalled from VS Code which is when VS Code is restarted (shutdown and start) after the extension is uninstalled. Only Node scripts are supported.'),
+					description: nls.localize('vscode.extension.scripts.uninstall', 'Uninstall hook for VS Code snap. Script that gets executed when the snap is completely uninstalled from VS Code which is when VS Code is restarted (shutdown and start) after the snap is uninstalled. Only Node scripts are supported.'),
 					type: 'string'
 				}
 			}
@@ -646,7 +646,7 @@ export const schema: IJSONSchema = {
 		},
 		pricing: {
 			type: 'string',
-			markdownDescription: nls.localize('vscode.extension.pricing', 'The pricing information for the extension. Can be Free (default) or Trial. For more details visit: https://code.visualstudio.com/api/working-with-extensions/publishing-extension#extension-pricing-label'),
+			markdownDescription: nls.localize('vscode.extension.pricing', 'The pricing information for the snap. Can be Free (default) or Trial. For more details visit: https://code.visualstudio.com/api/working-with-snaps/publishing-snap#snap-pricing-label'),
 			enum: ['Free', 'Trial'],
 			default: 'Free'
 		}
@@ -705,7 +705,7 @@ schemaRegistry.registerSchema(schemaId, schema);
 schemaRegistry.registerSchema(productSchemaId, {
 	properties: {
 		extensionEnabledApiProposals: {
-			description: nls.localize('product.extensionEnabledApiProposals', "API proposals that the respective extensions can freely use."),
+			description: nls.localize('product.extensionEnabledApiProposals', "API proposals that the respective snaps can freely use."),
 			type: 'object',
 			properties: {},
 			additionalProperties: {

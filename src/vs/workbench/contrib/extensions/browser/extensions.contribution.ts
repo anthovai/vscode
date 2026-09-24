@@ -97,8 +97,8 @@ registerSingleton(IExtensionRecommendationsService, ExtensionRecommendationsServ
 Registry.as<IQuickAccessRegistry>(Extensions.Quickaccess).registerQuickAccessProvider({
 	ctor: ManageExtensionsQuickAccessProvider,
 	prefix: ManageExtensionsQuickAccessProvider.PREFIX,
-	placeholder: localize('manageExtensionsQuickAccessPlaceholder', "Press Enter to manage extensions."),
-	helpEntries: [{ description: localize('manageExtensionsHelp', "Manage Extensions") }]
+	placeholder: localize('manageExtensionsQuickAccessPlaceholder', "Press Enter to manage snaps."),
+	helpEntries: [{ description: localize('manageExtensionsHelp', "Manage Snaps") }]
 });
 
 // Editor
@@ -106,7 +106,7 @@ Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane
 	EditorPaneDescriptor.create(
 		ExtensionEditor,
 		ExtensionEditor.ID,
-		localize('extension', "Extension")
+		localize('extension', "Snap")
 	),
 	[
 		new SyncDescriptor(ExtensionsInput)
@@ -115,7 +115,7 @@ Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane
 export const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer(
 	{
 		id: VIEWLET_ID,
-		title: localize2('extensions', "Extensions"),
+		title: localize2('extensions', "Snap"),
 		openCommandActionDescriptor: {
 			id: VIEWLET_ID,
 			mnemonicTitle: localize({ key: 'miViewExtensions', comment: ['&& denotes a mnemonic'] }, "E&&xtensions"),
@@ -133,17 +133,17 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 	.registerConfiguration({
 		id: 'extensions',
 		order: 30,
-		title: localize('extensionsConfigurationTitle', "Extensions"),
+		title: localize('extensionsConfigurationTitle', "Snap"),
 		type: 'object',
 		properties: {
 			'extensions.autoUpdate': {
 				type: 'string',
 				enum: ['on', 'off'],
 				enumDescriptions: [
-					localize('extensions.autoUpdate.on', 'Download and install updates automatically only for enabled extensions.'),
-					localize('extensions.autoUpdate.off', 'Extensions are not automatically updated.'),
+					localize('extensions.autoUpdate.on', 'Download and install updates automatically only for enabled snaps.'),
+					localize('extensions.autoUpdate.off', 'Snaps are not automatically updated.'),
 				],
-				description: localize('extensions.autoUpdate', "Controls the automatic update behavior of extensions. The updates are fetched from a Microsoft online service."),
+				description: localize('extensions.autoUpdate', "Controls the automatic update behavior of snaps. The updates are fetched from Open VSX."),
 				default: 'on',
 				scope: ConfigurationScope.APPLICATION,
 				tags: ['usesOnlineServices'],
@@ -154,16 +154,16 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 					localization: {
 						description: {
 							key: 'extensions.autoUpdate',
-							value: localize('extensions.autoUpdate', "Controls the automatic update behavior of extensions. The updates are fetched from a Microsoft online service."),
+							value: localize('extensions.autoUpdate', "Controls the automatic update behavior of snaps. The updates are fetched from Open VSX."),
 						},
 						enumDescriptions: [
 							{
 								key: 'extensions.autoUpdate.on',
-								value: localize('extensions.autoUpdate.on', 'Download and install updates automatically only for enabled extensions.'),
+								value: localize('extensions.autoUpdate.on', 'Download and install updates automatically only for enabled snaps.'),
 							},
 							{
 								key: 'extensions.autoUpdate.off',
-								value: localize('extensions.autoUpdate.off', 'Extensions are not automatically updated.'),
+								value: localize('extensions.autoUpdate.off', 'Snaps are not automatically updated.'),
 							},
 						]
 					}
@@ -173,7 +173,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 				type: 'number',
 				default: 12,
 				minimum: 0,
-				markdownDescription: localize('extensions.autoUpdateDelay', "Controls the delay in hours after an extension update is published before it is automatically installed. Only applies when `#extensions.autoUpdate#` is set to `on`. This delay helps avoid installing potentially problematic updates immediately after release."),
+				markdownDescription: localize('extensions.autoUpdateDelay', "Controls the delay in hours after a snap update is published before it is automatically installed. Only applies when `#extensions.autoUpdate#` is set to `on`. This delay helps avoid installing potentially problematic updates immediately after release."),
 				scope: ConfigurationScope.APPLICATION,
 				policy: {
 					name: 'ExtensionsAutoUpdateDelay',
@@ -182,33 +182,33 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 					localization: {
 						description: {
 							key: 'extensions.autoUpdateDelay',
-							value: localize('extensions.autoUpdateDelay', "Controls the delay in hours after an extension update is published before it is automatically installed. Only applies when `#extensions.autoUpdate#` is set to `on`. This delay helps avoid installing potentially problematic updates immediately after release."),
+							value: localize('extensions.autoUpdateDelay', "Controls the delay in hours after a snap update is published before it is automatically installed. Only applies when `#extensions.autoUpdate#` is set to `on`. This delay helps avoid installing potentially problematic updates immediately after release."),
 						}
 					}
 				}
 			},
 			'extensions.autoCheckUpdates': {
 				type: 'boolean',
-				description: localize('extensionsCheckUpdates', "When enabled, automatically checks extensions for updates. If an extension has an update, it is marked as outdated in the Extensions view. The updates are fetched from a Microsoft online service."),
+				description: localize('extensionsCheckUpdates', "When enabled, automatically checks snaps for updates. If a snap has an update, it is marked as outdated in the Snaps view. The updates are fetched from Open VSX."),
 				default: true,
 				scope: ConfigurationScope.APPLICATION,
 				tags: ['usesOnlineServices']
 			},
 			'extensions.ignoreRecommendations': {
 				type: 'boolean',
-				description: localize('extensionsIgnoreRecommendations', "When enabled, the notifications for extension recommendations will not be shown."),
+				description: localize('extensionsIgnoreRecommendations', "When enabled, the notifications for snap recommendations will not be shown."),
 				default: false,
 				agentsWindow: { default: true, readOnly: true },
 			},
 			'extensions.showRecommendationsOnlyOnDemand': {
 				type: 'boolean',
-				deprecationMessage: localize('extensionsShowRecommendationsOnlyOnDemand_Deprecated', "This setting is deprecated. Use extensions.ignoreRecommendations setting to control recommendation notifications. Use Extensions view's visibility actions to hide Recommended view by default."),
+				deprecationMessage: localize('extensionsShowRecommendationsOnlyOnDemand_Deprecated', "This setting is deprecated. Use extensions.ignoreRecommendations setting to control recommendation notifications. Use Snaps view's visibility actions to hide Recommended view by default."),
 				default: false,
 				tags: ['usesOnlineServices']
 			},
 			'extensions.closeExtensionDetailsOnViewChange': {
 				type: 'boolean',
-				description: localize('extensionsCloseExtensionDetailsOnViewChange', "When enabled, editors with extension details will be automatically closed upon navigating away from the Extensions View."),
+				description: localize('extensionsCloseExtensionDetailsOnViewChange', "When enabled, editors with snap details will be automatically closed upon navigating away from the Snaps View."),
 				default: false
 			},
 			'extensions.confirmedUriHandlerExtensionIds': {
@@ -216,7 +216,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 				items: {
 					type: 'string'
 				},
-				description: localize('handleUriConfirmedExtensions', "When an extension is listed here, a confirmation prompt will not be shown when that extension handles a URI."),
+				description: localize('handleUriConfirmedExtensions', "When a snap is listed here, a confirmation prompt will not be shown when that snap handles a URI."),
 				default: [],
 				scope: ConfigurationScope.APPLICATION
 			},
@@ -224,16 +224,16 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 				type: ['boolean', 'string'],
 				enum: [true, false, 'auto'],
 				enumDescriptions: [
-					localize('extensionsWebWorker.true', "The Web Worker Extension Host will always be launched."),
-					localize('extensionsWebWorker.false', "The Web Worker Extension Host will never be launched."),
-					localize('extensionsWebWorker.auto', "The Web Worker Extension Host will be launched when a web extension needs it."),
+					localize('extensionsWebWorker.true', "The Web Worker Snap Host will always be launched."),
+					localize('extensionsWebWorker.false', "The Web Worker Snap Host will never be launched."),
+					localize('extensionsWebWorker.auto', "The Web Worker Snap Host will be launched when a web snap needs it."),
 				],
-				description: localize('extensionsWebWorker', "Enable web worker extension host."),
+				description: localize('extensionsWebWorker', "Enable web worker snap host."),
 				default: 'auto'
 			},
 			'extensions.supportVirtualWorkspaces': {
 				type: 'object',
-				markdownDescription: localize('extensions.supportVirtualWorkspaces', "Override the virtual workspaces support of an extension."),
+				markdownDescription: localize('extensions.supportVirtualWorkspaces', "Override the virtual workspaces support of a snap."),
 				patternProperties: {
 					'([a-z0-9A-Z][a-z0-9-A-Z]*)\\.([a-z0-9A-Z][a-z0-9-A-Z]*)$': {
 						type: 'boolean',
@@ -251,7 +251,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			[EXTENSIONS_SUPPORT_AGENTS_WINDOW]: {
 				type: 'object',
 				scope: ConfigurationScope.APPLICATION,
-				markdownDescription: localize('extensions.supportAgentsWindow', "Override the Agents window support of an extension. Extensions using `true` will be enabled in the Agents window even when they would otherwise be disabled."),
+				markdownDescription: localize('extensions.supportAgentsWindow', "Override the Agents window support of a snap. Snaps using `true` will be enabled in the Agents window even when they would otherwise be disabled."),
 				patternProperties: {
 					'([a-z0-9A-Z][a-z0-9-A-Z]*)\\.([a-z0-9A-Z][a-z0-9-A-Z]*)$': {
 						type: 'boolean',
@@ -268,7 +268,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			},
 			'extensions.experimental.affinity': {
 				type: 'object',
-				markdownDescription: localize('extensions.affinity', "Configure an extension to execute in a different extension host process."),
+				markdownDescription: localize('extensions.affinity', "Configure a snap to execute in a different snap host process."),
 				patternProperties: {
 					'([a-z0-9A-Z][a-z0-9-A-Z]*)\\.([a-z0-9A-Z][a-z0-9-A-Z]*)$': {
 						type: 'integer',
@@ -286,7 +286,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			[WORKSPACE_TRUST_EXTENSION_SUPPORT]: {
 				type: 'object',
 				scope: ConfigurationScope.APPLICATION,
-				markdownDescription: localize('extensions.supportUntrustedWorkspaces', "Override the untrusted workspace support of an extension. Extensions using `true` will always be enabled. Extensions using `limited` will always be enabled, and the extension will hide functionality that requires trust. Extensions using `false` will only be enabled only when the workspace is trusted."),
+				markdownDescription: localize('extensions.supportUntrustedWorkspaces', "Override the untrusted workspace support of a snap. Snaps using `true` will always be enabled. Snaps using `limited` will always be enabled, and the snap will hide functionality that requires trust. Snaps using `false` will only be enabled only when the workspace is trusted."),
 				patternProperties: {
 					'([a-z0-9A-Z][a-z0-9-A-Z]*)\\.([a-z0-9A-Z][a-z0-9-A-Z]*)$': {
 						type: 'object',
@@ -295,15 +295,15 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 								type: ['boolean', 'string'],
 								enum: [true, false, 'limited'],
 								enumDescriptions: [
-									localize('extensions.supportUntrustedWorkspaces.true', "Extension will always be enabled."),
-									localize('extensions.supportUntrustedWorkspaces.false', "Extension will only be enabled only when the workspace is trusted."),
-									localize('extensions.supportUntrustedWorkspaces.limited', "Extension will always be enabled, and the extension will hide functionality requiring trust."),
+									localize('extensions.supportUntrustedWorkspaces.true', "Snap will always be enabled."),
+									localize('extensions.supportUntrustedWorkspaces.false', "Snap will only be enabled only when the workspace is trusted."),
+									localize('extensions.supportUntrustedWorkspaces.limited', "Snap will always be enabled, and the snap will hide functionality requiring trust."),
 								],
-								description: localize('extensions.supportUntrustedWorkspaces.supported', "Defines the untrusted workspace support setting for the extension."),
+								description: localize('extensions.supportUntrustedWorkspaces.supported', "Defines the untrusted workspace support setting for the snap."),
 							},
 							'version': {
 								type: 'string',
-								description: localize('extensions.supportUntrustedWorkspaces.version', "Defines the version of the extension for which the override should be applied. If not specified, the override will be applied independent of the extension version."),
+								description: localize('extensions.supportUntrustedWorkspaces.version', "Defines the version of the snap for which the override should be applied. If not specified, the override will be applied independent of the snap version."),
 							}
 						}
 					}
@@ -311,17 +311,17 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			},
 			'extensions.experimental.deferredStartupFinishedActivation': {
 				type: 'boolean',
-				description: localize('extensionsDeferredStartupFinishedActivation', "When enabled, extensions which declare the `onStartupFinished` activation event will be activated after a timeout."),
+				description: localize('extensionsDeferredStartupFinishedActivation', "When enabled, snaps which declare the `onStartupFinished` activation event will be activated after a timeout."),
 				default: false
 			},
 			'extensions.experimental.issueQuickAccess': {
 				type: 'boolean',
-				description: localize('extensionsInQuickAccess', "When enabled, extensions can be searched for via Quick Access and report issues from there."),
+				description: localize('extensionsInQuickAccess', "When enabled, snaps can be searched for via Quick Access and report issues from there."),
 				default: true
 			},
 			'extensions.allowOpenInModalEditor': {
 				type: 'boolean',
-				description: localize('extensions.allowOpenInModalEditor', "Controls whether extensions and MCP servers open in a modal editor overlay."),
+				description: localize('extensions.allowOpenInModalEditor', "Controls whether snaps and MCP servers open in a modal editor overlay."),
 				default: false, // TODO@bpasero figure out the default for stable and retire this setting
 				tags: ['experimental'],
 				experiment: {
@@ -330,14 +330,14 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			},
 			[VerifyExtensionSignatureConfigKey]: {
 				type: 'boolean',
-				description: localize('extensions.verifySignature', "When enabled, extensions are verified to be signed before getting installed."),
+				description: localize('extensions.verifySignature', "When enabled, snaps are verified to be signed before getting installed."),
 				default: true,
 				scope: ConfigurationScope.APPLICATION,
 				included: isNative
 			},
 			[AutoRestartConfigurationKey]: {
 				type: 'boolean',
-				description: localize('autoRestart', "If activated, extensions will automatically restart following an update if the window is not in focus. There can be a data loss if you have open Notebooks or Custom Editors."),
+				description: localize('autoRestart', "If activated, snaps will automatically restart following an update if the window is not in focus. There can be a data loss if you have open Notebooks or Custom Editors."),
 				default: false,
 				included: product.quality !== 'stable'
 			},
@@ -364,10 +364,10 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 				type: 'string',
 				enum: ['github', 'microsoft'],
 				enumDescriptions: [
-					localize('extensions.gallery.authProvider.github', "Authenticate to the Extensions Marketplace using GitHub."),
-					localize('extensions.gallery.authProvider.microsoft', "Authenticate to the Extensions Marketplace using a Microsoft (Entra ID) account."),
+					localize('extensions.gallery.authProvider.github', "Authenticate to the Snaps Marketplace using GitHub."),
+					localize('extensions.gallery.authProvider.microsoft', "Authenticate to the Snaps Marketplace using a Microsoft (Entra ID) account."),
 				],
-				description: localize('extensions.gallery.authProvider', "Configure the authentication provider for the Extensions Marketplace"),
+				description: localize('extensions.gallery.authProvider', "Configure the authentication provider for the Snaps Marketplace"),
 				default: 'github',
 				scope: ConfigurationScope.APPLICATION,
 				included: false,
@@ -378,16 +378,16 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 					localization: {
 						description: {
 							key: 'extensions.gallery.authProvider',
-							value: localize('extensions.gallery.authProvider', "Configure the authentication provider for the Extensions Marketplace"),
+							value: localize('extensions.gallery.authProvider', "Configure the authentication provider for the Snaps Marketplace"),
 						},
 						enumDescriptions: [
 							{
 								key: 'extensions.gallery.authProvider.github',
-								value: localize('extensions.gallery.authProvider.github', "Authenticate to the Extensions Marketplace using GitHub."),
+								value: localize('extensions.gallery.authProvider.github', "Authenticate to the Snaps Marketplace using GitHub."),
 							},
 							{
 								key: 'extensions.gallery.authProvider.microsoft',
-								value: localize('extensions.gallery.authProvider.microsoft', "Authenticate to the Extensions Marketplace using a Microsoft (Entra ID) account."),
+								value: localize('extensions.gallery.authProvider.microsoft', "Authenticate to the Snaps Marketplace using a Microsoft (Entra ID) account."),
 							},
 						]
 					}
@@ -400,7 +400,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			},
 			[ExtensionRequestsTimeoutConfigKey]: {
 				type: 'number',
-				description: localize('extensionsRequestTimeout', "Controls the timeout in milliseconds for HTTP requests made when fetching extensions from the Marketplace"),
+				description: localize('extensionsRequestTimeout', "Controls the timeout in milliseconds for HTTP requests made when fetching snaps from the Marketplace"),
 				default: 60_000,
 				scope: ConfigurationScope.APPLICATION,
 				tags: ['advanced', 'usesOnlineServices']
@@ -418,7 +418,7 @@ CommandsRegistry.registerCommand('_extensions.manage', (accessor: ServicesAccess
 	if (extension) {
 		extensionService.open(extension, { tab, preserveFocus, feature });
 	} else {
-		throw new Error(localize('notFound', "Extension '{0}' not found.", extensionId));
+		throw new Error(localize('notFound', "Snap '{0}' not found.", extensionId));
 	}
 });
 
@@ -437,11 +437,11 @@ CommandsRegistry.registerCommand('extension.open', async (accessor: ServicesAcce
 CommandsRegistry.registerCommand({
 	id: 'workbench.extensions.installExtension',
 	metadata: {
-		description: localize('workbench.extensions.installExtension.description', "Install the given extension"),
+		description: localize('workbench.extensions.installExtension.description', "Install the given snap"),
 		args: [
 			{
 				name: 'extensionIdOrVSIXUri',
-				description: localize('workbench.extensions.installExtension.arg.decription', "Extension id or VSIX resource uri"),
+				description: localize('workbench.extensions.installExtension.arg.decription', "Snap id or VSIX resource uri"),
 				constraint: (value: any) => typeof value === 'string' || value instanceof URI,
 			},
 			{
@@ -454,26 +454,26 @@ CommandsRegistry.registerCommand({
 					'properties': {
 						'installOnlyNewlyAddedFromExtensionPackVSIX': {
 							'type': 'boolean',
-							'description': localize('workbench.extensions.installExtension.option.installOnlyNewlyAddedFromExtensionPackVSIX', "When enabled, VS Code installs only newly added extensions from the extension pack VSIX. This option is considered only while installing a VSIX."),
+							'description': localize('workbench.extensions.installExtension.option.installOnlyNewlyAddedFromExtensionPackVSIX', "When enabled, VS Code installs only newly added snaps from the snap pack VSIX. This option is considered only while installing a VSIX."),
 							default: false
 						},
 						'installPreReleaseVersion': {
 							'type': 'boolean',
-							'description': localize('workbench.extensions.installExtension.option.installPreReleaseVersion', "When enabled, VS Code installs the pre-release version of the extension if available."),
+							'description': localize('workbench.extensions.installExtension.option.installPreReleaseVersion', "When enabled, VS Code installs the pre-release version of the snap if available."),
 							default: false
 						},
 						'donotSync': {
 							'type': 'boolean',
-							'description': localize('workbench.extensions.installExtension.option.donotSync', "When enabled, VS Code do not sync this extension when Settings Sync is on."),
+							'description': localize('workbench.extensions.installExtension.option.donotSync', "When enabled, VS Code do not sync this snap when Settings Sync is on."),
 							default: false
 						},
 						'justification': {
 							'type': ['string', 'object'],
-							'description': localize('workbench.extensions.installExtension.option.justification', "Justification for installing the extension. This is a string or an object that can be used to pass any information to the installation handlers. i.e. `{reason: 'This extension wants to open a URI', action: 'Open URI'}` will show a message box with the reason and action upon install."),
+							'description': localize('workbench.extensions.installExtension.option.justification', "Justification for installing the snap. This is a string or an object that can be used to pass any information to the installation handlers. i.e. `{reason: 'This extension wants to open a URI', action: 'Open URI'}` will show a message box with the reason and action upon install."),
 						},
 						'enable': {
 							'type': 'boolean',
-							'description': localize('workbench.extensions.installExtension.option.enable', "When enabled, the extension will be enabled if it is installed but disabled. If the extension is already enabled, this has no effect."),
+							'description': localize('workbench.extensions.installExtension.option.enable', "When enabled, the snap will be enabled if it is installed but disabled. If the snap is already enabled, this has no effect."),
 							default: false
 						}
 					}
@@ -501,7 +501,7 @@ CommandsRegistry.registerCommand({
 				if (extension?.enablementState === EnablementState.DisabledByExtensionKind) {
 					const [gallery] = await extensionGalleryService.getExtensions([{ id, preRelease: options?.installPreReleaseVersion }], CancellationToken.None);
 					if (!gallery) {
-						throw new Error(localize('notFound', "Extension '{0}' not found.", arg));
+						throw new Error(localize('notFound', "Snap '{0}' not found.", arg));
 					}
 					await extensionManagementService.installFromGallery(gallery, {
 						isMachineScoped: options?.donotSync ? true : undefined, /* do not allow syncing extensions automatically while installing through the command */
@@ -533,10 +533,10 @@ CommandsRegistry.registerCommand({
 CommandsRegistry.registerCommand({
 	id: 'workbench.extensions.uninstallExtension',
 	metadata: {
-		description: localize('workbench.extensions.uninstallExtension.description', "Uninstall the given extension"),
+		description: localize('workbench.extensions.uninstallExtension.description', "Uninstall the given snap"),
 		args: [
 			{
-				name: localize('workbench.extensions.uninstallExtension.arg.name', "Id of the extension to uninstall"),
+				name: localize('workbench.extensions.uninstallExtension.arg.name', "Id of the snap to uninstall"),
 				schema: {
 					'type': 'string'
 				}
@@ -545,16 +545,16 @@ CommandsRegistry.registerCommand({
 	},
 	handler: async (accessor, id: string) => {
 		if (!id) {
-			throw new Error(localize('id required', "Extension id required."));
+			throw new Error(localize('id required', "Snap id required."));
 		}
 		const extensionManagementService = accessor.get(IExtensionManagementService);
 		const installed = await extensionManagementService.getInstalled();
 		const [extensionToUninstall] = installed.filter(e => areSameExtensions(e.identifier, { id }));
 		if (!extensionToUninstall) {
-			throw new Error(localize('notInstalled', "Extension '{0}' is not installed. Make sure you use the full extension ID, including the publisher, e.g.: ms-dotnettools.csharp.", id));
+			throw new Error(localize('notInstalled', "Snap '{0}' is not installed. Make sure you use the full snap ID, including the publisher, e.g.: ms-dotnettools.csharp.", id));
 		}
 		if (extensionToUninstall.isBuiltin) {
-			throw new Error(localize('builtin', "Extension '{0}' is a Built-in extension and cannot be uninstalled", id));
+			throw new Error(localize('builtin', "Snap '{0}' is a Built-in snap and cannot be uninstalled", id));
 		}
 
 		try {
@@ -569,7 +569,7 @@ CommandsRegistry.registerCommand({
 CommandsRegistry.registerCommand({
 	id: 'workbench.extensions.search',
 	metadata: {
-		description: localize('workbench.extensions.search.description', "Search for a specific extension"),
+		description: localize('workbench.extensions.search.description', "Search for a specific snap"),
 		args: [
 			{
 				name: localize('workbench.extensions.search.arg.name', "Query to use in search"),
@@ -690,8 +690,8 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 			Registry.as<IQuickAccessRegistry>(Extensions.Quickaccess).registerQuickAccessProvider({
 				ctor: InstallExtensionQuickAccessProvider,
 				prefix: InstallExtensionQuickAccessProvider.PREFIX,
-				placeholder: localize('installExtensionQuickAccessPlaceholder', "Type the name of an extension to install or search."),
-				helpEntries: [{ description: localize('installExtensionQuickAccessHelp', "Install or Search Extensions") }]
+				placeholder: localize('installExtensionQuickAccessPlaceholder', "Type the name of a snap to install or search."),
+				helpEntries: [{ description: localize('installExtensionQuickAccessHelp', "Install or Search Snaps") }]
 			});
 		}
 	}
@@ -701,7 +701,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 		this._register(MenuRegistry.appendMenuItem(MenuId.MenubarPreferencesMenu, {
 			command: {
 				id: VIEWLET_ID,
-				title: localize({ key: 'miPreferencesExtensions', comment: ['&& denotes a mnemonic'] }, "&&Extensions")
+				title: localize({ key: 'miPreferencesExtensions', comment: ['&& denotes a mnemonic'] }, "&&Snaps")
 			},
 			group: '2_configuration',
 			order: 3,
@@ -710,7 +710,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 		this._register(MenuRegistry.appendMenuItem(MenuId.GlobalActivity, {
 			command: {
 				id: VIEWLET_ID,
-				title: localize('showExtensions', "Extensions")
+				title: localize('showExtensions', "Snap")
 			},
 			group: '2_configuration',
 			order: 3
@@ -718,7 +718,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.focusExtensionsView',
-			title: localize2('focusExtensions', 'Focus on Extensions View'),
+			title: localize2('focusExtensions', 'Focus on Snaps View'),
 			category: ExtensionsLocalizedLabel,
 			f1: true,
 			run: async (accessor: ServicesAccessor) => {
@@ -728,7 +728,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.installExtensions',
-			title: localize2('installExtensions', 'Install Extensions'),
+			title: localize2('installExtensions', 'Install Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -759,7 +759,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.showLanguageExtensions',
-			title: localize2('showLanguageExtensionsShort', 'Language Extensions'),
+			title: localize2('showLanguageExtensionsShort', 'Language Snaps'),
 			category: PreferencesLocalizedLabel,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -770,7 +770,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.checkForUpdates',
-			title: localize2('checkForUpdates', 'Check for Extension Updates'),
+			title: localize2('checkForUpdates', 'Check for Snap Updates'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -790,7 +790,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 				if (outdated.length) {
 					return this.extensionsWorkbenchService.openSearch('@outdated ');
 				} else if (pluginResult.updatedNames.length === 0 && pluginResult.failedNames.length === 0) {
-					return this.dialogService.info(localize('noUpdatesAvailable', "All extensions are up to date."));
+					return this.dialogService.info(localize('noUpdatesAvailable', "All snaps are up to date."));
 				}
 			}
 		});
@@ -798,7 +798,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 		const enableAutoUpdateWhenCondition = ContextKeyExpr.equals(`config.${AutoUpdateConfigurationKey}`, 'off');
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.enableAutoUpdate',
-			title: localize2('enableAutoUpdate', 'Enable Auto Update for Extensions'),
+			title: localize2('enableAutoUpdate', 'Enable Auto Update for Snaps'),
 			category: ExtensionsLocalizedLabel,
 			precondition: enableAutoUpdateWhenCondition,
 			menu: [{
@@ -815,7 +815,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 		const disableAutoUpdateWhenCondition = ContextKeyExpr.notEquals(`config.${AutoUpdateConfigurationKey}`, 'off');
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.disableAutoUpdate',
-			title: localize2('disableAutoUpdate', 'Disable Auto Update for Extensions'),
+			title: localize2('disableAutoUpdate', 'Disable Auto Update for Snaps'),
 			precondition: disableAutoUpdateWhenCondition,
 			category: ExtensionsLocalizedLabel,
 			menu: [{
@@ -831,7 +831,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.updateAllExtensions',
-			title: localize2('updateAll', 'Update All Extensions'),
+			title: localize2('updateAll', 'Update All Snaps'),
 			category: ExtensionsLocalizedLabel,
 			precondition: HasOutdatedExtensionsContext,
 			menu: [
@@ -858,7 +858,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.enableAll',
-			title: localize2('enableAll', 'Enable All Extensions'),
+			title: localize2('enableAll', 'Enable All Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -879,7 +879,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.enableAllWorkspace',
-			title: localize2('enableAllWorkspace', 'Enable All Extensions for this Workspace'),
+			title: localize2('enableAllWorkspace', 'Enable All Snaps for this Workspace'),
 			category: ExtensionsLocalizedLabel,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -895,7 +895,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.disableAll',
-			title: localize2('disableAll', 'Disable All Installed Extensions'),
+			title: localize2('disableAll', 'Disable All Installed Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -916,7 +916,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.disableAllWorkspace',
-			title: localize2('disableAllWorkspace', 'Disable All Installed Extensions for this Workspace'),
+			title: localize2('disableAllWorkspace', 'Disable All Installed Snaps for this Workspace'),
 			category: ExtensionsLocalizedLabel,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -961,7 +961,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: INSTALL_EXTENSION_FROM_VSIX_COMMAND_ID,
-			title: localize('installVSIX', "Install Extension VSIX"),
+			title: localize('installVSIX', "Install Snap VSIX"),
 			menu: [{
 				id: MenuId.ExplorerContext,
 				group: 'extensions',
@@ -989,8 +989,8 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 				if (requireReload) {
 					notificationService.prompt(
 						Severity.Info,
-						vsixs.length > 1 ? localize('InstallVSIXs.successReload', "Completed installing extensions. Please reload Visual Studio Code to enable them.")
-							: localize('InstallVSIXAction.successReload', "Completed installing extension. Please reload Visual Studio Code to enable it."),
+						vsixs.length > 1 ? localize('InstallVSIXs.successReload', "Completed installing snaps. Please reload Visual Studio Code to enable them.")
+							: localize('InstallVSIXAction.successReload', "Completed installing snap. Please reload Visual Studio Code to enable it."),
 						[{
 							label: localize('InstallVSIXAction.reloadNow', "Reload Now"),
 							run: () => hostService.reload()
@@ -1000,10 +1000,10 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 				else if (requireRestart) {
 					notificationService.prompt(
 						Severity.Info,
-						vsixs.length > 1 ? localize('InstallVSIXs.successRestart', "Completed installing extensions. Please restart extensions to enable them.")
-							: localize('InstallVSIXAction.successRestart', "Completed installing extension. Please restart extensions to enable it."),
+						vsixs.length > 1 ? localize('InstallVSIXs.successRestart', "Completed installing snaps. Please restart snaps to enable them.")
+							: localize('InstallVSIXAction.successRestart', "Completed installing snap. Please restart snaps to enable it."),
 						[{
-							label: localize('InstallVSIXAction.restartExtensions', "Restart Extensions"),
+							label: localize('InstallVSIXAction.restartExtensions', "Restart Snaps"),
 							run: () => extensionsWorkbenchService.updateRunningExtensions()
 						}]
 					);
@@ -1011,7 +1011,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 				else {
 					notificationService.prompt(
 						Severity.Info,
-						vsixs.length > 1 ? localize('InstallVSIXs.successNoReload', "Completed installing extensions.") : localize('InstallVSIXAction.successNoReload', "Completed installing extension."),
+						vsixs.length > 1 ? localize('InstallVSIXs.successNoReload', "Completed installing snaps.") : localize('InstallVSIXAction.successNoReload', "Completed installing snap."),
 						[]
 					);
 				}
@@ -1020,7 +1020,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.installExtensionFromLocation',
-			title: localize2('installExtensionFromLocation', 'Install Extension from Location...'),
+			title: localize2('installExtensionFromLocation', 'Install Snap from Location...'),
 			category: Categories.Developer,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1033,10 +1033,10 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 						const quickInputService = accessor.get(IQuickInputService);
 						const disposables = new DisposableStore();
 						const quickPick = disposables.add(quickInputService.createQuickPick());
-						quickPick.title = localize('installFromLocation', "Install Extension from Location");
+						quickPick.title = localize('installFromLocation', "Install Snap from Location");
 						quickPick.customButton = true;
 						quickPick.customLabel = localize('install button', "Install");
-						quickPick.placeholder = localize('installFromLocationPlaceHolder', "Location of the web extension");
+						quickPick.placeholder = localize('installFromLocationPlaceHolder', "Location of the web snap");
 						quickPick.ignoreFocusOut = true;
 						disposables.add(Event.any(quickPick.onDidAccept, quickPick.onDidCustom)(async () => {
 							quickPick.hide();
@@ -1059,7 +1059,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 						canSelectFolders: true,
 						canSelectFiles: false,
 						canSelectMany: false,
-						title: localize('installFromLocation', "Install Extension from Location"),
+						title: localize('installFromLocation', "Install Snap from Location"),
 					});
 					if (extensionLocation?.[0]) {
 						await extensionManagementService.installFromLocation(extensionLocation[0]);
@@ -1080,7 +1080,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 		const featuresExtensionsWhenContext = ContextKeyExpr.and(CONTEXT_HAS_GALLERY, ContextKeyExpr.regex(CONTEXT_GALLERY_FILTER_CAPABILITIES.key, new RegExp(`_${FilterType.Featured}_`)));
 		this.registerExtensionAction({
 			id: showFeaturedExtensionsId,
-			title: localize2('showFeaturedExtensions', 'Show Featured Extensions'),
+			title: localize2('showFeaturedExtensions', 'Show Featured Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1099,7 +1099,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.showPopularExtensions',
-			title: localize2('showPopularExtensions', 'Show Popular Extensions'),
+			title: localize2('showPopularExtensions', 'Show Popular Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1118,7 +1118,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.showRecommendedExtensions',
-			title: localize2('showRecommendedExtensions', 'Show Recommended Extensions'),
+			title: localize2('showRecommendedExtensions', 'Show Recommended Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1137,7 +1137,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.recentlyPublishedExtensions',
-			title: localize2('recentlyPublishedExtensions', 'Show Recently Published Extensions'),
+			title: localize2('recentlyPublishedExtensions', 'Show Recently Published Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1178,7 +1178,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.installedExtensions',
-			title: localize2('installedExtensions', 'Show Installed Extensions'),
+			title: localize2('installedExtensions', 'Show Installed Snaps'),
 			category: ExtensionsLocalizedLabel,
 			f1: true,
 			menu: [{
@@ -1194,7 +1194,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.listBuiltInExtensions',
-			title: localize2('showBuiltInExtensions', 'Show Built-in Extensions'),
+			title: localize2('showBuiltInExtensions', 'Show Built-in Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1212,7 +1212,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.extensionUpdates',
-			title: localize2('extensionUpdates', 'Show Extension Updates'),
+			title: localize2('extensionUpdates', 'Show Snap Updates'),
 			category: ExtensionsLocalizedLabel,
 			precondition: CONTEXT_HAS_GALLERY,
 			f1: true,
@@ -1230,7 +1230,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: LIST_WORKSPACE_UNSUPPORTED_EXTENSIONS_COMMAND_ID,
-			title: localize2('showWorkspaceUnsupportedExtensions', 'Show Extensions Unsupported By Workspace'),
+			title: localize2('showWorkspaceUnsupportedExtensions', 'Show Snaps Unsupported By Workspace'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1249,7 +1249,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.showEnabledExtensions',
-			title: localize2('showEnabledExtensions', 'Show Enabled Extensions'),
+			title: localize2('showEnabledExtensions', 'Show Enabled Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1267,7 +1267,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.showDisabledExtensions',
-			title: localize2('showDisabledExtensions', 'Show Disabled Extensions'),
+			title: localize2('showDisabledExtensions', 'Show Disabled Snaps'),
 			category: ExtensionsLocalizedLabel,
 			menu: [{
 				id: MenuId.CommandPalette,
@@ -1321,7 +1321,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.clearExtensionsSearchResults',
-			title: localize2('clearExtensionsSearchResults', 'Clear Extensions Search Results'),
+			title: localize2('clearExtensionsSearchResults', 'Clear Snaps Search Results'),
 			category: ExtensionsLocalizedLabel,
 			icon: clearSearchResultsIcon,
 			f1: true,
@@ -1363,7 +1363,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.installWorkspaceRecommendedExtensions',
-			title: localize('installWorkspaceRecommendedExtensions', "Install Workspace Recommended Extensions"),
+			title: localize('installWorkspaceRecommendedExtensions', "Install Workspace Recommended Snaps"),
 			icon: installWorkspaceRecommendedIcon,
 			menu: {
 				id: MenuId.ViewTitle,
@@ -1731,7 +1731,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.copyExtensionId',
-			title: localize2('workbench.extensions.action.copyExtensionId', 'Copy Extension ID'),
+			title: localize2('workbench.extensions.action.copyExtensionId', 'Copy Snap ID'),
 			menu: {
 				id: MenuId.ExtensionContext,
 				group: '1_copy'
@@ -1832,7 +1832,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.toggleApplyToAllProfiles',
-			title: localize2('workbench.extensions.action.toggleApplyToAllProfiles', "Apply Extension to all Profiles"),
+			title: localize2('workbench.extensions.action.toggleApplyToAllProfiles', "Apply Snap to all Profiles"),
 			toggled: ContextKeyExpr.has('isApplicationScopedExtension'),
 			menu: {
 				id: MenuId.ExtensionContext,
@@ -1851,7 +1851,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: TOGGLE_IGNORE_EXTENSION_ACTION_ID,
-			title: localize2('workbench.extensions.action.toggleIgnoreExtension', "Sync This Extension"),
+			title: localize2('workbench.extensions.action.toggleIgnoreExtension', "Sync This Snap"),
 			menu: {
 				id: MenuId.ExtensionContext,
 				group: '2_configure',
@@ -1916,7 +1916,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.addToWorkspaceRecommendations',
-			title: localize2('workbench.extensions.action.addToWorkspaceRecommendations', "Add Extension to Workspace Recommendations"),
+			title: localize2('workbench.extensions.action.addToWorkspaceRecommendations', "Add Snap to Workspace Recommendations"),
 			category: EXTENSIONS_CATEGORY,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -1939,7 +1939,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.addToWorkspaceFolderRecommendations',
-			title: localize2('workbench.extensions.action.addToWorkspaceFolderRecommendations', "Add Extension to Workspace Folder Recommendations"),
+			title: localize2('workbench.extensions.action.addToWorkspaceFolderRecommendations', "Add Snap to Workspace Folder Recommendations"),
 			category: EXTENSIONS_CATEGORY,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -1950,7 +1950,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.addToWorkspaceIgnoredRecommendations',
-			title: localize2('workbench.extensions.action.addToWorkspaceIgnoredRecommendations', "Add Extension to Workspace Ignored Recommendations"),
+			title: localize2('workbench.extensions.action.addToWorkspaceIgnoredRecommendations', "Add Snap to Workspace Ignored Recommendations"),
 			category: EXTENSIONS_CATEGORY,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -1973,7 +1973,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.addToWorkspaceFolderIgnoredRecommendations',
-			title: localize2('workbench.extensions.action.addToWorkspaceFolderIgnoredRecommendations', "Add Extension to Workspace Folder Ignored Recommendations"),
+			title: localize2('workbench.extensions.action.addToWorkspaceFolderIgnoredRecommendations', "Add Snap to Workspace Folder Ignored Recommendations"),
 			category: EXTENSIONS_CATEGORY,
 			menu: {
 				id: MenuId.CommandPalette,
@@ -1995,7 +1995,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 
 		this.registerExtensionAction({
 			id: 'workbench.extensions.action.manageTrustedPublishers',
-			title: localize2('workbench.extensions.action.manageTrustedPublishers', "Manage Trusted Extension Publishers"),
+			title: localize2('workbench.extensions.action.manageTrustedPublishers', "Manage Trusted Snap Publishers"),
 			category: EXTENSIONS_CATEGORY,
 			f1: true,
 			run: async (accessor: ServicesAccessor) => {
@@ -2010,7 +2010,7 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 				})).sort((a, b) => a.label.localeCompare(b.label));
 				const result = await quickInputService.pick(trustedPublisherItems, {
 					canPickMany: true,
-					title: localize('trustedPublishers', "Manage Trusted Extension Publishers"),
+					title: localize('trustedPublishers', "Manage Trusted Snap Publishers"),
 					placeHolder: localize('trustedPublishersPlaceholder', "Choose which publishers to trust"),
 				});
 				if (result) {
@@ -2148,7 +2148,7 @@ registerAction2(class ExtensionsGallerySignInAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.extensions.actions.gallery.signIn',
-			title: localize2('signInToMarketplace', 'Sign in to access Extensions Marketplace'),
+			title: localize2('signInToMarketplace', 'Sign in to access Snaps Marketplace'),
 			menu: {
 				id: MenuId.AccountsContext,
 				when: ContextKeyExpr.or(

@@ -325,7 +325,7 @@ export const tocData: ITOCEntry<string> = {
 				},
 				{
 					id: 'features/extensions',
-					label: localize('extensions', "Extensions"),
+					label: localize('extensions', "Snap"),
 					settings: ['extensions.*']
 				},
 				{

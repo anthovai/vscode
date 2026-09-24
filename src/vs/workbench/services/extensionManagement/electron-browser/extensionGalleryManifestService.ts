@@ -113,7 +113,7 @@ export class WorkbenchExtensionGalleryManifestService extends ExtensionGalleryMa
 			if (e.affectsConfiguration(ExtensionGalleryServiceUrlConfigKey)) {
 				this.requestRestart(localize('extensionGalleryManifestService.accountChange', "{0} is now configured to a different Marketplace. Please restart to apply the changes.", this.productService.nameLong));
 			} else if (e.affectsConfiguration(ExtensionGalleryAuthProviderConfigKey)) {
-				this.requestRestart(localize('extensionGalleryManifestService.configurationChange', "The Extensions Marketplace configuration has changed. Please restart to apply the changes."));
+				this.requestRestart(localize('extensionGalleryManifestService.configurationChange', "The Snaps Marketplace configuration has changed. Please restart to apply the changes."));
 			}
 		}));
 	}

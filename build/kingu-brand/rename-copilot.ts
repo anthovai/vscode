@@ -32,7 +32,7 @@ export function rename(text: string): string {
 	return text.replace(/\bGitHub Copilot\b/g, NAME).replace(/\bCopilot\b/g, NAME).replace(/\b([Aa]) Arkai\b/g, '$1n Arkai');
 }
 
-function* files(dir: string, test: (name: string) => boolean): Generator<string> {
+export function* files(dir: string, test: (name: string) => boolean): Generator<string> {
 	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
 		const full = path.join(dir, entry.name);
 		if (entry.isDirectory()) {
@@ -54,9 +54,30 @@ function isLocalizeCall(node: ts.Node): node is ts.CallExpression {
 	return name === 'localize' || name === 'localize2';
 }
 
-function renameMessages(file: string): number {
+/** A `localize` call's key: its first argument, or that argument's `key` property. */
+function localizeKey(call: ts.CallExpression): string | undefined {
+	const first = call.arguments[0];
+	if (first && ts.isStringLiteralLike(first)) {
+		return first.text;
+	}
+	if (first && ts.isObjectLiteralExpression(first)) {
+		for (const property of first.properties) {
+			if (ts.isPropertyAssignment(property) && property.name.getText() === 'key' && ts.isStringLiteralLike(property.initializer)) {
+				return property.initializer.text;
+			}
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Rewrites the message of every `localize` / `localize2` call in a file through `transform`,
+ * which gets the message's source text (quotes included) and the call's key. Only files that
+ * match `mentions` are parsed.
+ */
+export function renameLocalizeMessages(file: string, mentions: RegExp, transform: (raw: string, key: string | undefined) => string): number {
 	const source = fs.readFileSync(file, 'utf8');
-	if (!/\bCopilot\b/.test(source)) {
+	if (!mentions.test(source)) {
 		return 0;
 	}
 	const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
@@ -66,7 +87,7 @@ function renameMessages(file: string): number {
 			const message = node.arguments[1];
 			if (ts.isStringLiteral(message) || ts.isNoSubstitutionTemplateLiteral(message)) {
 				const raw = source.slice(message.getStart(tree), message.getEnd());
-				const renamed = rename(raw);
+				const renamed = transform(raw, localizeKey(node));
 				if (renamed !== raw) {
 					edits.push({ start: message.getStart(tree), end: message.getEnd(), text: renamed });
 				}
@@ -143,7 +164,7 @@ function renameJsonFile(file: string, shown: (key: string | undefined) => boolea
 function main(): void {
 	let total = 0;
 	for (const file of files(path.join(ROOT, 'src', 'vs'), name => name.endsWith('.ts') && !name.endsWith('.d.ts') && !name.includes('.test.'))) {
-		const n = renameMessages(file);
+		const n = renameLocalizeMessages(file, /\bCopilot\b/, raw => rename(raw));
 		if (n) {
 			console.log(`${path.relative(ROOT, file)}: ${n}`);
 			total += n;

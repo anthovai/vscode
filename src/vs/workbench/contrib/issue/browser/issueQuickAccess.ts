@@ -62,7 +62,7 @@ export class IssueQuickAccess extends PickerQuickAccessProvider<IPickerQuickAcce
 			});
 		}
 
-		issuePicksConst.push({ type: 'separator', label: localize('extensions', "Extensions") });
+		issuePicksConst.push({ type: 'separator', label: localize('extensions', "Snap") });
 
 
 		// gets menu actions from contributed

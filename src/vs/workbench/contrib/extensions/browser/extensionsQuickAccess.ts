@@ -32,12 +32,12 @@ export class InstallExtensionQuickAccessProvider extends PickerQuickAccessProvid
 		// Nothing typed
 		if (!filter) {
 			return [{
-				label: localize('type', "Type an extension name to install or search.")
+				label: localize('type', "Type a snap name to install or search.")
 			}];
 		}
 
 		const genericSearchPickItem: IPickerQuickAccessItem = {
-			label: localize('searchFor', "Press Enter to search for extension '{0}'.", filter),
+			label: localize('searchFor', "Press Enter to search for snap '{0}'.", filter),
 			accept: () => this.extensionsWorkbenchService.openSearch(filter)
 		};
 
@@ -62,7 +62,7 @@ export class InstallExtensionQuickAccessProvider extends PickerQuickAccessProvid
 			}
 
 			return [{
-				label: localize('install', "Press Enter to install extension '{0}'.", filter),
+				label: localize('install', "Press Enter to install snap '{0}'.", filter),
 				accept: () => this.installExtension(galleryExtension, filter)
 			}];
 		} catch (error) {
@@ -96,7 +96,7 @@ export class ManageExtensionsQuickAccessProvider extends PickerQuickAccessProvid
 
 	protected _getPicks(): Array<IPickerQuickAccessItem | IQuickPickSeparator> {
 		return [{
-			label: localize('manage', "Press Enter to manage your extensions."),
+			label: localize('manage', "Press Enter to manage your snaps."),
 			accept: () => this.extensionsWorkbenchService.openSearch('')
 		}];
 	}

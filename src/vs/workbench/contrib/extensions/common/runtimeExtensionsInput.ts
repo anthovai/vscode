@@ -11,7 +11,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 
-const RuntimeExtensionsEditorIcon = registerIcon('runtime-extensions-editor-label-icon', Codicon.extensions, nls.localize('runtimeExtensionEditorLabelIcon', 'Icon of the runtime extensions editor label.'));
+const RuntimeExtensionsEditorIcon = registerIcon('runtime-extensions-editor-label-icon', Codicon.extensions, nls.localize('runtimeExtensionEditorLabelIcon', 'Icon of the runtime snaps editor label.'));
 
 export class RuntimeExtensionsInput extends EditorInput {
 
@@ -40,7 +40,7 @@ export class RuntimeExtensionsInput extends EditorInput {
 	});
 
 	override getName(): string {
-		return nls.localize('extensionsInputName', "Running Extensions");
+		return nls.localize('extensionsInputName', "Running Snaps");
 	}
 
 	override getIcon(): ThemeIcon {

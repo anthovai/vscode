@@ -151,12 +151,12 @@ export class ExtensionManagementService extends AbstractExtensionManagementServi
 			const manifest = await getManifest(path.resolve(location.fsPath));
 			const extensionId = getGalleryExtensionId(manifest.publisher, manifest.name);
 			if (manifest.engines && manifest.engines.vscode && !isEngineValid(manifest.engines.vscode, this.productService.version, this.productService.date)) {
-				throw new Error(nls.localize('incompatible', "Unable to install extension '{0}' as it is not compatible with VS Code '{1}'.", extensionId, this.productService.version));
+				throw new Error(nls.localize('incompatible', "Unable to install snap '{0}' as it is not compatible with VS Code '{1}'.", extensionId, this.productService.version));
 			}
 
 			const allowedToInstall = this.allowedExtensionsService.isAllowed({ id: extensionId, version: manifest.version, publisherDisplayName: undefined });
 			if (allowedToInstall !== true) {
-				throw new Error(nls.localize('notAllowed', "This extension cannot be installed because {0}", allowedToInstall.value));
+				throw new Error(nls.localize('notAllowed', "This snap cannot be installed because {0}", allowedToInstall.value));
 			}
 
 			const results = await this.installExtensions([{ manifest, extension: location, options }]);
@@ -307,7 +307,7 @@ export class ExtensionManagementService extends AbstractExtensionManagementServi
 			// validate manifest
 			const manifest = await getManifest(location.fsPath);
 			if (!new ExtensionKey(gallery.identifier, gallery.version).equals(new ExtensionKey({ id: getGalleryExtensionId(manifest.publisher, manifest.name) }, manifest.version))) {
-				throw new ExtensionManagementError(nls.localize('invalidManifest', "Cannot install '{0}' extension because of manifest mismatch with Marketplace", gallery.identifier.id), ExtensionManagementErrorCode.Invalid);
+				throw new ExtensionManagementError(nls.localize('invalidManifest', "Cannot install '{0}' snap because of manifest mismatch with Marketplace", gallery.identifier.id), ExtensionManagementErrorCode.Invalid);
 			}
 
 			const local = await this.extensionsScanner.extractUserExtension(
@@ -634,7 +634,7 @@ export class ExtensionsScanner extends Disposable {
 			try {
 				await this.deleteExtensionFromLocation(extensionKey.id, extensionLocation, 'removeExisting');
 			} catch (error) {
-				throw new ExtensionManagementError(nls.localize('errorDeleting', "Unable to delete the existing folder '{0}' while installing the extension '{1}'. Please delete the folder manually and try again", extensionLocation.fsPath, extensionKey.id), ExtensionManagementErrorCode.Delete);
+				throw new ExtensionManagementError(nls.localize('errorDeleting', "Unable to delete the existing folder '{0}' while installing the snap '{1}'. Please delete the folder manually and try again", extensionLocation.fsPath, extensionKey.id), ExtensionManagementErrorCode.Delete);
 			}
 		}
 
@@ -879,7 +879,7 @@ export class ExtensionsScanner extends Disposable {
 					return await this.toLocalExtension(scannedExtension);
 				}
 			}
-			throw new ExtensionManagementError(nls.localize('cannot read', "Cannot read the extension from {0}", location.path), ExtensionManagementErrorCode.ScanningExtension);
+			throw new ExtensionManagementError(nls.localize('cannot read', "Cannot read the snap from {0}", location.path), ExtensionManagementErrorCode.ScanningExtension);
 		} catch (error) {
 			throw toExtensionManagementError(error, ExtensionManagementErrorCode.ScanningExtension);
 		}
@@ -1074,10 +1074,10 @@ class InstallExtensionInProfileTask extends AbstractExtensionTask<ILocalExtensio
 		const existingSystemExtension = system.find(i => areSameExtensions(i.identifier, this.identifier));
 		if (existingSystemExtension) {
 			if (!existingSystemExtension.forceAutoUpdate) {
-				throw new ExtensionManagementError(nls.localize('builtinAutoUpdate', "Extension '{0}' is a built-in extension and not allowed to be updated in the current product quality '{1}'.", existingSystemExtension.identifier.id, this.productService.quality), ExtensionManagementErrorCode.Incompatible);
+				throw new ExtensionManagementError(nls.localize('builtinAutoUpdate', "Snap '{0}' is a built-in snap and not allowed to be updated in the current product quality '{1}'.", existingSystemExtension.identifier.id, this.productService.quality), ExtensionManagementErrorCode.Incompatible);
 			}
 			if (semver.gt(existingSystemExtension.manifest.version, this.manifest.version)) {
-				throw new ExtensionManagementError(nls.localize('builtinVersion', "Extension '{0}' is a built-in extension with version '{1}' and cannot be downgraded to version '{2}'.", existingSystemExtension.identifier.id, existingSystemExtension.manifest.version, this.manifest.version), ExtensionManagementErrorCode.Incompatible);
+				throw new ExtensionManagementError(nls.localize('builtinVersion', "Snap '{0}' is a built-in snap with version '{1}' and cannot be downgraded to version '{2}'.", existingSystemExtension.identifier.id, existingSystemExtension.manifest.version, this.manifest.version), ExtensionManagementErrorCode.Incompatible);
 			}
 		}
 

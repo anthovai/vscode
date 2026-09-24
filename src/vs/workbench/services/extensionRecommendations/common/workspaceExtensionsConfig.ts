@@ -104,8 +104,8 @@ export class WorkspaceExtensionsConfigService extends Disposable implements IWor
 		const isRecommended = isWorkspaceRecommended || recommendedWorksapceFolders.length > 0;
 
 		const workspaceOrFolders = isRecommended
-			? await this.pickWorkspaceOrFolders(recommendedWorksapceFolders, isWorkspaceRecommended ? workspace : undefined, localize('select for remove', "Remove extension recommendation from"))
-			: await this.pickWorkspaceOrFolders(workspace.folders, workspace.configuration ? workspace : undefined, localize('select for add', "Add extension recommendation to"));
+			? await this.pickWorkspaceOrFolders(recommendedWorksapceFolders, isWorkspaceRecommended ? workspace : undefined, localize('select for remove', "Remove snap recommendation from"))
+			: await this.pickWorkspaceOrFolders(workspace.folders, workspace.configuration ? workspace : undefined, localize('select for add', "Add snap recommendation to"));
 
 		for (const workspaceOrWorkspaceFolder of workspaceOrFolders) {
 			if (isWorkspace(workspaceOrWorkspaceFolder)) {
@@ -130,8 +130,8 @@ export class WorkspaceExtensionsConfigService extends Disposable implements IWor
 		const isUnwanted = isWorkspaceUnwanted || unWantedWorksapceFolders.length > 0;
 
 		const workspaceOrFolders = isUnwanted
-			? await this.pickWorkspaceOrFolders(unWantedWorksapceFolders, isWorkspaceUnwanted ? workspace : undefined, localize('select for remove', "Remove extension recommendation from"))
-			: await this.pickWorkspaceOrFolders(workspace.folders, workspace.configuration ? workspace : undefined, localize('select for add', "Add extension recommendation to"));
+			? await this.pickWorkspaceOrFolders(unWantedWorksapceFolders, isWorkspaceUnwanted ? workspace : undefined, localize('select for remove', "Remove snap recommendation from"))
+			: await this.pickWorkspaceOrFolders(workspace.folders, workspace.configuration ? workspace : undefined, localize('select for add', "Add snap recommendation to"));
 
 		for (const workspaceOrWorkspaceFolder of workspaceOrFolders) {
 			if (isWorkspace(workspaceOrWorkspaceFolder)) {

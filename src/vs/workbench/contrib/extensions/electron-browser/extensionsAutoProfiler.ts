@@ -231,11 +231,11 @@ export class ExtensionsAutoProfiler implements IWorkbenchContribution {
 			Severity.Warning,
 			localize(
 				'unresponsive-exthost',
-				"The extension '{0}' took a very long time to complete its last operation and it has prevented other extensions from running.",
+				"The snap '{0}' took a very long time to complete its last operation and it has prevented other snaps from running.",
 				extension.displayName || extension.name
 			),
 			[{
-				label: localize('show', 'Show Extensions'),
+				label: localize('show', 'Show Snaps'),
 				run: () => this._editorService.openEditor(RuntimeExtensionsInput.instance, { pinned: true })
 			},
 				action

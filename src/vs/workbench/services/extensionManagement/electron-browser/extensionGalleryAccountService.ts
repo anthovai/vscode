@@ -267,7 +267,7 @@ export class MicrosoftGalleryAccountProvider extends AbstractGalleryAccountProvi
 		picks.push({ label: localize('marketplace.signInDifferentAccount', "Sign in with a Different Account…") });
 
 		const pick = await this.quickInputService.pick(picks, {
-			placeHolder: localize('marketplace.pickAccount', "Select the account to use for the Extensions Marketplace")
+			placeHolder: localize('marketplace.pickAccount', "Select the account to use for the Snaps Marketplace")
 		});
 		if (!pick) {
 			return; // cancelled

@@ -1286,11 +1286,11 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		}
 
 		const result = await this.dialogService.confirm({
-			title: nls.localize('confirmEnableDisableAutoUpdate', "Auto Update Extensions"),
+			title: nls.localize('confirmEnableDisableAutoUpdate', "Auto Update Snaps"),
 			message: isAutoUpdateEnabled
-				? nls.localize('confirmEnableAutoUpdate', "Do you want to enable auto update for extensions?")
-				: nls.localize('confirmDisableAutoUpdate', "Do you want to disable auto update for extensions?"),
-			detail: nls.localize('confirmEnableDisableAutoUpdateDetail', "This will reset any auto update settings you have set for individual extensions."),
+				? nls.localize('confirmEnableAutoUpdate', "Do you want to enable auto update for snaps?")
+				: nls.localize('confirmDisableAutoUpdate', "Do you want to disable auto update for snaps?"),
+			detail: nls.localize('confirmEnableDisableAutoUpdateDetail', "This will reset any auto update settings you have set for individual snaps."),
 		});
 		if (!result.confirmed) {
 			return;
@@ -1362,7 +1362,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 	private updateExtensionsPinnedState(pinned: boolean): Promise<void> {
 		return this.progressService.withProgress({
 			location: ProgressLocation.Extensions,
-			title: nls.localize('updatingExtensions', "Updating Extensions Auto Update State"),
+			title: nls.localize('updatingExtensions', "Updating Snaps Auto Update State"),
 		}, () => this.extensionManagementService.resetPinnedStateForAllUserExtensions(pinned));
 	}
 
@@ -1553,8 +1553,8 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		if (disallowedExtensions.length) {
 			computedNotificiations.push({
 				message: this.configurationService.inspect(AllowedExtensionsConfigKey).policy
-					? nls.localize('disallowed extensions by policy', "Some extensions are disabled because they are not allowed by your system administrator.")
-					: nls.localize('disallowed extensions', "Some extensions are disabled because they are configured not to be allowed."),
+					? nls.localize('disallowed extensions by policy', "Some snaps are disabled because they are not allowed by your system administrator.")
+					: nls.localize('disallowed extensions', "Some snaps are disabled because they are configured not to be allowed."),
 				severity: Severity.Warning,
 				extensions: disallowedExtensions,
 				key: 'disallowedExtensions:' + disallowedExtensions.sort((a, b) => a.identifier.id.localeCompare(b.identifier.id)).map(e => e.identifier.id.toLowerCase()).join('-'),
@@ -1567,14 +1567,14 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				!isEngineValid(e.local.manifest.engines.vscode, this.productService.version, this.productService.date)
 			)) {
 				computedNotificiations.push({
-					message: nls.localize('incompatibleExtensions', "Some extensions are disabled due to version incompatibility. Review and update them."),
+					message: nls.localize('incompatibleExtensions', "Some snaps are disabled due to version incompatibility. Review and update them."),
 					severity: Severity.Warning,
 					extensions: invalidExtensions,
 					key: 'incompatibleExtensions:' + invalidExtensions.sort((a, b) => a.identifier.id.localeCompare(b.identifier.id)).map(e => `${e.identifier.id.toLowerCase()}@${e.local?.manifest.version}`).join('-'),
 				});
 			} else {
 				computedNotificiations.push({
-					message: nls.localize('invalidExtensions', "Invalid extensions detected. Review them."),
+					message: nls.localize('invalidExtensions', "Invalid snaps detected. Review them."),
 					severity: Severity.Warning,
 					extensions: invalidExtensions,
 					key: 'invalidExtensions:' + invalidExtensions.sort((a, b) => a.identifier.id.localeCompare(b.identifier.id)).map(e => `${e.identifier.id.toLowerCase()}@${e.local?.manifest.version}`).join('-'),
@@ -1588,15 +1588,15 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				const needsReload = restartRequiredExtensions.some(e => e.runtimeState?.action === ExtensionRuntimeActionType.ReloadWindow);
 				computedNotificiations.push({
 					message: needsReload
-						? nls.localize('extensions need reload', "Extensions require a window reload to apply updates.")
-						: nls.localize('extensions need restart', "All extensions require a restart to apply updates."),
+						? nls.localize('extensions need reload', "Snaps require a window reload to apply updates.")
+						: nls.localize('extensions need restart', "All snaps require a restart to apply updates."),
 					severity: Severity.Info,
 					extensions: restartRequiredExtensions,
 					query: '@restartrequired',
 					action: {
 						label: needsReload
 							? nls.localize('reload window', "Reload Window")
-							: nls.localize('restart extensions action', "Restart Extensions"),
+							: nls.localize('restart extensions action', "Restart Snaps"),
 						run: () => {
 							if (needsReload) {
 								this.hostService.reload();
@@ -1613,7 +1613,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		const deprecatedExtensions = this.local.filter(e => !!e.deprecationInfo && e.local && this.extensionEnablementService.isEnabled(e.local));
 		if (deprecatedExtensions.length) {
 			computedNotificiations.push({
-				message: nls.localize('deprecated extensions', "Deprecated extensions detected. Review them and migrate to alternatives."),
+				message: nls.localize('deprecated extensions', "Deprecated snaps detected. Review them and migrate to alternatives."),
 				severity: Severity.Warning,
 				extensions: deprecatedExtensions,
 				key: 'deprecatedExtensions:' + deprecatedExtensions.sort((a, b) => a.identifier.id.localeCompare(b.identifier.id)).map(e => e.identifier.id.toLowerCase()).join('-'),
@@ -1629,7 +1629,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				linkUri = `command:workbench.action.openSettings?${encodeURIComponent(JSON.stringify(settingsQuery))}`;
 				message.isTrusted = { enabledCommands: ['workbench.action.openSettings'] };
 			}
-			message.appendMarkdown(nls.localize('privateMarketplace', "This window is connected to a [private extension marketplace]({0}) managed by your organization.", linkUri));
+			message.appendMarkdown(nls.localize('privateMarketplace', "This window is connected to a [private snap marketplace]({0}) managed by your organization.", linkUri));
 			computedNotificiations.push({
 				message,
 				severity: Severity.Info,
@@ -1730,7 +1730,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		return undefined;
 	}
 
-	async updateRunningExtensions(message = nls.localize('restart', "Changing extension enablement"), auto: boolean = false): Promise<void> {
+	async updateRunningExtensions(message = nls.localize('restart', "Changing snap enablement"), auto: boolean = false): Promise<void> {
 		const toAdd: ILocalExtension[] = [];
 		const toRemove: string[] = [];
 
@@ -1776,7 +1776,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				if (auto) {
 					this.notificationService.notify({
 						severity: Severity.Info,
-						message: nls.localize('extensionsAutoRestart', "Extensions were auto restarted to enable updates."),
+						message: nls.localize('extensionsAutoRestart', "Snaps were auto restarted to enable updates."),
 						priority: NotificationPriority.SILENT
 					});
 				}
@@ -1799,7 +1799,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		const isUninstalled = extension.state === ExtensionState.Uninstalled;
 		const runningExtension = this.extensionService.extensions.find(e => areSameExtensions({ id: e.identifier.value }, extension.identifier));
 		const reloadAction = this.extensionManagementServerService.remoteExtensionManagementServer ? ExtensionRuntimeActionType.ReloadWindow : ExtensionRuntimeActionType.RestartExtensions;
-		const reloadActionLabel = reloadAction === ExtensionRuntimeActionType.ReloadWindow ? nls.localize('reload', "reload window") : nls.localize('restart extensions', "restart extensions");
+		const reloadActionLabel = reloadAction === ExtensionRuntimeActionType.ReloadWindow ? nls.localize('reload', "reload window") : nls.localize('restart extensions', "restart snaps");
 
 		if (isUninstalled) {
 			const canRemoveRunningExtension = runningExtension && this.extensionService.canRemoveExtension(runningExtension);
@@ -1807,7 +1807,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				&& (!extension.server || extension.server === this.extensionManagementServerService.getExtensionManagementServer(toExtension(runningExtension)))
 				&& (!extension.resourceExtension || this.uriIdentityService.extUri.isEqual(extension.resourceExtension.location, runningExtension.extensionLocation));
 			if (!canRemoveRunningExtension && isSameExtensionRunning && !runningExtension.isUnderDevelopment) {
-				return { action: reloadAction, reason: nls.localize('postUninstallTooltip', "Please {0} to complete the uninstallation of this extension.", reloadActionLabel) };
+				return { action: reloadAction, reason: nls.localize('postUninstallTooltip', "Please {0} to complete the uninstallation of this snap.", reloadActionLabel) };
 			}
 			return undefined;
 		}
@@ -1835,17 +1835,17 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 							) {
 								const state = this.updateService.state;
 								if (state.type === StateType.AvailableForDownload) {
-									return { action: ExtensionRuntimeActionType.DownloadUpdate, reason: nls.localize('postUpdateDownloadTooltip', "Please update {0} to enable the updated extension.", this.productService.nameLong) };
+									return { action: ExtensionRuntimeActionType.DownloadUpdate, reason: nls.localize('postUpdateDownloadTooltip', "Please update {0} to enable the updated snap.", this.productService.nameLong) };
 								}
 								if (state.type === StateType.Downloaded) {
-									return { action: ExtensionRuntimeActionType.ApplyUpdate, reason: nls.localize('postUpdateUpdateTooltip', "Please update {0} to enable the updated extension.", this.productService.nameLong) };
+									return { action: ExtensionRuntimeActionType.ApplyUpdate, reason: nls.localize('postUpdateUpdateTooltip', "Please update {0} to enable the updated snap.", this.productService.nameLong) };
 								}
 								if (state.type === StateType.Ready) {
-									return { action: ExtensionRuntimeActionType.QuitAndInstall, reason: nls.localize('postUpdateRestartTooltip', "Please restart {0} to enable the updated extension.", this.productService.nameLong) };
+									return { action: ExtensionRuntimeActionType.QuitAndInstall, reason: nls.localize('postUpdateRestartTooltip', "Please restart {0} to enable the updated snap.", this.productService.nameLong) };
 								}
 								return undefined;
 							}
-							return { action: reloadAction, reason: nls.localize('postUpdateTooltip', "Please {0} to enable the updated extension.", reloadActionLabel) };
+							return { action: reloadAction, reason: nls.localize('postUpdateTooltip', "Please {0} to enable the updated snap.", reloadActionLabel) };
 						}
 
 						if (this.extensionsServers.length > 1) {
@@ -1853,12 +1853,12 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 							if (extensionInOtherServer) {
 								// This extension prefers to run on UI/Local side but is running in remote
 								if (runningExtensionServer === this.extensionManagementServerService.remoteExtensionManagementServer && this.extensionManifestPropertiesService.prefersExecuteOnUI(extension.local.manifest) && extensionInOtherServer.server === this.extensionManagementServerService.localExtensionManagementServer) {
-									return { action: reloadAction, reason: nls.localize('enable locally', "Please {0} to enable this extension locally.", reloadActionLabel) };
+									return { action: reloadAction, reason: nls.localize('enable locally', "Please {0} to enable this snap locally.", reloadActionLabel) };
 								}
 
 								// This extension prefers to run on Workspace/Remote side but is running in local
 								if (runningExtensionServer === this.extensionManagementServerService.localExtensionManagementServer && this.extensionManifestPropertiesService.prefersExecuteOnWorkspace(extension.local.manifest) && extensionInOtherServer.server === this.extensionManagementServerService.remoteExtensionManagementServer) {
-									return { action: reloadAction, reason: nls.localize('enable remote', "Please {0} to enable this extension in {1}.", reloadActionLabel, this.extensionManagementServerService.remoteExtensionManagementServer?.label) };
+									return { action: reloadAction, reason: nls.localize('enable remote', "Please {0} to enable this snap in {1}.", reloadActionLabel, this.extensionManagementServerService.remoteExtensionManagementServer?.label) };
 								}
 							}
 						}
@@ -1868,20 +1868,20 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 						if (extension.server === this.extensionManagementServerService.localExtensionManagementServer && runningExtensionServer === this.extensionManagementServerService.remoteExtensionManagementServer) {
 							// This extension prefers to run on UI/Local side but is running in remote
 							if (this.extensionManifestPropertiesService.prefersExecuteOnUI(extension.local.manifest)) {
-								return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this extension.", reloadActionLabel) };
+								return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this snap.", reloadActionLabel) };
 							}
 						}
 						if (extension.server === this.extensionManagementServerService.remoteExtensionManagementServer && runningExtensionServer === this.extensionManagementServerService.localExtensionManagementServer) {
 							// This extension prefers to run on Workspace/Remote side but is running in local
 							if (this.extensionManifestPropertiesService.prefersExecuteOnWorkspace(extension.local.manifest)) {
-								return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this extension.", reloadActionLabel) };
+								return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this snap.", reloadActionLabel) };
 							}
 						}
 					}
 					return undefined;
 				} else {
 					if (isSameExtensionRunning && !runningExtension.isUnderDevelopment) {
-						return { action: reloadAction, reason: nls.localize('postDisableTooltip', "Please {0} to disable this extension.", reloadActionLabel) };
+						return { action: reloadAction, reason: nls.localize('postDisableTooltip', "Please {0} to disable this snap.", reloadActionLabel) };
 					}
 				}
 				return undefined;
@@ -1890,7 +1890,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 			// Extension is not running
 			else {
 				if (isEnabled && !this.extensionService.canAddExtension(toExtensionDescription(extension.local))) {
-					return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this extension.", reloadActionLabel) };
+					return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this snap.", reloadActionLabel) };
 				}
 
 				const otherServer = extension.server ? extension.server === this.extensionManagementServerService.localExtensionManagementServer ? this.extensionManagementServerService.remoteExtensionManagementServer : this.extensionManagementServerService.localExtensionManagementServer : null;
@@ -1898,7 +1898,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 					const extensionInOtherServer = this.local.filter(e => areSameExtensions(e.identifier, extension.identifier) && e.server === otherServer)[0];
 					// Same extension in other server exists and
 					if (extensionInOtherServer && extensionInOtherServer.local && this.extensionEnablementService.isEnabled(extensionInOtherServer.local)) {
-						return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this extension.", reloadActionLabel) };
+						return { action: reloadAction, reason: nls.localize('postEnableTooltip', "Please {0} to enable this snap.", reloadActionLabel) };
 					}
 				}
 			}
@@ -2123,7 +2123,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 		let [galleryExtension] = await this.galleryService.getExtensions([extensionInfo], queryOptions, CancellationToken.None);
 		if (!galleryExtension) {
-			throw new Error(nls.localize('extension not found', "Extension '{0}' not found.", extensionId));
+			throw new Error(nls.localize('extension not found', "Snap '{0}' not found.", extensionId));
 		}
 
 		let targetPlatform = galleryExtension.properties.targetPlatform;
@@ -2176,7 +2176,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 	private async pickVersionToDownload(extensionId: string): Promise<IGalleryExtensionVersion | undefined> {
 		const allVersions = await this.galleryService.getAllVersions({ id: extensionId });
 		if (!allVersions.length) {
-			await this.dialogService.info(nls.localize('no versions', "This extension has no other versions."));
+			await this.dialogService.info(nls.localize('no versions', "This snap has no other versions."));
 			return;
 		}
 
@@ -2394,7 +2394,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		}
 
 		if (extension.local.identifier.uuid && extension.local.identifier.uuid !== extension.gallery.identifier.uuid) {
-			return nls.localize('consentRequiredToUpdateRepublishedExtension', "The marketplace metadata of this extension changed, likely due to a re-publish.");
+			return nls.localize('consentRequiredToUpdateRepublishedExtension', "The marketplace metadata of this snap changed, likely due to a re-publish.");
 		}
 
 		if (!extension.local.manifest.engines.vscode || extension.local.manifest.main || extension.local.manifest.browser) {
@@ -2414,7 +2414,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 			}
 		}
 
-		return nls.localize('consentRequiredToUpdate', "The update for {0} extension introduces executable code, which is not present in the currently installed version.", extension.displayName);
+		return nls.localize('consentRequiredToUpdate', "The update for {0} snap introduces executable code, which is not present in the currently installed version.", extension.displayName);
 	}
 
 	isAutoUpdateEnabledFor(extensionOrPublisher: IExtension | string): boolean {
@@ -2566,20 +2566,20 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 	async canInstall(extension: IExtension): Promise<true | IMarkdownString> {
 		if (!(extension instanceof Extension)) {
-			return new MarkdownString().appendText(nls.localize('not an extension', "The provided object is not an extension."));
+			return new MarkdownString().appendText(nls.localize('not an extension', "The provided object is not a snap."));
 		}
 
 		if (extension.isMalicious) {
-			return new MarkdownString().appendText(nls.localize('malicious', "This extension is reported to be problematic."));
+			return new MarkdownString().appendText(nls.localize('malicious', "This snap is reported to be problematic."));
 		}
 
 		if (extension.deprecationInfo?.disallowInstall) {
-			return new MarkdownString().appendText(nls.localize('disallowed', "This extension is disallowed to be installed."));
+			return new MarkdownString().appendText(nls.localize('disallowed', "This snap is disallowed to be installed."));
 		}
 
 		if (extension.gallery) {
 			if (!extension.gallery.isSigned && shouldRequireRepositorySignatureFor(extension.private, await this.extensionGalleryManifestService.getExtensionGalleryManifest())) {
-				return new MarkdownString().appendText(nls.localize('not signed', "This extension is not signed."));
+				return new MarkdownString().appendText(nls.localize('not signed', "This snap is not signed."));
 			}
 
 			const localResult = this.localExtensions ? await this.localExtensions.canInstall(extension.gallery) : undefined;
@@ -2597,31 +2597,31 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				return true;
 			}
 
-			return localResult ?? remoteResult ?? webResult ?? new MarkdownString().appendText(nls.localize('cannot be installed', "Cannot install the '{0}' extension because it is not available in this setup.", extension.displayName ?? extension.identifier.id));
+			return localResult ?? remoteResult ?? webResult ?? new MarkdownString().appendText(nls.localize('cannot be installed', "Cannot install the '{0}' snap because it is not available in this setup.", extension.displayName ?? extension.identifier.id));
 		}
 
 		if (extension.resourceExtension && await this.extensionManagementService.canInstall(extension.resourceExtension) === true) {
 			return true;
 		}
 
-		return new MarkdownString().appendText(nls.localize('cannot be installed', "Cannot install the '{0}' extension because it is not available in this setup.", extension.displayName ?? extension.identifier.id));
+		return new MarkdownString().appendText(nls.localize('cannot be installed', "Cannot install the '{0}' snap because it is not available in this setup.", extension.displayName ?? extension.identifier.id));
 	}
 
 	async install(arg: string | URI | IExtension, installOptions: InstallExtensionOptions = {}, progressLocation?: ProgressLocation | string): Promise<IExtension> {
 		const extension = await this._install(arg, installOptions, progressLocation);
 
 		if (!extension) {
-			throw new Error(nls.localize('unknown', "Unable to install extension"));
+			throw new Error(nls.localize('unknown', "Unable to install snap"));
 		}
 
 		if (installOptions.enable) {
 			if (extension.enablementState === EnablementState.DisabledWorkspace || extension.enablementState === EnablementState.DisabledGlobally) {
 				if (installOptions.justification) {
 					const result = await this.dialogService.confirm({
-						title: nls.localize('enableExtensionTitle', "Enable Extension"),
-						message: nls.localize('enableExtensionMessage', "Would you like to enable '{0}' extension?", extension.displayName),
+						title: nls.localize('enableExtensionTitle', "Enable Snap"),
+						message: nls.localize('enableExtensionMessage', "Would you like to enable '{0}' snap?", extension.displayName),
 						detail: isString(installOptions.justification) ? installOptions.justification : installOptions.justification.reason,
-						primaryButton: isString(installOptions.justification) ? nls.localize({ key: 'enableButtonLabel', comment: ['&& denotes a mnemonic'] }, "&&Enable Extension") : nls.localize({ key: 'enableButtonLabelWithAction', comment: ['&& denotes a mnemonic'] }, "&&Enable Extension and {0}", installOptions.justification.action),
+						primaryButton: isString(installOptions.justification) ? nls.localize({ key: 'enableButtonLabel', comment: ['&& denotes a mnemonic'] }, "&&Enable Snap") : nls.localize({ key: 'enableButtonLabelWithAction', comment: ['&& denotes a mnemonic'] }, "&&Enable Snap and {0}", installOptions.justification.action),
 					});
 					if (!result.confirmed) {
 						throw new CancellationError();
@@ -2682,7 +2682,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 			}
 
 			if (extension?.isMalicious) {
-				throw new Error(nls.localize('malicious', "This extension is reported to be problematic."));
+				throw new Error(nls.localize('malicious', "This snap is reported to be problematic."));
 			}
 
 			if (gallery) {
@@ -2719,10 +2719,10 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 						const reportIssueUri = manifest ? getExtensionGalleryManifestResourceUri(manifest, ExtensionGalleryResourceType.ContactSupportUri) : undefined;
 						const reportIssueMessage = reportIssueUri ? nls.localize('report issue', "If this issue persists, please report it at {0}", reportIssueUri.toString()) : '';
 						if (installOptions.version) {
-							const message = nls.localize('not found version', "The extension '{0}' cannot be installed because the requested version '{1}' was not found.", id, installOptions.version);
+							const message = nls.localize('not found version', "The snap '{0}' cannot be installed because the requested version '{1}' was not found.", id, installOptions.version);
 							throw new ExtensionManagementError(reportIssueMessage ? `${message} ${reportIssueMessage}` : message, ExtensionManagementErrorCode.NotFound);
 						} else {
-							const message = nls.localize('not found', "The extension '{0}' cannot be installed because it was not found.", id);
+							const message = nls.localize('not found', "The snap '{0}' cannot be installed because it was not found.", id);
 							throw new ExtensionManagementError(reportIssueMessage ? `${message} ${reportIssueMessage}` : message, ExtensionManagementErrorCode.NotFound);
 						}
 					}
@@ -2743,20 +2743,20 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				const buttons: IPromptButton<boolean>[] = [];
 				buttons.push({
 					label: isString(installOptions.justification) || !installOptions.justification.action
-						? nls.localize({ key: 'installButtonLabel', comment: ['&& denotes a mnemonic'] }, "&&Install Extension")
-						: nls.localize({ key: 'installButtonLabelWithAction', comment: ['&& denotes a mnemonic'] }, "&&Install Extension and {0}", installOptions.justification.action), run: () => true
+						? nls.localize({ key: 'installButtonLabel', comment: ['&& denotes a mnemonic'] }, "&&Install Snap")
+						: nls.localize({ key: 'installButtonLabelWithAction', comment: ['&& denotes a mnemonic'] }, "&&Install Snap and {0}", installOptions.justification.action), run: () => true
 				});
 				if (!extension) {
-					buttons.push({ label: nls.localize('open', "Open Extension"), run: () => { this.open(extension!); return false; } });
+					buttons.push({ label: nls.localize('open', "Open Snap"), run: () => { this.open(extension!); return false; } });
 				}
 				const result = await this.dialogService.prompt<boolean>({
-					title: nls.localize('installExtensionTitle', "Install Extension"),
-					message: extension ? nls.localize('installExtensionMessage', "Would you like to install '{0}' extension from '{1}'?", extension.displayName, extension.publisherDisplayName) : nls.localize('installVSIXMessage', "Would you like to install the extension?"),
+					title: nls.localize('installExtensionTitle', "Install Snap"),
+					message: extension ? nls.localize('installExtensionMessage', "Would you like to install '{0}' snap from '{1}'?", extension.displayName, extension.publisherDisplayName) : nls.localize('installVSIXMessage', "Would you like to install the snap?"),
 					detail: isString(installOptions.justification) ? installOptions.justification : installOptions.justification.reason,
 					cancelButton: true,
 					buttons,
 					checkbox: syncCheck ? {
-						label: nls.localize('sync extension', "Sync this extension"),
+						label: nls.localize('sync extension', "Sync this snap"),
 						checked: true,
 					} : undefined,
 				});
@@ -2795,7 +2795,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 			const targetPlatform = await server.extensionManagementService.getTargetPlatform();
 			if (!isTargetPlatformCompatible(local.targetPlatform, [local.targetPlatform], targetPlatform)) {
-				throw new Error(nls.localize('incompatible', "Can't install '{0}' extension because it is not compatible.", extension.identifier.id));
+				throw new Error(nls.localize('incompatible', "Can't install '{0}' snap because it is not compatible.", extension.identifier.id));
 			}
 
 			const vsix = await this.extensionManagementService.zip(local);
@@ -2853,7 +2853,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 		if (extension.local.isApplicationScoped && this.userDataProfilesService.profiles.length > 1) {
 			const { confirmed } = await this.dialogService.confirm({
-				title: nls.localize('uninstallApplicationScoped', "Uninstall Extension"),
+				title: nls.localize('uninstallApplicationScoped', "Uninstall Snap"),
 				type: Severity.Info,
 				message: nls.localize('uninstallApplicationScopedMessage', "Would you like to Uninstall {0} from all profiles?", extension.displayName),
 				primaryButton: nls.localize('uninstallAllProfiles', "Uninstall (All Profiles)")
@@ -2916,7 +2916,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 		if (dependents.length) {
 			const { result } = await this.dialogService.prompt({
-				title: nls.localize('uninstallDependents', "Uninstall Extension with Dependents"),
+				title: nls.localize('uninstallDependents', "Uninstall Snap with Dependents"),
 				type: Severity.Warning,
 				message: this.getErrorMessageForUninstallingAnExtensionWithDependents(extension, dependents),
 				buttons: [{
@@ -2963,13 +2963,13 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 	private getErrorMessageForUninstallingAnExtensionWithDependents(extension: IExtension, dependents: ILocalExtension[]): string {
 		if (dependents.length === 1) {
-			return nls.localize('singleDependentUninstallError', "Cannot uninstall '{0}' extension alone. '{1}' extension depends on this. Do you want to uninstall all these extensions?", extension.displayName, dependents[0].manifest.displayName);
+			return nls.localize('singleDependentUninstallError', "Cannot uninstall '{0}' snap alone. '{1}' snap depends on this. Do you want to uninstall all these snaps?", extension.displayName, dependents[0].manifest.displayName);
 		}
 		if (dependents.length === 2) {
-			return nls.localize('twoDependentsUninstallError', "Cannot uninstall '{0}' extension alone. '{1}' and '{2}' extensions depend on this. Do you want to uninstall all these extensions?",
+			return nls.localize('twoDependentsUninstallError', "Cannot uninstall '{0}' snap alone. '{1}' and '{2}' snaps depend on this. Do you want to uninstall all these snaps?",
 				extension.displayName, dependents[0].manifest.displayName, dependents[1].manifest.displayName);
 		}
-		return nls.localize('multipleDependentsUninstallError', "Cannot uninstall '{0}' extension alone. '{1}', '{2}' and other extensions depend on this. Do you want to uninstall all these extensions?",
+		return nls.localize('multipleDependentsUninstallError', "Cannot uninstall '{0}' snap alone. '{1}', '{2}' and other snaps depend on this. Do you want to uninstall all these snaps?",
 			extension.displayName, dependents[0].manifest.displayName, dependents[1].manifest.displayName);
 	}
 
@@ -3149,7 +3149,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				const dependents = this.getDependentsAfterDisablement(extension, allExtensions, this.local);
 				if (dependents.length) {
 					const { result } = await this.dialogService.prompt({
-						title: nls.localize('disableDependents', "Disable Extension with Dependents"),
+						title: nls.localize('disableDependents', "Disable Snap with Dependents"),
 						type: Severity.Warning,
 						message: this.getDependentsErrorMessageForDisablement(extension, allExtensions, dependents),
 						buttons: [{
@@ -3230,13 +3230,13 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 	private getErrorMessageForDisablingAnExtensionWithDependents(extension: IExtension, dependents: IExtension[]): string {
 		if (dependents.length === 1) {
-			return nls.localize('singleDependentError', "Cannot disable '{0}' extension alone. '{1}' extension depends on this. Do you want to disable all these extensions?", extension.displayName, dependents[0].displayName);
+			return nls.localize('singleDependentError', "Cannot disable '{0}' snap alone. '{1}' snap depends on this. Do you want to disable all these snaps?", extension.displayName, dependents[0].displayName);
 		}
 		if (dependents.length === 2) {
-			return nls.localize('twoDependentsError', "Cannot disable '{0}' extension alone. '{1}' and '{2}' extensions depend on this. Do you want to disable all these extensions?",
+			return nls.localize('twoDependentsError', "Cannot disable '{0}' snap alone. '{1}' and '{2}' snaps depend on this. Do you want to disable all these snaps?",
 				extension.displayName, dependents[0].displayName, dependents[1].displayName);
 		}
-		return nls.localize('multipleDependentsError', "Cannot disable '{0}' extension alone. '{1}', '{2}' and other extensions depend on this. Do you want to disable all these extensions?",
+		return nls.localize('multipleDependentsError', "Cannot disable '{0}' snap alone. '{1}', '{2}' and other snaps depend on this. Do you want to disable all these snaps?",
 			extension.displayName, dependents[0].displayName, dependents[1].displayName);
 	}
 

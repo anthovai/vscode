@@ -96,7 +96,7 @@ export class ExtensionsList extends Disposable {
 					return getAriaLabelForExtension(extension);
 				},
 				getWidgetAriaLabel(): string {
-					return localize('extensions', "Extensions");
+					return localize('extensions', "Snap");
 				}
 			},
 			overrideStyles: getLocationBasedViewColors(viewDescriptorService.getViewLocationById(viewId)).listOverrideStyles,
@@ -332,7 +332,7 @@ class UnknownExtensionRenderer implements IListRenderer<ITreeNode<IExtensionData
 	public renderTemplate(container: HTMLElement): IUnknownExtensionTemplateData {
 		const messageContainer = dom.append(container, dom.$('div.unknown-extension'));
 		dom.append(messageContainer, dom.$('span.error-marker')).textContent = localize('error', "Error");
-		dom.append(messageContainer, dom.$('span.message')).textContent = localize('Unknown Extension', "Unknown Extension:");
+		dom.append(messageContainer, dom.$('span.message')).textContent = localize('Unknown Extension', "Unknown Snap:");
 
 		const identifier = dom.append(messageContainer, dom.$('span.message'));
 		return { identifier };
@@ -403,7 +403,7 @@ export class ExtensionsTree extends WorkbenchAsyncDataTree<IExtensionData, IExte
 						return getAriaLabelForExtension(extensionData.extension);
 					},
 					getWidgetAriaLabel(): string {
-						return localize('extensions', "Extensions");
+						return localize('extensions', "Snap");
 					}
 				}
 			},

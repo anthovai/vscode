@@ -109,7 +109,7 @@ export class PromptExtensionInstallFailureAction extends Action {
 
 		if (this.error.name === ExtensionManagementErrorCode.Unsupported) {
 			const productName = isWeb ? localize('VS Code for Web', "{0} for the Web", this.productService.nameLong) : this.productService.nameLong;
-			const message = localize('cannot be installed', "The '{0}' extension is not available in {1}. Click 'More Information' to learn more.", this.extension.displayName || this.extension.identifier.id, productName);
+			const message = localize('cannot be installed', "The '{0}' snap is not available in {1}. Click 'More Information' to learn more.", this.extension.displayName || this.extension.identifier.id, productName);
 			const { confirmed } = await this.dialogService.confirm({
 				type: Severity.Info,
 				message,
@@ -147,7 +147,7 @@ export class PromptExtensionInstallFailureAction extends Action {
 		if (ExtensionManagementErrorCode.PackageNotSigned === (<ExtensionManagementErrorCode>this.error.name)) {
 			await this.dialogService.prompt({
 				type: 'error',
-				message: localize('not signed', "'{0}' is an extension from an unknown source. Are you sure you want to install?", this.extension.displayName),
+				message: localize('not signed', "'{0}' is a snap from an unknown source. Are you sure you want to install?", this.extension.displayName),
 				detail: getErrorMessage(this.error),
 				buttons: [{
 					label: localize('install anyway', "Install Anyway"),
@@ -165,7 +165,7 @@ export class PromptExtensionInstallFailureAction extends Action {
 		if (ExtensionManagementErrorCode.SignatureVerificationFailed === (<ExtensionManagementErrorCode>this.error.name)) {
 			await this.dialogService.prompt({
 				type: 'error',
-				message: localize('verification failed', "Cannot install '{0}' extension because {1} cannot verify the extension signature", this.extension.displayName, this.productService.nameLong),
+				message: localize('verification failed', "Cannot install '{0}' snap because {1} cannot verify the snap signature", this.extension.displayName, this.productService.nameLong),
 				detail: getErrorMessage(this.error),
 				buttons: [{
 					label: localize('learn more', "Learn More"),
@@ -186,7 +186,7 @@ export class PromptExtensionInstallFailureAction extends Action {
 		if (ExtensionManagementErrorCode.SignatureVerificationInternal === (<ExtensionManagementErrorCode>this.error.name)) {
 			await this.dialogService.prompt({
 				type: 'error',
-				message: localize('verification failed', "Cannot install '{0}' extension because {1} cannot verify the extension signature", this.extension.displayName, this.productService.nameLong),
+				message: localize('verification failed', "Cannot install '{0}' snap because {1} cannot verify the snap signature", this.extension.displayName, this.productService.nameLong),
 				detail: getErrorMessage(this.error),
 				buttons: [{
 					label: localize('learn more', "Learn More"),
@@ -194,7 +194,7 @@ export class PromptExtensionInstallFailureAction extends Action {
 				}, {
 					label: localize('report issue', "Report Issue"),
 					run: () => this.workbenchIssueService.openReporter({
-						issueTitle: localize('report issue title', "Extension Signature Verification Failed: {0}", this.extension.displayName),
+						issueTitle: localize('report issue title', "Snap Signature Verification Failed: {0}", this.extension.displayName),
 						issueBody: localize('report issue body', "Please include following log `F1 > Open View... > Shared` below.\n\n")
 					})
 				}, {
@@ -210,8 +210,8 @@ export class PromptExtensionInstallFailureAction extends Action {
 			return;
 		}
 
-		const operationMessage = this.installOperation === InstallOperation.Update ? localize('update operation', "Error while updating '{0}' extension.", this.extension.displayName || this.extension.identifier.id)
-			: localize('install operation', "Error while installing '{0}' extension.", this.extension.displayName || this.extension.identifier.id);
+		const operationMessage = this.installOperation === InstallOperation.Update ? localize('update operation', "Error while updating '{0}' snap.", this.extension.displayName || this.extension.identifier.id)
+			: localize('install operation', "Error while installing '{0}' snap.", this.extension.displayName || this.extension.identifier.id);
 		let additionalMessage;
 		const promptChoices: IPromptChoice[] = [];
 
@@ -503,8 +503,8 @@ export class InstallAction extends ExtensionAction {
 		if (this.extension.gallery && !this.extension.gallery.isSigned && shouldRequireRepositorySignatureFor(this.extension.private, await this.extensionGalleryManifestService.getExtensionGalleryManifest())) {
 			const { result } = await this.dialogService.prompt({
 				type: Severity.Warning,
-				message: localize('not signed', "'{0}' is an extension from an unknown source. Are you sure you want to install?", this.extension.displayName),
-				detail: localize('not signed detail', "Extension is not signed."),
+				message: localize('not signed', "'{0}' is a snap from an unknown source. Are you sure you want to install?", this.extension.displayName),
+				detail: localize('not signed detail', "Snap is not signed."),
 				buttons: [
 					{
 						label: localize('install anyway', "Install Anyway"),
@@ -524,7 +524,7 @@ export class InstallAction extends ExtensionAction {
 		}
 
 		if (this.extension.deprecationInfo) {
-			let detail: string | MarkdownString = localize('deprecated message', "This extension is deprecated as it is no longer being maintained.");
+			let detail: string | MarkdownString = localize('deprecated message', "This snap is deprecated as it is no longer being maintained.");
 			enum DeprecationChoice {
 				InstallAnyway = 0,
 				ShowAlternateExtension = 1,
@@ -539,7 +539,7 @@ export class InstallAction extends ExtensionAction {
 			];
 
 			if (this.extension.deprecationInfo.extension) {
-				detail = localize('deprecated with alternate extension message', "This extension is deprecated. Use the {0} extension instead.", this.extension.deprecationInfo.extension.displayName);
+				detail = localize('deprecated with alternate extension message', "This snap is deprecated. Use the {0} snap instead.", this.extension.deprecationInfo.extension.displayName);
 
 				const alternateExtension = this.extension.deprecationInfo.extension;
 				buttons.push({
@@ -552,7 +552,7 @@ export class InstallAction extends ExtensionAction {
 					}
 				});
 			} else if (this.extension.deprecationInfo.settings) {
-				detail = localize('deprecated with alternate settings message', "This extension is deprecated as this functionality is now built-in to VS Code.");
+				detail = localize('deprecated with alternate settings message', "This snap is deprecated as this functionality is now built-in to VS Code.");
 
 				const settings = this.extension.deprecationInfo.settings;
 				buttons.push({
@@ -588,7 +588,7 @@ export class InstallAction extends ExtensionAction {
 
 		this.extensionsWorkbenchService.open(this.extension, { showPreReleaseVersion: this.options.installPreReleaseVersion });
 
-		alert(localize('installExtensionStart', "Installing extension {0} started. An editor is now open with more details on this extension", this.extension.displayName));
+		alert(localize('installExtensionStart', "Installing snap {0} started. An editor is now open with more details on this snap", this.extension.displayName));
 
 		/* __GDPR__
 			"extensions:action:install" : {
@@ -604,7 +604,7 @@ export class InstallAction extends ExtensionAction {
 		const extension = await this.install(this.extension);
 
 		if (extension?.local) {
-			alert(localize('installExtensionComplete', "Installing extension {0} is completed.", this.extension.displayName));
+			alert(localize('installExtensionComplete', "Installing snap {0} is completed.", this.extension.displayName));
 			const runningExtension = await this.getRunningExtension(extension.local);
 			if (runningExtension && !(runningExtension.activationEvents && runningExtension.activationEvents.some(activationEent => activationEent.startsWith('onLanguage')))) {
 				const action = await this.getThemeAction(extension);
@@ -671,7 +671,7 @@ export class InstallAction extends ExtensionAction {
 
 	getLabel(primary?: boolean): string {
 		if (this.extension?.isWorkspaceScoped && this.extension.resourceExtension && this.contextService.isInsideWorkspace(this.extension.resourceExtension.location)) {
-			return localize('install workspace version', "Install Workspace Extension");
+			return localize('install workspace version', "Install Workspace Snap");
 		}
 		/* install pre-release version */
 		if (this.options.installPreReleaseVersion && this.extension?.hasPreReleaseVersion) {
@@ -826,7 +826,7 @@ export abstract class InstallInOtherServerAction extends ExtensionAction {
 			return;
 		}
 		this.extensionsWorkbenchService.open(this.extension);
-		alert(localize('installExtensionStart', "Installing extension {0} started. An editor is now open with more details on this extension", this.extension.displayName));
+		alert(localize('installExtensionStart', "Installing snap {0} started. An editor is now open with more details on this snap", this.extension.displayName));
 		return this.extensionsWorkbenchService.installInServer(this.extension, this.server);
 	}
 
@@ -937,11 +937,11 @@ export class UninstallAction extends ExtensionAction {
 		if (!this.extension) {
 			return;
 		}
-		alert(localize('uninstallExtensionStart', "Uninstalling extension {0} started.", this.extension.displayName));
+		alert(localize('uninstallExtensionStart', "Uninstalling snap {0} started.", this.extension.displayName));
 
 		try {
 			await this.extensionsWorkbenchService.uninstall(this.extension);
-			alert(localize('uninstallExtensionComplete', "Please reload Visual Studio Code to complete the uninstallation of the extension {0}.", this.extension.displayName));
+			alert(localize('uninstallExtensionComplete', "Please reload Visual Studio Code to complete the uninstallation of the snap {0}.", this.extension.displayName));
 		} catch (error) {
 			if (!isCancellationError(error)) {
 				this.dialogService.error(getErrorMessage(error));
@@ -1003,8 +1003,8 @@ export class UpdateAction extends ExtensionAction {
 		if (consent) {
 			const { result } = await this.dialogService.prompt<'update' | 'review' | 'cancel'>({
 				type: 'warning',
-				title: localize('updateExtensionConsentTitle', "Update {0} Extension", this.extension.displayName),
-				message: localize('updateExtensionConsent', "{0}\n\nWould you like to update the extension?", consent),
+				title: localize('updateExtensionConsentTitle', "Update {0} Snap", this.extension.displayName),
+				message: localize('updateExtensionConsent', "{0}\n\nWould you like to update the snap?", consent),
 				buttons: [{
 					label: localize('update', "Update"),
 					run: () => 'update'
@@ -1038,9 +1038,9 @@ export class UpdateAction extends ExtensionAction {
 			installOptions.installPreReleaseVersion = true;
 		}
 		try {
-			alert(localize('updateExtensionStart', "Updating extension {0} to version {1} started.", this.extension.displayName, this.extension.latestVersion));
+			alert(localize('updateExtensionStart', "Updating snap {0} to version {1} started.", this.extension.displayName, this.extension.latestVersion));
 			await this.extensionsWorkbenchService.install(this.extension, installOptions);
-			alert(localize('updateExtensionComplete', "Updating extension {0} to version {1} completed.", this.extension.displayName, this.extension.latestVersion));
+			alert(localize('updateExtensionComplete', "Updating snap {0} to version {1} completed.", this.extension.displayName, this.extension.latestVersion));
 		} catch (err) {
 			this.instantiationService.createInstance(PromptExtensionInstallFailureAction, this.extension, installOptions, this.extension.latestVersion, InstallOperation.Update, err).run();
 		}
@@ -1613,7 +1613,7 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 		const targetPlatform = this.extension.server ? await this.extension.server.extensionManagementService.getTargetPlatform() : await this.extensionManagementService.getTargetPlatform();
 		const allVersions = await this.extensionGalleryService.getAllCompatibleVersions(this.extension.identifier, this.extension.local?.preRelease ?? this.extension.gallery?.properties.isPreReleaseVersion ?? false, targetPlatform);
 		if (!allVersions.length) {
-			await this.dialogService.info(localize('no versions', "This extension has no other versions."));
+			await this.dialogService.info(localize('no versions', "This snap has no other versions."));
 			return;
 		}
 
@@ -1658,7 +1658,7 @@ export class EnableForWorkspaceAction extends ExtensionAction {
 		@IProductService private readonly productService: IProductService,
 	) {
 		super(EnableForWorkspaceAction.ID, EnableForWorkspaceAction.LABEL, ExtensionAction.LABEL_ACTION_CLASS);
-		this.tooltip = localize('enableForWorkspaceActionToolTip', "Enable this extension only in this workspace");
+		this.tooltip = localize('enableForWorkspaceActionToolTip', "Enable this snap only in this workspace");
 		this.update();
 	}
 
@@ -1693,7 +1693,7 @@ export class EnableGloballyAction extends ExtensionAction {
 		@IProductService private readonly productService: IProductService,
 	) {
 		super(EnableGloballyAction.ID, EnableGloballyAction.LABEL, ExtensionAction.LABEL_ACTION_CLASS);
-		this.tooltip = localize('enableGloballyActionToolTip', "Enable this extension");
+		this.tooltip = localize('enableGloballyActionToolTip', "Enable this snap");
 		this.update();
 	}
 
@@ -1730,7 +1730,7 @@ export class DisableForWorkspaceAction extends ExtensionAction {
 		@IProductService private readonly productService: IProductService,
 	) {
 		super(DisableForWorkspaceAction.ID, DisableForWorkspaceAction.LABEL, ExtensionAction.LABEL_ACTION_CLASS);
-		this.tooltip = localize('disableForWorkspaceActionToolTip', "Disable this extension only in this workspace");
+		this.tooltip = localize('disableForWorkspaceActionToolTip', "Disable this snap only in this workspace");
 		this.update();
 		this._register(this.extensionService.onDidChangeExtensions(() => this.update()));
 	}
@@ -1767,7 +1767,7 @@ export class DisableGloballyAction extends ExtensionAction {
 		@IProductService private readonly productService: IProductService,
 	) {
 		super(DisableGloballyAction.ID, DisableGloballyAction.LABEL, ExtensionAction.LABEL_ACTION_CLASS);
-		this.tooltip = localize('disableGloballyActionToolTip', "Disable this extension");
+		this.tooltip = localize('disableGloballyActionToolTip', "Disable this snap");
 		this.update();
 		this._register(this.extensionService.onDidChangeExtensions(() => this.update()));
 	}
@@ -2047,7 +2047,7 @@ export class ExtensionRuntimeStateAction extends ExtensionAction {
 		this.class = ExtensionRuntimeStateAction.EnabledClass;
 		this.tooltip = runtimeState.reason;
 		this.label = runtimeState.action === ExtensionRuntimeActionType.ReloadWindow ? localize('reload window', 'Reload Window')
-			: runtimeState.action === ExtensionRuntimeActionType.RestartExtensions ? localize('restart extensions', 'Restart Extensions')
+			: runtimeState.action === ExtensionRuntimeActionType.RestartExtensions ? localize('restart extensions', 'Restart Snaps')
 				: runtimeState.action === ExtensionRuntimeActionType.QuitAndInstall ? localize('restart product', 'Restart to Update')
 					: runtimeState.action === ExtensionRuntimeActionType.ApplyUpdate || runtimeState.action === ExtensionRuntimeActionType.DownloadUpdate ? localize('update product', 'Update {0}', this.productService.nameShort) : '';
 	}
@@ -2339,7 +2339,7 @@ export class ClearLanguageAction extends ExtensionAction {
 export class ShowRecommendedExtensionAction extends Action {
 
 	static readonly ID = 'workbench.extensions.action.showRecommendedExtension';
-	static readonly LABEL = localize('showRecommendedExtension', "Show Recommended Extension");
+	static readonly LABEL = localize('showRecommendedExtension', "Show Recommended Snap");
 
 	private extensionId: string;
 
@@ -2364,7 +2364,7 @@ export class ShowRecommendedExtensionAction extends Action {
 export class InstallRecommendedExtensionAction extends Action {
 
 	static readonly ID = 'workbench.extensions.action.installRecommendedExtension';
-	static readonly LABEL = localize('installRecommendedExtension', "Install Recommended Extension");
+	static readonly LABEL = localize('installRecommendedExtension', "Install Recommended Snap");
 
 	private extensionId: string;
 
@@ -2404,7 +2404,7 @@ export class IgnoreExtensionRecommendationAction extends Action {
 		super(IgnoreExtensionRecommendationAction.ID, 'Ignore Recommendation');
 
 		this.class = IgnoreExtensionRecommendationAction.Class;
-		this.tooltip = localize('ignoreExtensionRecommendation', "Do not recommend this extension again");
+		this.tooltip = localize('ignoreExtensionRecommendation', "Do not recommend this snap again");
 		this.enabled = true;
 	}
 
@@ -2526,7 +2526,7 @@ export abstract class AbstractConfigureRecommendedExtensionsAction extends Actio
 export class ConfigureWorkspaceRecommendedExtensionsAction extends AbstractConfigureRecommendedExtensionsAction {
 
 	static readonly ID = 'workbench.extensions.action.configureWorkspaceRecommendedExtensions';
-	static readonly LABEL = localize('configureWorkspaceRecommendedExtensions', "Configure Recommended Extensions (Workspace)");
+	static readonly LABEL = localize('configureWorkspaceRecommendedExtensions', "Configure Recommended Snaps (Workspace)");
 
 	constructor(
 		id: string,
@@ -2561,7 +2561,7 @@ export class ConfigureWorkspaceRecommendedExtensionsAction extends AbstractConfi
 export class ConfigureWorkspaceFolderRecommendedExtensionsAction extends AbstractConfigureRecommendedExtensionsAction {
 
 	static readonly ID = 'workbench.extensions.action.configureWorkspaceFolderRecommendedExtensions';
-	static readonly LABEL = localize('configureWorkspaceFolderRecommendedExtensions', "Configure Recommended Extensions (Workspace Folder)");
+	static readonly LABEL = localize('configureWorkspaceFolderRecommendedExtensions', "Configure Recommended Snaps (Workspace Folder)");
 
 	constructor(
 		id: string,
@@ -2721,7 +2721,7 @@ export class ToggleSyncExtensionAction extends DropDownExtensionAction {
 		if (this.extension) {
 			const isIgnored = this.extensionsWorkbenchService.isExtensionIgnoredToSync(this.extension);
 			this.class = isIgnored ? ToggleSyncExtensionAction.IGNORED_SYNC_CLASS : ToggleSyncExtensionAction.SYNC_CLASS;
-			this.tooltip = isIgnored ? localize('ignored', "This extension is ignored during sync") : localize('synced', "This extension is synced");
+			this.tooltip = isIgnored ? localize('ignored', "This snap is ignored during sync") : localize('synced', "This snap is synced");
 		}
 	}
 
@@ -2730,7 +2730,7 @@ export class ToggleSyncExtensionAction extends DropDownExtensionAction {
 			[
 				new Action(
 					'extensions.syncignore',
-					this.extensionsWorkbenchService.isExtensionIgnoredToSync(this.extension!) ? localize('sync', "Sync this extension") : localize('do not sync', "Do not sync this extension")
+					this.extensionsWorkbenchService.isExtensionIgnoredToSync(this.extension!) ? localize('sync', "Sync this snap") : localize('do not sync', "Do not sync this snap")
 					, undefined, true, () => this.extensionsWorkbenchService.toggleExtensionIgnoredToSync(this.extension!))
 			]
 		]);
@@ -2805,24 +2805,24 @@ export class ExtensionStatusAction extends ExtensionAction {
 		}
 
 		if (this.extension.isMalicious) {
-			this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('malicious tooltip', "This extension was reported to be problematic.")) }, true);
+			this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('malicious tooltip', "This snap was reported to be problematic.")) }, true);
 			return;
 		}
 
 		if (this.extension.state === ExtensionState.Uninstalled && this.extension.gallery && !this.extension.gallery.isSigned && shouldRequireRepositorySignatureFor(this.extension.private, await this.extensionGalleryManifestService.getExtensionGalleryManifest())) {
-			this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('not signed tooltip', "This extension is not signed by the Extension Marketplace.")) }, true);
+			this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('not signed tooltip', "This snap is not signed by the Snap Marketplace.")) }, true);
 			return;
 		}
 
 		if (this.extension.deprecationInfo) {
 			if (this.extension.deprecationInfo.extension) {
 				const link = `[${this.extension.deprecationInfo.extension.displayName}](${createCommandUri('extension.open', this.extension.deprecationInfo.extension.id)})`;
-				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('deprecated with alternate extension tooltip', "This extension is deprecated. Use the {0} extension instead.", link)) }, true);
+				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('deprecated with alternate extension tooltip', "This snap is deprecated. Use the {0} snap instead.", link)) }, true);
 			} else if (this.extension.deprecationInfo.settings) {
 				const link = `[${localize('settings', "settings")}](${createCommandUri('workbench.action.openSettings', this.extension.deprecationInfo.settings.map(setting => `@id:${setting}`).join(' '))}})`;
-				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('deprecated with alternate settings tooltip', "This extension is deprecated as this functionality is now built-in to VS Code. Configure these {0} to use this functionality.", link)) }, true);
+				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('deprecated with alternate settings tooltip', "This snap is deprecated as this functionality is now built-in to VS Code. Configure these {0} to use this functionality.", link)) }, true);
 			} else {
-				const message = new MarkdownString(localize('deprecated tooltip', "This extension is deprecated as it is no longer being maintained."));
+				const message = new MarkdownString(localize('deprecated tooltip', "This snap is deprecated as it is no longer being maintained."));
 				if (this.extension.deprecationInfo.additionalInfo) {
 					message.appendMarkdown(` ${this.extension.deprecationInfo.additionalInfo}`);
 				}
@@ -2832,7 +2832,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 		}
 
 		if (this.extension.missingFromGallery) {
-			this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('missing from gallery tooltip', "This extension is no longer available on the Extension Marketplace.")) }, true);
+			this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('missing from gallery tooltip', "This snap is no longer available on the Snap Marketplace.")) }, true);
 			return;
 		}
 
@@ -2848,7 +2848,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 				const markdown = new MarkdownString();
 				markdown.appendMarkdown(`${message} `);
 				markdown.appendMarkdown(
-					localize('auto update message', "Please [review the extension]({0}) and update it manually.",
+					localize('auto update message', "Please [review the snap]({0}) and update it manually.",
 						this.extension.hasChangelog()
 							? createCommandUri('extension.open', this.extension.identifier.id, ExtensionEditorTab.Changelog).toString()
 							: this.extension.repository
@@ -2861,7 +2861,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 				const delay = fromNow(Date.now() - this.extensionsWorkbenchService.getAutoUpdateDelay(), false, true);
 				const updateAt = fromNow(Date.now() + this.extensionsWorkbenchService.getAutoUpdateDelayRemaining(this.extension), false, true);
 				// Do not override the higher-priority warning class with the info class.
-				this.updateStatus({ icon: infoIcon, message: new MarkdownString(localize('autoUpdateDelayed', "This extension is not updated yet because new versions are auto updated {0} after they are published. It will be auto updated {1}.", delay, updateAt)) }, !hasConsentWarning);
+				this.updateStatus({ icon: infoIcon, message: new MarkdownString(localize('autoUpdateDelayed', "This snap is not updated yet because new versions are auto updated {0} after they are published. It will be auto updated {1}.", delay, updateAt)) }, !hasConsentWarning);
 			}
 		}
 
@@ -2884,27 +2884,27 @@ export class ExtensionStatusAction extends ExtensionAction {
 		if (this.extension.enablementState === EnablementState.DisabledByAllowlist) {
 			const result = this.allowedExtensionsService.isAllowed(this.extension.local);
 			if (result !== true) {
-				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('disabled - not allowed', "This extension is disabled because {0}", result.value)) }, true);
+				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('disabled - not allowed', "This snap is disabled because {0}", result.value)) }, true);
 				return;
 			}
 		}
 
 		// Extension is disabled by environment
 		if (this.extension.enablementState === EnablementState.DisabledByEnvironment) {
-			this.updateStatus({ message: new MarkdownString(localize('disabled by environment', "This extension is disabled by the environment.")) }, true);
+			this.updateStatus({ message: new MarkdownString(localize('disabled by environment', "This snap is disabled by the environment.")) }, true);
 			return;
 		}
 
 		// Extension is enabled by environment
 		if (this.extension.enablementState === EnablementState.EnabledByEnvironment) {
-			this.updateStatus({ message: new MarkdownString(localize('enabled by environment', "This extension is enabled because it is required in the current environment.")) }, true);
+			this.updateStatus({ message: new MarkdownString(localize('enabled by environment', "This snap is enabled because it is required in the current environment.")) }, true);
 			return;
 		}
 
 		// Extension is disabled by virtual workspace
 		if (this.extension.enablementState === EnablementState.DisabledByVirtualWorkspace) {
 			const details = getWorkspaceSupportTypeMessage(this.extension.local.manifest.capabilities?.virtualWorkspaces);
-			this.updateStatus({ icon: infoIcon, message: new MarkdownString(details ? escapeMarkdownSyntaxTokens(details) : localize('disabled because of virtual workspace', "This extension has been disabled because it does not support virtual workspaces.")) }, true);
+			this.updateStatus({ icon: infoIcon, message: new MarkdownString(details ? escapeMarkdownSyntaxTokens(details) : localize('disabled because of virtual workspace', "This snap has been disabled because it does not support virtual workspaces.")) }, true);
 			return;
 		}
 
@@ -2913,14 +2913,14 @@ export class ExtensionStatusAction extends ExtensionAction {
 			const virtualSupportType = this.extensionManifestPropertiesService.getExtensionVirtualWorkspaceSupportType(this.extension.local.manifest);
 			const details = getWorkspaceSupportTypeMessage(this.extension.local.manifest.capabilities?.virtualWorkspaces);
 			if (virtualSupportType === 'limited' || details) {
-				this.updateStatus({ icon: warningIcon, message: new MarkdownString(details ? escapeMarkdownSyntaxTokens(details) : localize('extension limited because of virtual workspace', "This extension has limited features because the current workspace is virtual.")) }, true);
+				this.updateStatus({ icon: warningIcon, message: new MarkdownString(details ? escapeMarkdownSyntaxTokens(details) : localize('extension limited because of virtual workspace', "This snap has limited features because the current workspace is virtual.")) }, true);
 				return;
 			}
 		}
 
 		// Unification
 		if (this.extension.enablementState === EnablementState.DisabledByUnification) {
-			this.updateStatus({ icon: infoIcon, message: new MarkdownString(localize('extension disabled because of unification', "All Arkai functionality is now being served from the Arkai Chat extension. To temporarily opt out of this extension unification, toggle the {0} setting.", '`chat.extensionUnification.enabled`')) }, true);
+			this.updateStatus({ icon: infoIcon, message: new MarkdownString(localize('extension disabled because of unification', "All Arkai functionality is now being served from the Arkai Chat snap. To temporarily opt out of this snap unification, toggle the {0} setting.", '`chat.extensionUnification.enabled`')) }, true);
 			return;
 		}
 
@@ -2931,7 +2931,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 				(this.extension.enablementState === EnablementState.DisabledByExtensionDependency && this.workbenchExtensionEnablementService.getDependenciesEnablementStates(this.extension.local).every(([, enablementState]) => this.workbenchExtensionEnablementService.isEnabledEnablementState(enablementState) || enablementState === EnablementState.DisabledByTrustRequirement)))) {
 			this.enabled = true;
 			const untrustedDetails = getWorkspaceSupportTypeMessage(this.extension.local.manifest.capabilities?.untrustedWorkspaces);
-			this.updateStatus({ icon: trustIcon, message: new MarkdownString(untrustedDetails ? escapeMarkdownSyntaxTokens(untrustedDetails) : localize('extension disabled because of trust requirement', "This extension has been disabled because the current workspace is not trusted.")) }, true);
+			this.updateStatus({ icon: trustIcon, message: new MarkdownString(untrustedDetails ? escapeMarkdownSyntaxTokens(untrustedDetails) : localize('extension disabled because of trust requirement', "This snap has been disabled because the current workspace is not trusted.")) }, true);
 			return;
 		}
 
@@ -2941,7 +2941,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 			const untrustedDetails = getWorkspaceSupportTypeMessage(this.extension.local.manifest.capabilities?.untrustedWorkspaces);
 			if (untrustedSupportType === 'limited' || untrustedDetails) {
 				this.enabled = true;
-				this.updateStatus({ icon: trustIcon, message: new MarkdownString(untrustedDetails ? escapeMarkdownSyntaxTokens(untrustedDetails) : localize('extension limited because of trust requirement', "This extension has limited features because the current workspace is not trusted.")) }, true);
+				this.updateStatus({ icon: trustIcon, message: new MarkdownString(untrustedDetails ? escapeMarkdownSyntaxTokens(untrustedDetails) : localize('extension limited because of trust requirement', "This snap has limited features because the current workspace is not trusted.")) }, true);
 				return;
 			}
 		}
@@ -2954,7 +2954,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 				if (this.extensionManagementServerService.localExtensionManagementServer === this.extension.server) {
 					if (this.extensionManifestPropertiesService.prefersExecuteOnWorkspace(this.extension.local.manifest)) {
 						if (this.extensionManagementServerService.remoteExtensionManagementServer) {
-							message = new MarkdownString(`${localize('Install in remote server to enable', "This extension is disabled in this workspace because it is defined to run in the Remote Extension Host. Please install the extension in '{0}' to enable.", this.extensionManagementServerService.remoteExtensionManagementServer.label)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
+							message = new MarkdownString(`${localize('Install in remote server to enable', "This snap is disabled in this workspace because it is defined to run in the Remote Snap Host. Please install the snap in '{0}' to enable.", this.extensionManagementServerService.remoteExtensionManagementServer.label)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
 						}
 					}
 				}
@@ -2962,15 +2962,15 @@ export class ExtensionStatusAction extends ExtensionAction {
 				else if (this.extensionManagementServerService.remoteExtensionManagementServer === this.extension.server) {
 					if (this.extensionManifestPropertiesService.prefersExecuteOnUI(this.extension.local.manifest)) {
 						if (this.extensionManagementServerService.localExtensionManagementServer) {
-							message = new MarkdownString(`${localize('Install in local server to enable', "This extension is disabled in this workspace because it is defined to run in the Local Extension Host. Please install the extension locally to enable.", this.extensionManagementServerService.remoteExtensionManagementServer.label)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
+							message = new MarkdownString(`${localize('Install in local server to enable', "This snap is disabled in this workspace because it is defined to run in the Local Snap Host. Please install the snap locally to enable.", this.extensionManagementServerService.remoteExtensionManagementServer.label)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
 						} else if (isWeb) {
-							message = new MarkdownString(`${localize('Defined to run in desktop', "This extension is disabled because it is defined to run only in {0} for the Desktop.", this.productService.nameLong)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
+							message = new MarkdownString(`${localize('Defined to run in desktop', "This snap is disabled because it is defined to run only in {0} for the Desktop.", this.productService.nameLong)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
 						}
 					}
 				}
 				// Extension on Web Server
 				else if (this.extensionManagementServerService.webExtensionManagementServer === this.extension.server) {
-					message = new MarkdownString(`${localize('Cannot be enabled', "This extension is disabled because it is not supported in {0} for the Web.", this.productService.nameLong)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
+					message = new MarkdownString(`${localize('Cannot be enabled', "This snap is disabled because it is not supported in {0} for the Web.", this.productService.nameLong)} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`);
 				}
 				if (message) {
 					this.updateStatus({ icon: warningIcon, message }, true);
@@ -2999,8 +2999,8 @@ export class ExtensionStatusAction extends ExtensionAction {
 			if (isLanguagePackExtension(this.extension.local.manifest)) {
 				if (!this.extensionsWorkbenchService.installed.some(e => areSameExtensions(e.identifier, this.extension!.identifier) && e.server !== this.extension!.server)) {
 					const message = this.extension.server === this.extensionManagementServerService.localExtensionManagementServer
-						? new MarkdownString(localize('Install language pack also in remote server', "Install the language pack extension on '{0}' to enable it there also.", this.extensionManagementServerService.remoteExtensionManagementServer.label))
-						: new MarkdownString(localize('Install language pack also locally', "Install the language pack extension locally to enable it there also."));
+						? new MarkdownString(localize('Install language pack also in remote server', "Install the language pack snap on '{0}' to enable it there also.", this.extensionManagementServerService.remoteExtensionManagementServer.label))
+						: new MarkdownString(localize('Install language pack also locally', "Install the language pack snap locally to enable it there also."));
 					this.updateStatus({ icon: infoIcon, message }, true);
 				}
 				return;
@@ -3010,21 +3010,21 @@ export class ExtensionStatusAction extends ExtensionAction {
 			const runningExtensionServer = runningExtension ? this.extensionManagementServerService.getExtensionManagementServer(toExtension(runningExtension)) : null;
 			if (this.extension.server === this.extensionManagementServerService.localExtensionManagementServer && runningExtensionServer === this.extensionManagementServerService.remoteExtensionManagementServer) {
 				if (this.extensionManifestPropertiesService.prefersExecuteOnWorkspace(this.extension.local.manifest)) {
-					this.updateStatus({ icon: infoIcon, message: new MarkdownString(`${localize('enabled remotely', "This extension is enabled in the Remote Extension Host because it prefers to run there.")} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`) }, true);
+					this.updateStatus({ icon: infoIcon, message: new MarkdownString(`${localize('enabled remotely', "This snap is enabled in the Remote Snap Host because it prefers to run there.")} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`) }, true);
 				}
 				return;
 			}
 
 			if (this.extension.server === this.extensionManagementServerService.remoteExtensionManagementServer && runningExtensionServer === this.extensionManagementServerService.localExtensionManagementServer) {
 				if (this.extensionManifestPropertiesService.prefersExecuteOnUI(this.extension.local.manifest)) {
-					this.updateStatus({ icon: infoIcon, message: new MarkdownString(`${localize('enabled locally', "This extension is enabled in the Local Extension Host because it prefers to run there.")} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`) }, true);
+					this.updateStatus({ icon: infoIcon, message: new MarkdownString(`${localize('enabled locally', "This snap is enabled in the Local Snap Host because it prefers to run there.")} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`) }, true);
 				}
 				return;
 			}
 
 			if (this.extension.server === this.extensionManagementServerService.remoteExtensionManagementServer && runningExtensionServer === this.extensionManagementServerService.webExtensionManagementServer) {
 				if (this.extensionManifestPropertiesService.canExecuteOnWeb(this.extension.local.manifest)) {
-					this.updateStatus({ icon: infoIcon, message: new MarkdownString(`${localize('enabled in web worker', "This extension is enabled in the Web Worker Extension Host because it prefers to run there.")} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`) }, true);
+					this.updateStatus({ icon: infoIcon, message: new MarkdownString(`${localize('enabled in web worker', "This snap is enabled in the Web Worker Snap Host because it prefers to run there.")} [${localize('learn more', "Learn More")}](https://code.visualstudio.com/api/advanced-topics/remote-extensions#architecture-and-extension-kinds)`) }, true);
 				}
 				return;
 			}
@@ -3034,7 +3034,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 		if (this.extension.enablementState === EnablementState.DisabledByExtensionDependency) {
 			this.updateStatus({
 				icon: warningIcon,
-				message: new MarkdownString(localize('extension disabled because of dependency', "This extension depends on an extension that is disabled."))
+				message: new MarkdownString(localize('extension disabled because of dependency', "This snap depends on a snap that is disabled."))
 					.appendMarkdown(`&nbsp;[${localize('dependencies', "Show Dependencies")}](${createCommandUri('extension.open', this.extension.identifier.id, ExtensionEditorTab.Dependencies)})`)
 			}, true);
 			return;
@@ -3051,12 +3051,12 @@ export class ExtensionStatusAction extends ExtensionAction {
 
 		if (!this.extension.isWorkspaceScoped && isEnabled && isRunning) {
 			if (this.extension.enablementState === EnablementState.EnabledWorkspace) {
-				this.updateStatus({ message: new MarkdownString(localize('workspace enabled', "This extension is enabled for this workspace by the user.")) }, true);
+				this.updateStatus({ message: new MarkdownString(localize('workspace enabled', "This snap is enabled for this workspace by the user.")) }, true);
 				return;
 			}
 			if (this.extensionManagementServerService.localExtensionManagementServer && this.extensionManagementServerService.remoteExtensionManagementServer) {
 				if (this.extension.server === this.extensionManagementServerService.remoteExtensionManagementServer) {
-					this.updateStatus({ message: new MarkdownString(localize('extension enabled on remote', "Extension is enabled on '{0}'", this.extension.server.label)) }, true);
+					this.updateStatus({ message: new MarkdownString(localize('extension enabled on remote', "Snap is enabled on '{0}'", this.extension.server.label)) }, true);
 					return;
 				}
 			}
@@ -3067,11 +3067,11 @@ export class ExtensionStatusAction extends ExtensionAction {
 
 		if (!isEnabled && !isRunning) {
 			if (this.extension.enablementState === EnablementState.DisabledGlobally) {
-				this.updateStatus({ message: new MarkdownString(localize('globally disabled', "This extension is disabled globally by the user.")) }, true);
+				this.updateStatus({ message: new MarkdownString(localize('globally disabled', "This snap is disabled globally by the user.")) }, true);
 				return;
 			}
 			if (this.extension.enablementState === EnablementState.DisabledWorkspace) {
-				this.updateStatus({ message: new MarkdownString(localize('workspace disabled', "This extension is disabled for this workspace by the user.")) }, true);
+				this.updateStatus({ message: new MarkdownString(localize('workspace disabled', "This snap is disabled for this workspace by the user.")) }, true);
 				return;
 			}
 		}
@@ -3151,7 +3151,7 @@ export class InstallSpecificVersionOfExtensionAction extends Action {
 	}
 
 	override async run(): Promise<any> {
-		const extensionPick = await this.quickInputService.pick(this.getExtensionEntries(), { placeHolder: localize('selectExtension', "Select Extension"), matchOnDetail: true });
+		const extensionPick = await this.quickInputService.pick(this.getExtensionEntries(), { placeHolder: localize('selectExtension', "Select Snap"), matchOnDetail: true });
 		if (extensionPick && extensionPick.extension) {
 			const action = this.instantiationService.createInstance(InstallAnotherVersionAction, extensionPick.extension, true);
 			// TODO: replace with `using` once available
@@ -3249,7 +3249,7 @@ export abstract class AbstractInstallExtensionsInServerAction extends Action {
 		quickPick.busy = false;
 		if (localExtensionsToInstall.length) {
 			quickPick.title = this.getQuickPickTitle();
-			quickPick.placeholder = localize('select extensions to install', "Select extensions to install");
+			quickPick.placeholder = localize('select extensions to install', "Select snaps to install");
 			quickPick.canSelectMany = true;
 			localExtensionsToInstall.sort((e1, e2) => e1.displayName.localeCompare(e2.displayName));
 			quickPick.items = localExtensionsToInstall.map<IExtensionPickItem>(extension => ({ extension, label: extension.displayName, description: extension.version }));
@@ -3258,7 +3258,7 @@ export abstract class AbstractInstallExtensionsInServerAction extends Action {
 			quickPick.dispose();
 			this.notificationService.notify({
 				severity: Severity.Info,
-				message: localize('no local extensions', "There are no extensions to install.")
+				message: localize('no local extensions', "There are no snaps to install.")
 			});
 		}
 	}
@@ -3273,7 +3273,7 @@ export abstract class AbstractInstallExtensionsInServerAction extends Action {
 						title: localize('installing extensions', "Installing Extensions...")
 					},
 					() => this.installExtensions(localExtensionsToInstall));
-				this.notificationService.info(localize('finished installing', "Successfully installed extensions."));
+				this.notificationService.info(localize('finished installing', "Successfully installed snaps."));
 			}
 		}
 	}
@@ -3301,13 +3301,13 @@ export class InstallLocalExtensionsInRemoteAction extends AbstractInstallExtensi
 
 	override get label(): string {
 		if (this.extensionManagementServerService && this.extensionManagementServerService.remoteExtensionManagementServer) {
-			return localize('select and install local extensions', "Install Local Extensions in '{0}'...", this.extensionManagementServerService.remoteExtensionManagementServer.label);
+			return localize('select and install local extensions', "Install Local Snaps in '{0}'...", this.extensionManagementServerService.remoteExtensionManagementServer.label);
 		}
 		return '';
 	}
 
 	protected getQuickPickTitle(): string {
-		return localize('install local extensions title', "Install Local Extensions in '{0}'", this.extensionManagementServerService.remoteExtensionManagementServer!.label);
+		return localize('install local extensions title', "Install Local Snaps in '{0}'", this.extensionManagementServerService.remoteExtensionManagementServer!.label);
 	}
 
 	protected getExtensionsToInstall(local: IExtension[]): IExtension[] {
@@ -3364,11 +3364,11 @@ export class InstallRemoteExtensionsInLocalAction extends AbstractInstallExtensi
 	}
 
 	override get label(): string {
-		return localize('select and install remote extensions', "Install Remote Extensions Locally...");
+		return localize('select and install remote extensions', "Install Remote Snaps Locally...");
 	}
 
 	protected getQuickPickTitle(): string {
-		return localize('install remote extensions', "Install Remote Extensions Locally");
+		return localize('install remote extensions', "Install Remote Snaps Locally");
 	}
 
 	protected getExtensionsToInstall(local: IExtension[]): IExtension[] {
@@ -3422,51 +3422,51 @@ registerColor('extensionButton.background', {
 	light: buttonSecondaryBackground,
 	hcDark: null,
 	hcLight: null
-}, localize('extensionButtonBackground', "Button background color for extension actions."));
+}, localize('extensionButtonBackground', "Button background color for snap actions."));
 
 registerColor('extensionButton.foreground', {
 	dark: buttonSecondaryForeground,
 	light: buttonSecondaryForeground,
 	hcDark: null,
 	hcLight: null
-}, localize('extensionButtonForeground', "Button foreground color for extension actions."));
+}, localize('extensionButtonForeground', "Button foreground color for snap actions."));
 
 registerColor('extensionButton.hoverBackground', {
 	dark: buttonSecondaryHoverBackground,
 	light: buttonSecondaryHoverBackground,
 	hcDark: null,
 	hcLight: null
-}, localize('extensionButtonHoverBackground', "Button background hover color for extension actions."));
+}, localize('extensionButtonHoverBackground', "Button background hover color for snap actions."));
 
 registerColor('extensionButton.border', {
 	dark: buttonSecondaryBorder,
 	light: buttonSecondaryBorder,
 	hcDark: buttonSecondaryBorder,
 	hcLight: buttonSecondaryBorder
-}, localize('extensionButtonBorder', "Button border color for extension actions."));
+}, localize('extensionButtonBorder', "Button border color for snap actions."));
 
-registerColor('extensionButton.separator', buttonSeparator, localize('extensionButtonSeparator', "Button separator color for extension actions"));
+registerColor('extensionButton.separator', buttonSeparator, localize('extensionButtonSeparator', "Button separator color for snap actions"));
 
 export const extensionButtonProminentBackground = registerColor('extensionButton.prominentBackground', {
 	dark: buttonBackground,
 	light: buttonBackground,
 	hcDark: null,
 	hcLight: null
-}, localize('extensionButtonProminentBackground', "Button background color for extension actions that stand out (e.g. install button)."));
+}, localize('extensionButtonProminentBackground', "Button background color for snap actions that stand out (e.g. install button)."));
 
 registerColor('extensionButton.prominentForeground', {
 	dark: buttonForeground,
 	light: buttonForeground,
 	hcDark: null,
 	hcLight: null
-}, localize('extensionButtonProminentForeground', "Button foreground color for extension actions that stand out (e.g. install button)."));
+}, localize('extensionButtonProminentForeground', "Button foreground color for snap actions that stand out (e.g. install button)."));
 
 registerColor('extensionButton.prominentHoverBackground', {
 	dark: buttonHoverBackground,
 	light: buttonHoverBackground,
 	hcDark: null,
 	hcLight: null
-}, localize('extensionButtonProminentHoverBackground', "Button background hover color for extension actions that stand out (e.g. install button)."));
+}, localize('extensionButtonProminentHoverBackground', "Button background hover color for snap actions that stand out (e.g. install button)."));
 
 registerThemingParticipant((theme: IColorTheme, collector: ICssStyleCollector) => {
 
