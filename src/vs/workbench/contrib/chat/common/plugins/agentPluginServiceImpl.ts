@@ -1033,8 +1033,8 @@ export class CopilotCliAgentPluginDiscovery extends AbstractAgentPluginDiscovery
 
 	private async _promptRemove(resource: URI): Promise<boolean> {
 		const { confirmed } = await this._dialogService.confirm({
-			message: localize('copilotCliPlugin.remove.confirm', "This plugin was installed by the Copilot CLI. Remove it from disk?"),
-			detail: localize('copilotCliPlugin.remove.detail', "The plugin directory '{0}' will be moved to the trash. You can reinstall it later via the Copilot CLI.", resource.fsPath),
+			message: localize('copilotCliPlugin.remove.confirm', "This plugin was installed by the Arkai CLI. Remove it from disk?"),
+			detail: localize('copilotCliPlugin.remove.detail', "The plugin directory '{0}' will be moved to the trash. You can reinstall it later via the Arkai CLI.", resource.fsPath),
 			primaryButton: localize('copilotCliPlugin.remove.primary', "Remove"),
 		});
 		if (!confirmed) {

@@ -251,7 +251,7 @@ suite('ChatStatusBarEntry', () => {
 		svc.quotas = { premiumChat: available };
 		svc.fireQuotaExceeded();
 
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Arkai Resumed');
 		assert.strictEqual(persistedState(storageService), 'resumed');
 	});
 
@@ -260,7 +260,7 @@ suite('ChatStatusBarEntry', () => {
 
 		await flushTimers();
 
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Arkai Resumed');
 		assert.strictEqual(persistedState(storageService), 'resumed');
 	});
 
@@ -269,14 +269,14 @@ suite('ChatStatusBarEntry', () => {
 
 		await flushTimers();
 
-		assert.notStrictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.notStrictEqual(statusbar.current?.text, '$(copilot) Arkai Resumed');
 		assert.strictEqual(persistedState(storageService), undefined);
 	});
 
 	test('clears resumed when the dashboard is opened', async () => {
 		const { statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'blocked' });
 		await flushTimers();
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Arkai Resumed');
 
 		// Opening the dashboard happens through the status entry tooltip element factory.
 		const tooltip = statusbar.current?.tooltip as { element: (token: CancellationToken) => HTMLElement };
@@ -291,7 +291,7 @@ suite('ChatStatusBarEntry', () => {
 
 	test('resumed is overridden when the user becomes blocked again', () => {
 		const { svc, statusbar, storageService } = createEntry({ entitlement: ChatEntitlement.Free, quotas: { premiumChat: available }, persisted: 'resumed' });
-		assert.strictEqual(statusbar.current?.text, '$(copilot) Copilot Resumed');
+		assert.strictEqual(statusbar.current?.text, '$(copilot) Arkai Resumed');
 
 		svc.quotas = { premiumChat: exhausted };
 		svc.fireQuotaExceeded();

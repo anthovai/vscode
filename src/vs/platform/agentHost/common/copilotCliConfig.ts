@@ -152,19 +152,19 @@ export const copilotCliConfigSchema = createSchema({
 	[CopilotCliConfigKey.EnableCustomTerminalTool]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.enableCustomTerminalTool.title', "Use Agent Host Terminal Tool"),
-		description: localize('agentHost.config.enableCustomTerminalTool.description', "When enabled, Copilot SDK sessions use Agent Host's terminal tool override instead of the SDK's default terminal behavior."),
+		description: localize('agentHost.config.enableCustomTerminalTool.description', "When enabled, Arkai SDK sessions use Agent Host's terminal tool override instead of the SDK's default terminal behavior."),
 		default: false,
 	}),
 	[CopilotCliConfigKey.EnableShellInitScript]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.enableShellInitScript.title', "Shell Init Script"),
-		description: localize('agentHost.config.enableShellInitScript.description', "When enabled, Copilot SDK sessions apply the shell init script published by the client before each shell command."),
+		description: localize('agentHost.config.enableShellInitScript.description', "When enabled, Arkai SDK sessions apply the shell init script published by the client before each shell command."),
 		default: false,
 	}),
 	[CopilotCliConfigKey.CopilotSdkLogLevel]: schemaProperty<CopilotSdkLogLevelSetting>({
 		type: 'string',
-		title: localize('agentHost.config.copilotSdkLogLevel.title', "Copilot SDK Log Level"),
-		description: localize('agentHost.config.copilotSdkLogLevel.description', "Controls logging from the Copilot SDK runtime. Agent host trace logging always enables trace output."),
+		title: localize('agentHost.config.copilotSdkLogLevel.title', "Arkai SDK Log Level"),
+		description: localize('agentHost.config.copilotSdkLogLevel.description', "Controls logging from the Arkai SDK runtime. Agent host trace logging always enables trace output."),
 		enum: [...copilotSdkLogLevelSettingValues],
 		enumLabels: [
 			localize('agentHost.config.copilotSdkLogLevel.info', "Info"),
@@ -181,19 +181,19 @@ export const copilotCliConfigSchema = createSchema({
 	[CopilotCliConfigKey.ClaudeAdvisor]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.claudeAdvisor.title', "Claude Advisor Tool"),
-		description: localize('agentHost.config.claudeAdvisor.description', "When enabled, Copilot SDK sessions using supported Claude models expose the provider-native Advisor tool."),
+		description: localize('agentHost.config.claudeAdvisor.description', "When enabled, Arkai SDK sessions using supported Claude models expose the provider-native Advisor tool."),
 		default: false,
 	}),
 	[CopilotCliConfigKey.Opus48Prompt]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.opus48Prompt.title', "Opus 4.8 Agent Prompt"),
-		description: localize('agentHost.config.opus48Prompt.description', "When enabled, Copilot SDK sessions running a Claude Opus 4.8 model apply Opus 4.8-tuned system-prompt section overrides on top of the default system message."),
+		description: localize('agentHost.config.opus48Prompt.description', "When enabled, Arkai SDK sessions running a Claude Opus 4.8 model apply Opus 4.8-tuned system-prompt section overrides on top of the default system message."),
 		default: false,
 	}),
 	[CopilotCliConfigKey.ToolSearchEnabled]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.toolSearchEnabled.title', "Agent Host Tool Search"),
-		description: localize('agentHost.config.toolSearchEnabled.description', "When enabled, Copilot SDK sessions defer MCP and non-core VS Code tools behind a tool-search tool so the model discovers them on demand instead of loading every tool definition up front."),
+		description: localize('agentHost.config.toolSearchEnabled.description', "When enabled, Arkai SDK sessions defer MCP and non-core VS Code tools behind a tool-search tool so the model discovers them on demand instead of loading every tool definition up front."),
 		default: true,
 	}),
 	[CopilotCliConfigKey.ToolSearchDeferThreshold]: schemaProperty<number>({
@@ -205,19 +205,19 @@ export const copilotCliConfigSchema = createSchema({
 	[CopilotCliConfigKey.ReasoningSummary]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.reasoningSummary.title', "Reasoning Summary"),
-		description: localize('agentHost.config.reasoningSummary.description', "When enabled, requests concise reasoning summaries for supported Copilot SDK sessions."),
+		description: localize('agentHost.config.reasoningSummary.description', "When enabled, requests concise reasoning summaries for supported Arkai SDK sessions."),
 		default: false,
 	}),
 	[CopilotCliConfigKey.HydraFusion]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.hydraFusion.title', "HydraFusion"),
-		description: localize('agentHost.config.hydraFusion.description', "When enabled, Copilot SDK sessions can use the experimental HydraFusion model."),
+		description: localize('agentHost.config.hydraFusion.description', "When enabled, Arkai SDK sessions can use the experimental HydraFusion model."),
 		default: false,
 	}),
 	[CopilotCliConfigKey.SkillCharBudget]: schemaProperty<number>({
 		type: 'number',
 		title: localize('agentHost.config.skillCharBudget.title', "Skill Character Budget"),
-		description: localize('agentHost.config.skillCharBudget.description', "Maximum number of characters available for skill descriptions in the Copilot SDK system message."),
+		description: localize('agentHost.config.skillCharBudget.description', "Maximum number of characters available for skill descriptions in the Arkai SDK system message."),
 		default: DEFAULT_COPILOT_SKILL_CHAR_BUDGET,
 	}),
 	[CopilotCliConfigKey.AutoModeTierOverride]: schemaProperty<string>({
@@ -229,13 +229,13 @@ export const copilotCliConfigSchema = createSchema({
 	[CopilotCliConfigKey.SubagentModelGuidance]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.subagentModelGuidance.title', "Subagent Model Guidance"),
-		description: localize('agentHost.config.subagentModelGuidance.description', "When enabled, Copilot SDK sessions instruct the model to keep subagents on their default model unless the user explicitly names another one."),
+		description: localize('agentHost.config.subagentModelGuidance.description', "When enabled, Arkai SDK sessions instruct the model to keep subagents on their default model unless the user explicitly names another one."),
 		default: false,
 	}),
 	[CopilotCliConfigKey.ModelCapabilityOverrides]: schemaProperty<CopilotCliModelCapabilityOverrides>({
 		type: 'object',
 		title: localize('agentHost.config.modelCapabilityOverrides.title', "Model Capability Overrides"),
-		description: localize('agentHost.config.modelCapabilityOverrides.description', "Per-model overrides for Copilot SDK sessions. Use `*` to match every model. Intended for experimentation."),
+		description: localize('agentHost.config.modelCapabilityOverrides.description', "Per-model overrides for Arkai SDK sessions. Use `*` to match every model. Intended for experimentation."),
 		additionalProperties: {
 			type: 'object',
 			title: localize('agentHost.config.modelCapabilityOverrides.entry.title', "Capability Override"),
@@ -256,7 +256,7 @@ export const copilotCliConfigSchema = createSchema({
 					type: 'array',
 					items: { type: 'string', title: localize('agentHost.config.modelCapabilityOverrides.availableTools.item.title', "Tool Name or Pattern") },
 					title: localize('agentHost.config.modelCapabilityOverrides.availableTools.title', "Available Tools"),
-					description: localize('agentHost.config.modelCapabilityOverrides.availableTools.description', "When set, only matching tools are available to sessions on this model. Patterns: bare tool names, `builtin:*` or `builtin:<name>` (Copilot runtime tools), `mcp:*` or `mcp:<name>` (MCP server tools), and `custom:*` or `custom:<name>` (every tool VS Code registers with the SDK, including the agent host's own terminal tools); a bare `*` expands to all three sources. Applied when the session launches or resumes."),
+					description: localize('agentHost.config.modelCapabilityOverrides.availableTools.description', "When set, only matching tools are available to sessions on this model. Patterns: bare tool names, `builtin:*` or `builtin:<name>` (Arkai runtime tools), `mcp:*` or `mcp:<name>` (MCP server tools), and `custom:*` or `custom:<name>` (every tool VS Code registers with the SDK, including the agent host's own terminal tools); a bare `*` expands to all three sources. Applied when the session launches or resumes."),
 				},
 				excludedTools: {
 					type: 'array',
@@ -267,7 +267,7 @@ export const copilotCliConfigSchema = createSchema({
 				modelCapabilities: {
 					type: 'object',
 					title: localize('agentHost.config.modelCapabilityOverrides.modelCapabilities.title', "Model Capabilities"),
-					description: localize('agentHost.config.modelCapabilityOverrides.modelCapabilities.description', "Per-property model capability overrides passed through to the Copilot SDK's `modelCapabilities` session field (e.g. `{ \"supports\": { \"vision\": false }, \"limits\": { \"max_context_window_tokens\": 64000 } }`), deep-merged over the runtime's resolved defaults for this model. Applied when the session launches or resumes."),
+					description: localize('agentHost.config.modelCapabilityOverrides.modelCapabilities.description', "Per-property model capability overrides passed through to the Arkai SDK's `modelCapabilities` session field (e.g. `{ \"supports\": { \"vision\": false }, \"limits\": { \"max_context_window_tokens\": 64000 } }`), deep-merged over the runtime's resolved defaults for this model. Applied when the session launches or resumes."),
 				},
 				promptOverrideString: {
 					type: 'string',

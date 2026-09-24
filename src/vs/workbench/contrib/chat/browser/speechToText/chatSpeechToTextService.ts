@@ -805,7 +805,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		this._activeBackend = backend;
 
 		if (!this._isEntitledForBackend(backend)) {
-			this._notificationService.warn(localize('chatStt.maiEnterpriseUnavailable', "Cloud speech-to-text is not available for GitHub Copilot Enterprise accounts."));
+			this._notificationService.warn(localize('chatStt.maiEnterpriseUnavailable', "Cloud speech-to-text is not available for Arkai Enterprise accounts."));
 			return;
 		}
 

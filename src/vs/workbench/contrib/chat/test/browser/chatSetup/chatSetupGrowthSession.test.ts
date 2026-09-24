@@ -61,7 +61,7 @@ suite('GrowthSessionController', () => {
 		const items = controller.items;
 		assert.strictEqual(items.length, 1);
 		assert.strictEqual(items[0].status, ChatSessionStatus.NeedsInput);
-		assert.strictEqual(items[0].label, 'Try Copilot');
+		assert.strictEqual(items[0].label, 'Try Arkai');
 		assert.ok(items[0].resource.scheme === AgentSessionProviders.Growth);
 	});
 

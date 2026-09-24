@@ -1539,7 +1539,7 @@ export class CopilotChatSessionsProvider extends Disposable implements ISessions
 	private static readonly AUTOMATION_AGENT_RESOLUTION_TIMEOUT_MS = 30_000;
 
 	readonly id = COPILOT_PROVIDER_ID;
-	readonly label = localize('copilotChatSessionsProvider', "Copilot Chat");
+	readonly label = localize('copilotChatSessionsProvider', "Arkai Chat");
 	readonly icon = Codicon.copilot;
 	readonly order = 0;
 	readonly supportsAutomationSessionConfiguration = true;

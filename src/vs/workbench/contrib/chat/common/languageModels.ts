@@ -738,7 +738,7 @@ export interface ILanguageModelsService {
 export function getLanguageModelProviderDisplayName(languageModelsService: ILanguageModelsService, vendor: string): string {
 	if (vendor === 'copilotcli') {
 		// @vritant24: This is temporary until we have distinct vendors for Copilot CLI and Copilot Chat.
-		return localize('chat.languageModelProvider.copilot', "Copilot");
+		return localize('chat.languageModelProvider.copilot', "Arkai");
 	}
 	const descriptor = languageModelsService.getVendors().find(candidate => candidate.vendor === vendor);
 	return descriptor?.displayName ?? vendor.charAt(0).toUpperCase() + vendor.slice(1);
@@ -833,7 +833,7 @@ const languageModelChatProviderType = {
 		},
 		managementCommand: {
 			type: 'string',
-			description: localize('vscode.extension.contributes.languageModels.managementCommand', "A command to manage the language model chat provider, e.g. 'Manage Copilot models'. This is used in the chat model picker. If not provided, a gear icon is not rendered during vendor selection."),
+			description: localize('vscode.extension.contributes.languageModels.managementCommand', "A command to manage the language model chat provider, e.g. 'Manage Arkai models'. This is used in the chat model picker. If not provided, a gear icon is not rendered during vendor selection."),
 			deprecated: true,
 			deprecationMessage: localize('vscode.extension.contributes.languageModels.managementCommand.deprecated', "The managementCommand property is deprecated and will be removed in a future release. Use the new configuration property instead.")
 		},

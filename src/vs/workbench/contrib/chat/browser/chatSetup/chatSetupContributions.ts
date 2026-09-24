@@ -224,7 +224,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 		class ChatSetupTriggerAction extends Action2 {
 
-			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with Copilot for free...");
+			static CHAT_SETUP_ACTION_LABEL = localize2('triggerChatSetup', "Use AI Features with Arkai for free...");
 
 			constructor() {
 				super({
@@ -332,7 +332,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.triggerSetupForceSignIn',
-					title: localize2('forceSignIn', "Sign in to use GitHub Copilot")
+					title: localize2('forceSignIn', "Sign in to use Arkai")
 				});
 			}
 
@@ -370,7 +370,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.triggerSetupFromAccounts',
-					title: localize2('triggerChatSetupFromAccounts', "Sign in to use GitHub Copilot..."),
+					title: localize2('triggerChatSetupFromAccounts', "Sign in to use Arkai..."),
 					menu: {
 						id: MenuId.AccountsContext,
 						group: '2_copilot',
@@ -436,8 +436,8 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super(
 					ChatConfiguration.TitleBarSignInEnabled,
-					localize('toggle.chatSignIn', 'Copilot Sign In'),
-					localize('toggle.chatSignInDescription', "Toggle visibility of the Copilot Sign In button in title bar"),
+					localize('toggle.chatSignIn', 'Arkai Sign In'),
+					localize('toggle.chatSignInDescription', "Toggle visibility of the Arkai Sign In button in title bar"),
 					3,
 					ContextKeyExpr.and(
 						IsWebContext.negate(),
@@ -454,7 +454,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.upgradePlan',
-					title: localize2('managePlan', "Upgrade to GitHub Copilot Pro"),
+					title: localize2('managePlan', "Upgrade to Arkai Pro"),
 					category: localize2('chat.category', 'Chat'),
 					f1: true,
 					precondition: ContextKeyExpr.and(
@@ -519,7 +519,7 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 			constructor() {
 				super({
 					id: 'workbench.action.chat.manageAdditionalSpend',
-					title: localize2('manageAdditionalSpend', "Manage GitHub Copilot Budget"),
+					title: localize2('manageAdditionalSpend', "Manage Arkai Budget"),
 					category: localize2('chat.category', 'Chat'),
 					f1: true,
 					precondition: ContextKeyExpr.and(

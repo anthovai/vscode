@@ -1,7 +1,7 @@
 {
   "name": "copilot-chat",
-  "displayName": "GitHub Copilot",
-  "description": "AI chat features powered by Copilot",
+  "displayName": "Arkai",
+  "description": "AI chat features powered by Arkai",
   "version": "0.67.0",
   "build": "1",
   "completionsCoreVersion": "1.378.1799",
@@ -1236,7 +1236,7 @@
         "displayName": "Session Store SQL",
         "toolReferenceName": "sessionStoreSql",
         "when": "github.copilot.sessionSearch.enabled",
-        "userDescription": "Query your Copilot session history using SQL",
+        "userDescription": "Query your Arkai session history using SQL",
         "modelDescription": "Query the local session store containing history from past coding sessions. Uses SQLite syntax (NOT DuckDB or Postgres). SQL queries are read-only — only SELECT and WITH are allowed. Use `datetime('now', '-1 day')` for date math (NOT `now() - INTERVAL '1 day'`), FTS5 `MATCH` for text search.\n\nTables: `sessions`, `turns`, `session_files`, `session_refs`, `checkpoints`, `search_index`. For column details and query patterns, use the **chronicle** skill.\n\nActions: 'query' (execute SQL — supports JOINs, FTS5 MATCH, aggregations), 'reindex' (rebuild index from debug logs).",
         "tags": [],
         "canBeReferencedInPrompt": false,
@@ -1360,7 +1360,7 @@
       {
         "id": "github.copilot.default",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "Arkai",
         "description": "%copilot.description%",
         "isDefault": true,
         "locations": [
@@ -1477,7 +1477,7 @@
       {
         "id": "github.copilot.editingSession",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "Arkai",
         "description": "%copilot.edits.description%",
         "isDefault": true,
         "locations": [
@@ -1490,7 +1490,7 @@
       {
         "id": "github.copilot.editingSessionEditor",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "Arkai",
         "description": "%copilot.edits.description%",
         "isDefault": true,
         "locations": [
@@ -1501,7 +1501,7 @@
       {
         "id": "github.copilot.editsAgent",
         "name": "agent",
-        "fullName": "GitHub Copilot",
+        "fullName": "Arkai",
         "description": "%copilot.agent.description%",
         "locations": [
           "panel"
@@ -1607,7 +1607,7 @@
       {
         "id": "github.copilot.notebook",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "Arkai",
         "description": "%copilot.description%",
         "isDefault": true,
         "locations": [
@@ -1628,7 +1628,7 @@
       {
         "id": "github.copilot.notebookEditorAgent",
         "name": "GitHubCopilot",
-        "fullName": "GitHub Copilot",
+        "fullName": "Arkai",
         "description": "%copilot.description%",
         "isDefault": true,
         "locations": [
@@ -1733,11 +1733,11 @@
     "languageModelChatProviders": [
       {
         "vendor": "copilot",
-        "displayName": "Copilot"
+        "displayName": "Arkai"
       },
       {
         "vendor": "copilotcli",
-        "displayName": "Copilot CLI",
+        "displayName": "Arkai CLI",
         "when": "false"
       },
       {
@@ -2180,7 +2180,7 @@
                   },
                   "modelOptions": {
                     "type": "object",
-                    "markdownDescription": "Sampling parameters to send with requests to this model. These override Copilot's defaults but are overridden by explicit per-request values. Set a property to `null` to omit it and use the model server's default.",
+                    "markdownDescription": "Sampling parameters to send with requests to this model. These override Arkai's defaults but are overridden by explicit per-request values. Set a property to `null` to omit it and use the model server's default.",
                     "properties": {
                       "temperature": {
                         "type": [
@@ -2361,7 +2361,7 @@
     ],
     "interactiveSession": [
       {
-        "label": "GitHub Copilot",
+        "label": "Arkai",
         "id": "copilot",
         "icon": "",
         "when": "!github.copilot.interactiveSession.disabled"
@@ -2445,65 +2445,65 @@
         "command": "github.copilot.cli.sessions.delete",
         "title": "%github.copilot.command.deleteAgentSession%",
         "icon": "$(close)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "agents.github.copilot.cli.deleteSessions",
         "title": "%github.copilot.command.deleteAgentSession%",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.resumeInTerminal",
         "title": "%github.copilot.command.cli.sessions.resumeInTerminal%",
         "icon": "$(terminal)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.rename",
         "title": "%github.copilot.command.cli.sessions.rename%",
         "icon": "$(edit)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.setTitle",
         "title": "%github.copilot.command.cli.sessions.setTitle%",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.openRepository",
         "title": "%github.copilot.command.cli.sessions.openRepository%",
         "icon": "$(folder-opened)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.openWorktreeInNewWindow",
         "title": "%github.copilot.command.cli.sessions.openWorktreeInNewWindow%",
         "icon": "$(folder-opened)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.openWorktreeInTerminal",
         "title": "%github.copilot.command.cli.sessions.openWorktreeInTerminal%",
         "icon": "$(terminal)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.copyWorktreeBranchName",
         "title": "%github.copilot.command.cli.sessions.copyWorktreeBranchName%",
         "icon": "$(copy)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.commitToWorktree",
         "title": "%github.copilot.command.cli.sessions.commitToWorktree%",
         "icon": "$(git-commit)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.sessions.commitToRepository",
         "title": "%github.copilot.command.cli.sessions.commitToRepository%",
         "icon": "$(git-commit)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.cli.newSession",
@@ -2521,7 +2521,7 @@
         "command": "github.copilot.cli.openInCopilotCLI",
         "title": "%github.copilot.command.cli.openInCopilotCLI%",
         "icon": "$(terminal)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.chat.compact",
@@ -2843,7 +2843,7 @@
       },
       {
         "command": "github.copilot.chat.startCopilotDebugCommand",
-        "title": "Start Copilot Debug"
+        "title": "Start Arkai Debug"
       },
       {
         "command": "github.copilot.chat.clearTemporalContext",
@@ -2951,22 +2951,22 @@
       {
         "command": "github.copilot.nes.captureExpected.start",
         "title": "Record Expected Edit (NES)",
-        "category": "Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.nes.captureExpected.confirm",
         "title": "Confirm and Save Expected Edit Capture",
-        "category": "Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.nes.captureExpected.abort",
         "title": "Cancel Expected Edit Capture",
-        "category": "Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.nes.captureExpected.submit",
         "title": "Submit NES Captures",
-        "category": "Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.debug.collectWorkspaceIndexDiagnostics",
@@ -3023,132 +3023,132 @@
         "command": "github.copilot.chat.openSuggestionsPanel",
         "title": "Open Completions Panel",
         "enablement": "github.copilot.extensionUnification.activated && !isWeb",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.toggleStatusMenu",
         "title": "Open Status Menu",
         "enablement": "github.copilot.extensionUnification.activated",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.completions.disable",
         "title": "Disable Inline Suggestions",
         "enablement": "github.copilot.extensionUnification.activated && github.copilot.activated && config.editor.inlineSuggest.enabled && github.copilot.completions.enabled",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.completions.enable",
         "title": "Enable Inline Suggestions",
         "enablement": "github.copilot.extensionUnification.activated && github.copilot.activated && !(config.editor.inlineSuggest.enabled && github.copilot.completions.enabled)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.completions.toggle",
         "title": "Toggle (Enable/Disable) Inline Suggestions",
         "enablement": "github.copilot.extensionUnification.activated && github.copilot.activated",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.openModelPicker",
         "title": "Change Completions Model",
-        "category": "GitHub Copilot",
+        "category": "Arkai",
         "enablement": "github.copilot.extensionUnification.activated && !isWeb && github.copilot.completions.hasMultipleModels"
       },
       {
         "command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges",
         "title": "%github.copilot.command.applyCopilotCLIAgentSessionChanges%",
         "enablement": "!chatSessionRequestInProgress",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply",
         "title": "%github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply%",
         "enablement": "!chatSessionRequestInProgress",
         "icon": "$(git-stash-pop)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.mergeCopilotCLIAgentSessionChanges.merge",
         "title": "%github.copilot.chat.mergeCopilotCLIAgentSessionChanges.merge%",
         "enablement": "!chatSessionRequestInProgress",
         "icon": "$(git-merge)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.mergeCopilotCLIAgentSessionChanges.mergeAndSync",
         "title": "%github.copilot.chat.mergeCopilotCLIAgentSessionChanges.mergeAndSync%",
         "enablement": "!chatSessionRequestInProgress",
         "icon": "$(sync)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.sessions.commit",
         "title": "%github.copilot.command.sessions.commit%",
         "enablement": "!chatSessionRequestInProgress && !sessions.hasGitOperationInProgress",
         "icon": "$(git-commit)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.sessions.commitAndSync",
         "title": "%github.copilot.command.sessions.commitAndSync%",
         "enablement": "!chatSessionRequestInProgress && !sessions.hasGitOperationInProgress",
         "icon": "$(sync)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.sessions.sync",
         "title": "%github.copilot.command.sessions.sync%",
         "enablement": "!chatSessionRequestInProgress && !sessions.hasGitOperationInProgress",
         "icon": "$(sync)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.createPullRequestCopilotCLIAgentSession.createPR",
         "title": "%github.copilot.chat.createPullRequestCopilotCLIAgentSession.createPR%",
         "enablement": "!chatSessionRequestInProgress && !sessions.hasGitOperationInProgress",
         "icon": "$(git-pull-request-create)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.createDraftPullRequestCopilotCLIAgentSession.createDraftPR",
         "title": "%github.copilot.chat.createDraftPullRequestCopilotCLIAgentSession.createDraftPR%",
         "enablement": "!chatSessionRequestInProgress && !sessions.hasGitOperationInProgress",
         "icon": "$(git-pull-request-draft)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.sessions.discardChanges",
         "title": "%github.copilot.command.sessions.discardChanges%",
         "enablement": "!chatSessionRequestInProgress",
         "icon": "$(discard)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.copilotCLI.addFileReference",
         "title": "%github.copilot.command.chat.copilotCLI.addFileReference%",
         "enablement": "github.copilot.chat.copilotCLI.hasSession",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.chat.copilotCLI.addSelection",
         "title": "%github.copilot.command.chat.copilotCLI.addSelection%",
         "enablement": "github.copilot.chat.copilotCLI.hasSession",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.chat.copilotCLI.acceptDiff",
         "title": "%github.copilot.command.chat.copilotCLI.acceptDiff%",
         "enablement": "github.copilot.chat.copilotCLI.hasActiveDiff",
         "icon": "$(check)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.chat.copilotCLI.rejectDiff",
         "title": "%github.copilot.command.chat.copilotCLI.rejectDiff%",
         "enablement": "github.copilot.chat.copilotCLI.hasActiveDiff",
         "icon": "$(close)",
-        "category": "Copilot CLI"
+        "category": "Arkai CLI"
       },
       {
         "command": "github.copilot.chat.checkoutPullRequestReroute",
@@ -3172,30 +3172,30 @@
         "command": "github.copilot.chat.cloudSessions.openRepository",
         "title": "%github.copilot.command.cloudSessions.openRepository.title%",
         "icon": "$(repo)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.chat.cloudSessions.clearCaches",
         "title": "%github.copilot.command.cloudSessions.clearCaches.title%",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.sessions.refreshChanges",
         "title": "%github.copilot.command.sessions.refreshChanges%",
         "icon": "$(refresh)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       },
       {
         "command": "github.copilot.sessions.initializeRepository",
         "title": "%github.copilot.command.sessions.initializeRepository%",
         "enablement": "!chatSessionRequestInProgress",
         "icon": "$(repo)",
-        "category": "GitHub Copilot"
+        "category": "Arkai"
       }
     ],
     "configuration": [
       {
-        "title": "GitHub Copilot Chat",
+        "title": "Arkai Chat",
         "id": "stable",
         "properties": {
           "github.copilot.chat.backgroundAgent.enabled": {
@@ -3415,7 +3415,7 @@
             "additionalProperties": {
               "type": "boolean"
             },
-            "markdownDescription": "Enable or disable auto triggering of Copilot completions for specified [languages](https://code.visualstudio.com/docs/languages/identifiers). You can still trigger suggestions manually using `Alt + \\`",
+            "markdownDescription": "Enable or disable auto triggering of Arkai completions for specified [languages](https://code.visualstudio.com/docs/languages/identifiers). You can still trigger suggestions manually using `Alt + \\`",
             "agentsWindow": {
               "default": {
                 "markdown": true,
@@ -3426,7 +3426,7 @@
           "github.copilot.selectedCompletionModel": {
             "type": "string",
             "default": "",
-            "markdownDescription": "The currently selected completion model ID. To select from a list of available models, use the __\"Change Completions Model\"__ command or open the model picker (from the Copilot menu in the VS Code title bar, select __\"Configure Code Completions\"__ then __\"Change Completions Model\"__. The value must be a valid model ID. An empty value indicates that the default model will be used."
+            "markdownDescription": "The currently selected completion model ID. To select from a list of available models, use the __\"Change Completions Model\"__ command or open the model picker (from the Arkai menu in the VS Code title bar, select __\"Configure Code Completions\"__ then __\"Change Completions Model\"__. The value must be a valid model ID. An empty value indicates that the default model will be used."
           },
           "github.copilot.chat.reviewAgent.enabled": {
             "type": "boolean",
@@ -5308,7 +5308,7 @@
             "policyReference": {
               "name": "CopilotOtelEnabled"
             },
-            "markdownDescription": "Enable OpenTelemetry trace/metric/log emission for Copilot Chat operations. Precedence: enterprise policy > env var `COPILOT_OTEL_ENABLED` > user setting. Requires window reload.",
+            "markdownDescription": "Enable OpenTelemetry trace/metric/log emission for Arkai Chat operations. Precedence: enterprise policy > env var `COPILOT_OTEL_ENABLED` > user setting. Requires window reload.",
             "tags": [
               "advanced"
             ]
@@ -5326,7 +5326,7 @@
             "policyReference": {
               "name": "CopilotOtelProtocol"
             },
-            "markdownDescription": "OTel exporter type for Copilot Chat telemetry. Configurable in user settings or managed by enterprise policy (policy takes precedence). Requires window reload.",
+            "markdownDescription": "OTel exporter type for Arkai Chat telemetry. Configurable in user settings or managed by enterprise policy (policy takes precedence). Requires window reload.",
             "tags": [
               "advanced"
             ]
@@ -5344,7 +5344,7 @@
             "policyReference": {
               "name": "CopilotOtelOtlpProtocol"
             },
-            "markdownDescription": "OTLP wire protocol for Copilot Chat OTel data, mirroring `OTEL_EXPORTER_OTLP_PROTOCOL`. `http/protobuf` selects the protobuf-over-HTTP exporter; the default (empty) uses `http/json`. Precedence: enterprise policy > env var > user setting. Requires window reload.",
+            "markdownDescription": "OTLP wire protocol for Arkai Chat OTel data, mirroring `OTEL_EXPORTER_OTLP_PROTOCOL`. `http/protobuf` selects the protobuf-over-HTTP exporter; the default (empty) uses `http/json`. Precedence: enterprise policy > env var > user setting. Requires window reload.",
             "tags": [
               "advanced"
             ]
@@ -5356,7 +5356,7 @@
             "policyReference": {
               "name": "CopilotOtelEndpoint"
             },
-            "markdownDescription": "OTLP collector endpoint URL for Copilot Chat OTel data. Precedence: enterprise policy > env var `OTEL_EXPORTER_OTLP_ENDPOINT` > user setting. Requires window reload.",
+            "markdownDescription": "OTLP collector endpoint URL for Arkai Chat OTel data. Precedence: enterprise policy > env var `OTEL_EXPORTER_OTLP_ENDPOINT` > user setting. Requires window reload.",
             "tags": [
               "advanced"
             ]
@@ -5380,7 +5380,7 @@
             "policyReference": {
               "name": "CopilotOtelServiceName"
             },
-            "markdownDescription": "OTel `service.name` resource attribute for Copilot Chat OTel data. Configurable in user settings only. Env var `OTEL_SERVICE_NAME` takes precedence over the setting; enterprise policy takes precedence over both. Requires window reload.",
+            "markdownDescription": "OTel `service.name` resource attribute for Arkai Chat OTel data. Configurable in user settings only. Env var `OTEL_SERVICE_NAME` takes precedence over the setting; enterprise policy takes precedence over both. Requires window reload.",
             "tags": [
               "advanced"
             ]
@@ -5395,7 +5395,7 @@
             "policyReference": {
               "name": "CopilotOtelResourceAttributes"
             },
-            "markdownDescription": "Additional OTel resource attributes for Copilot Chat OTel data, as a `{ \"key\": \"value\" }` map. Configurable in user settings only. Merged per-key with `OTEL_RESOURCE_ATTRIBUTES` env (env wins over the setting); enterprise policy wins over both. Requires window reload.",
+            "markdownDescription": "Additional OTel resource attributes for Arkai Chat OTel data, as a `{ \"key\": \"value\" }` map. Configurable in user settings only. Merged per-key with `OTEL_RESOURCE_ATTRIBUTES` env (env wins over the setting); enterprise policy wins over both. Requires window reload.",
             "tags": [
               "advanced"
             ]
@@ -5410,7 +5410,7 @@
             "policyReference": {
               "name": "CopilotOtelHeaders"
             },
-            "markdownDescription": "Extra OTLP exporter headers (e.g. auth tokens) for Copilot Chat OTel data, as a `{ \"key\": \"value\" }` map. Applied directly to the OTLP exporter, not via environment variables. Configurable in user settings only. Merged per-key with `OTEL_EXPORTER_OTLP_HEADERS` env (env wins over the setting); enterprise policy wins over both. **Contains potentially sensitive credentials.** Requires window reload.",
+            "markdownDescription": "Extra OTLP exporter headers (e.g. auth tokens) for Arkai Chat OTel data, as a `{ \"key\": \"value\" }` map. Applied directly to the OTLP exporter, not via environment variables. Configurable in user settings only. Merged per-key with `OTEL_EXPORTER_OTLP_HEADERS` env (env wins over the setting); enterprise policy wins over both. **Contains potentially sensitive credentials.** Requires window reload.",
             "tags": [
               "advanced"
             ]
@@ -6710,11 +6710,11 @@
       {
         "type": "copilotcli",
         "name": "cli",
-        "displayName": "Copilot CLI",
+        "displayName": "Arkai CLI",
         "icon": "$(copilot)",
-        "welcomeTitle": "Copilot CLI",
-        "welcomeMessage": "Run tasks in the background with the Copilot CLI",
-        "inputPlaceholder": "Run tasks in the background with the Copilot CLI, type `#` for adding context",
+        "welcomeTitle": "Arkai CLI",
+        "welcomeMessage": "Run tasks in the background with the Arkai CLI",
+        "inputPlaceholder": "Run tasks in the background with the Arkai CLI, type `#` for adding context",
         "order": 1,
         "canDelegate": true,
         "description": "%github.copilot.session.providerDescription.background%",
@@ -6928,7 +6928,7 @@
         {
           "icon": "copilot",
           "id": "copilot-cli",
-          "title": "GitHub Copilot CLI",
+          "title": "Arkai CLI",
           "titleTemplate": "${sequence}"
         }
       ]

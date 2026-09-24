@@ -29,9 +29,8 @@ const commonResourcePatterns = [
 	'vs/sessions/contrib/chat/browser/media/*.svg',
 	'vs/sessions/contrib/welcome/browser/media/themePreviews/*.svg',
 
-	// Kingu: the fonts that draw the Kingu marks over the codicon Copilot glyphs
-	'vs/base/browser/ui/codicons/codicon/kingu-ide-marks.ttf',
-	'vs/sessions/browser/media/kingu-ade-marks.ttf'
+	// Kingu: the font that draws the Arkai and Kingu marks over the codicon Copilot and VS Code glyphs
+	'vs/base/browser/ui/codicons/codicon/kingu-marks.ttf'
 ];
 
 // Resources for desktop target

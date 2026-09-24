@@ -1278,7 +1278,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 		const failedTurnIds = new Set<string>();
 		const error: ErrorInfo = {
 			errorType: 'providerConnectionClosed',
-			message: localize('copilotAgent.connectionClosed', "Copilot stopped unexpectedly. Retry your request."),
+			message: localize('copilotAgent.connectionClosed', "Arkai stopped unexpectedly. Retry your request."),
 		};
 		for (const chat of this._allLiveSessions()) {
 			const clientContext = chat.currentTurnClientContext;
@@ -1338,8 +1338,8 @@ export class CopilotAgent extends Disposable implements IAgent {
 	getDescriptor(): IAgentDescriptor {
 		return {
 			provider: 'copilotcli',
-			displayName: 'Copilot',
-			description: localize('copilotAgent.description', "Copilot SDK agent running in the local agent host process"),
+			displayName: 'Arkai',
+			description: localize('copilotAgent.description', "Arkai SDK agent running in the local agent host process"),
 			capabilities: {
 				multipleChats: { fork: true, sideChat: true },
 				...(this._isMultiRootEnabled() ? { multipleWorkingDirectories: { immutablePrimary: true } } : {}),

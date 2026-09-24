@@ -2626,7 +2626,7 @@ suite('AgentSessions', () => {
 
 		test('should return simplified AgentHostCopilot name', () => {
 			const name = getAgentSessionProviderName(AgentSessionProviders.AgentHostCopilot);
-			assert.strictEqual(name, 'Copilot');
+			assert.strictEqual(name, 'Arkai');
 		});
 
 		test('should return correct name for Growth provider', () => {

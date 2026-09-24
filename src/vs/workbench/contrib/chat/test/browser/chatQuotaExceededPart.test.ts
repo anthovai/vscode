@@ -142,7 +142,7 @@ suite('ChatQuotaExceededPart', () => {
 
 			const button = getPrimaryButton(widget);
 			assert.ok(button);
-			assert.strictEqual(button.textContent, 'Upgrade to GitHub Copilot Pro');
+			assert.strictEqual(button.textContent, 'Upgrade to Arkai Pro');
 		});
 
 		test('shows "Manage Budget" for Pro user with additional_spend_limit_reached', () => {

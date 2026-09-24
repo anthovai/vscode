@@ -20,16 +20,6 @@
 	border-radius: var(--vscode-cornerRadius-small);
 }
 
-/* ---- Kingu ADE mark ---- */
-
-/* The Copilot glyphs drawn as the Kingu ADE mark in this window, over the IDE mark that codicon.css puts there. Written by build/kingu-brand/generate.py. */
-@font-face {
-	font-family: "codicon";
-	font-display: block;
-	src: url("./kingu-ade-marks.ttf") format("truetype");
-	unicode-range: U+EC1E, U+EC38, U+EC3A, U+EC3B, U+EC3D, U+EC3E, U+EC42, U+EC4C, U+EC4D, U+EC4E, U+EC52, U+EC8A, U+ECF2, U+ECF3;
-}
-
 /* ---- Scrollbars ---- */
 
 /* Thinner, rounded scrollbar sliders scoped to the agents app.

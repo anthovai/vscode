@@ -3,15 +3,17 @@
 #  Licensed under the MIT License.
 # ---------------------------------------------------------------------------------------------
 """
-Writes every Kingu logo the product shows, from one source: `brand-sheet.webp`,
-the IDE mark on the left and the ADE (Agents window) mark on the right.
+Writes every Kingu logo the product shows, from two sources: `brand-sheet.webp`,
+the IDE mark on the left and the ADE (Agents window) mark on the right, and
+`arkai-mark.webp`, the mark of Arkai, the chat agent (where Copilot was).
 
     python build/kingu-brand/generate.py
 
 Needs `opencv-python`, `numpy`, `Pillow` and `fonttools`. It traces both marks
 into outlines, then writes the SVGs, PNGs, ICO/ICNS/XPM app icons, installer
-bitmaps, the badge on the file-type icons, and two small fonts that put the
-marks at the codicon font's Copilot and VS Code codepoints (the codicon font
+bitmaps, the badge on the file-type icons, and a small font that puts the
+Arkai mark at the codicon font's Copilot codepoints and the IDE mark at its
+VS Code ones (the codicon font
 itself is copied from `@vscode/codicons` at build time, so it is overlaid with
 `unicode-range` faces instead of being edited). The TypeScript paths it prints
 last are pasted into `chatWorkingLogo.ts` and the aquarium's `logoPath.ts`.
@@ -32,11 +34,13 @@ from fontTools.ttLib import TTFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
-SHEET = os.path.join(HERE, 'brand-sheet.webp')
 
-# Where each mark sits on the sheet: its columns, and the rows above the labels.
-MARK_COLUMNS = {'ide': (184, 647), 'ade': (889, 1351)}
-MARK_ROWS = (179, 784)
+# Where each mark is: its image, its columns and rows there, and whether it is drawn dark on light.
+MARK_SOURCES = {
+	'ide': ('brand-sheet.webp', (184, 647), (179, 784), False),
+	'ade': ('brand-sheet.webp', (889, 1351), (179, 784), False),
+	'arkai': ('arkai-mark.webp', (70, 1181), (65, 1166), True),
+}
 TRACE_SCALE = 4
 
 
@@ -48,11 +52,13 @@ def path(*parts):
 
 def trace(name):
 	"""The mark's outlines in sheet pixels (origin at its padded corner), and the padded size."""
-	sheet = cv2.imread(SHEET, cv2.IMREAD_GRAYSCALE)
-	x0, x1 = MARK_COLUMNS[name]
-	top, bottom = MARK_ROWS
+	source, (x0, x1), (top, bottom), dark = MARK_SOURCES[name]
+	sheet = cv2.imread(os.path.join(HERE, source), cv2.IMREAD_GRAYSCALE)
+	if dark:
+		sheet = 255 - sheet
 	pad = 8
-	crop = sheet[top - pad:bottom + pad + 1, x0 - pad:x1 + pad + 1]
+	sheet = cv2.copyMakeBorder(sheet, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+	crop = sheet[top:bottom + 2 * pad + 1, x0:x1 + 2 * pad + 1]
 	big = cv2.resize(crop, None, fx=TRACE_SCALE, fy=TRACE_SCALE, interpolation=cv2.INTER_CUBIC)
 	big = cv2.GaussianBlur(big, (0, 0), TRACE_SCALE * 0.6)
 	_, binary = cv2.threshold(big, 128, 255, cv2.THRESH_BINARY)
@@ -317,14 +323,15 @@ def glyph_from_raster(image):
 	return pen.glyph()
 
 
-def marks_font(mark, codicons, names):
+def marks_font(family, codicons, glyph_marks):
+	"""A font with each named codicon glyph drawn as its mark: `glyph_marks` maps a mark to the glyph names it takes."""
 	n = codicons.n
-	k, dx, dy = fit(mark.size, n, 0.96)
-	plain = raster(mark.outlines, n, k, dx, dy, supersample=1)
-	_, plain = cv2.threshold(plain, 127, 255, cv2.THRESH_BINARY)
 	gap = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (32 * FONT_RASTER + 1, 32 * FONT_RASTER + 1))
 	order, glyphs, char_map = ['.notdef'], {'.notdef': TTGlyphPen(None).glyph()}, {}
-	for name in names:
+	for mark, name in [(mark, name) for mark, names in glyph_marks for name in names]:
+		k, dx, dy = fit(mark.size, n, 0.96)
+		plain = raster(mark.outlines, n, k, dx, dy, supersample=1)
+		_, plain = cv2.threshold(plain, 127, 255, cv2.THRESH_BINARY)
 		code = codicons.by_name[name]
 		badge = codicons.badge(code)
 		image = plain if badge is None else cv2.bitwise_or(cv2.bitwise_and(plain, cv2.bitwise_not(cv2.dilate(badge, gap))), badge)
@@ -338,7 +345,7 @@ def marks_font(mark, codicons, names):
 	builder.setupGlyf(glyphs)
 	builder.setupHorizontalMetrics({g: (UPM, 0) for g in order})
 	builder.setupHorizontalHeader(ascent=UPM, descent=0)
-	builder.setupNameTable({'familyName': f'kingu-{mark.name}-marks', 'styleName': 'Regular'})
+	builder.setupNameTable({'familyName': family, 'styleName': 'Regular'})
 	builder.setupOS2(sTypoAscender=UPM, sTypoDescender=0, usWinAscent=UPM, usWinDescent=0)
 	builder.setupPost()
 	buffer = io.BytesIO()
@@ -405,13 +412,13 @@ def rebadge_icns(rel, mark):
 
 
 def main():
-	ide, ade = Mark('ide'), Mark('ade')
+	ide, ade, arkai = Mark('ide'), Mark('ade'), Mark('arkai')
 
 	# The source marks, for anything that needs them later.
-	for mark in (ide, ade):
-		write(f'resources/kingu/kingu-{mark.name}-icon.svg', mark.icon_svg())
-		write(f'resources/kingu/kingu-{mark.name}-mark.svg', mark.mark_svg())
-		write(f'resources/kingu/kingu-{mark.name}-icon-1024.png', png(mark.icon_image(1024)))
+	for mark, prefix in ((ide, 'kingu-ide'), (ade, 'kingu-ade'), (arkai, 'arkai')):
+		write(f'resources/kingu/{prefix}-icon.svg', mark.icon_svg())
+		write(f'resources/kingu/{prefix}-mark.svg', mark.mark_svg())
+		write(f'resources/kingu/{prefix}-icon-1024.png', png(mark.icon_image(1024)))
 
 	# App icons: the IDE everywhere but the Agents window's own icon.
 	write('resources/win32/code.ico', ico([ide.icon_image(s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)]))
@@ -427,7 +434,8 @@ def main():
 	for extension in ('github-authentication', 'microsoft-authentication'):
 		write(f'extensions/{extension}/media/favicon.ico', ico([ide.icon_image(s) for s in (16, 24, 32, 48, 64)]))
 	write('extensions/github-authentication/media/code-icon.svg', ide.icon_svg())
-	write('extensions/copilot/assets/copilot.png', png(ide.icon_image(256)))
+	# The chat agent's extension shows as Arkai.
+	write('extensions/copilot/assets/copilot.png', png(arkai.icon_image(256)))
 
 	# The installer's wizard images: the icon on white, the big one a little above centre.
 	for scale in (100, 125, 150, 175, 200, 225, 250):
@@ -462,14 +470,11 @@ def main():
 	for theme, fill in (('light', '#D9D9D9'), ('dark', '#3C3C3C')):
 		write(f'src/vs/sessions/contrib/chat/browser/media/letterpress-sessions-{theme}.svg', ade.mark_svg('', fill))
 
-	# The codicon overlays: the IDE font everywhere, the ADE font on top of it in the Agents window.
+	# The codicon overlay, in both windows: Arkai where Copilot was, the IDE where VS Code was.
 	codicons = Codicons(path('node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'))
-	ide_font, ide_ranges = marks_font(ide, codicons, COPILOT_GLYPHS + VSCODE_GLYPHS)
-	ade_font, ade_ranges = marks_font(ade, codicons, COPILOT_GLYPHS)
-	write('src/vs/base/browser/ui/codicons/codicon/kingu-ide-marks.ttf', ide_font)
-	write('src/vs/sessions/browser/media/kingu-ade-marks.ttf', ade_font)
-	print('\nIDE unicode-range:', ide_ranges)
-	print('ADE unicode-range:', ade_ranges)
+	font, ranges = marks_font('kingu-marks', codicons, [(arkai, COPILOT_GLYPHS), (ide, VSCODE_GLYPHS)])
+	write('src/vs/base/browser/ui/codicons/codicon/kingu-marks.ttf', font)
+	print('\nunicode-range:', ranges)
 
 	# Paths for the TypeScript that draws the mark itself.
 	k, dx, dy = fit(ide.size, 84, 1.0)

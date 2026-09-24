@@ -876,7 +876,7 @@ export const platformRootSchema = createSchema({
 	[AgentHostSystemProxyEnabledConfigKey]: schemaProperty<boolean>({
 		type: 'boolean',
 		title: localize('agentHost.config.systemProxyEnabled.title', "System Proxy Discovery"),
-		description: localize('agentHost.config.systemProxyEnabled.description', "Whether Copilot sessions automatically discover and use the operating system's proxy configuration."),
+		description: localize('agentHost.config.systemProxyEnabled.description', "Whether Arkai sessions automatically discover and use the operating system's proxy configuration."),
 		default: true,
 	}),
 	[AgentHostGitHubMcpServerEnabledConfigKey]: schemaProperty<boolean>({
@@ -923,8 +923,8 @@ export const platformRootSchema = createSchema({
 	}),
 	[AgentHostMigrateLegacyCopilotCliEnabledConfigKey]: schemaProperty<boolean>({
 		type: 'boolean',
-		title: localize('agentHost.config.migrateLegacyCopilotCliEnabled.title', "Migrate Legacy Copilot CLI Sessions"),
-		description: localize('agentHost.config.migrateLegacyCopilotCliEnabled.description', "Whether un-adopted extension-host Copilot CLI sessions are surfaced as adoptable agent-host sessions and migrated in place when opened."),
+		title: localize('agentHost.config.migrateLegacyCopilotCliEnabled.title', "Migrate Legacy Arkai CLI Sessions"),
+		description: localize('agentHost.config.migrateLegacyCopilotCliEnabled.description', "Whether un-adopted extension-host Arkai CLI sessions are surfaced as adoptable agent-host sessions and migrated in place when opened."),
 		default: false,
 	}),
 	[AgentHostSessionCatalogEnabledConfigKey]: schemaProperty<boolean>({
@@ -961,8 +961,8 @@ export const platformRootSchema = createSchema({
 	}),
 	[AgentHostCopilotMultiRootEnabledConfigKey]: schemaProperty<boolean>({
 		type: 'boolean',
-		title: localize('agentHost.config.copilotMultiRootEnabled.title', "Copilot Multiple Working Directories"),
-		description: localize('agentHost.config.copilotMultiRootEnabled.description', "Whether the Copilot provider advertises support for multiple working directories, letting a session span every folder of a multi-root workspace."),
+		title: localize('agentHost.config.copilotMultiRootEnabled.title', "Arkai Multiple Working Directories"),
+		description: localize('agentHost.config.copilotMultiRootEnabled.description', "Whether the Arkai provider advertises support for multiple working directories, letting a session span every folder of a multi-root workspace."),
 		default: false,
 	}),
 	[AgentHostClaudeMultiRootEnabledConfigKey]: schemaProperty<boolean>({

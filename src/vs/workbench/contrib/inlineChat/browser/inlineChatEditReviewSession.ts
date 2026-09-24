@@ -323,7 +323,7 @@ export class InlineChatEditReviewSession extends Disposable implements IChatEdit
 	}
 
 	private _getReadonlyMessage(): IMarkdownString {
-		return { value: localize('inlineChatReadonly', "Editor is read-only while Copilot is editing this file.") };
+		return { value: localize('inlineChatReadonly', "Editor is read-only while Arkai is editing this file.") };
 	}
 
 	private async _resetReadonlyLocks(): Promise<void> {

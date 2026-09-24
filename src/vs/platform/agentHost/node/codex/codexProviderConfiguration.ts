@@ -42,7 +42,7 @@ export async function ensurePortableCodexProxyProvider(client: Pick<ICodexAppSer
 		const response = await client.request<'config/read', ConfigReadResponse>('config/read', { includeLayers: true });
 		const userLayer = response.layers?.find(layer => layer.name.type === 'user' && layer.name.profile === null);
 		if (!userLayer || !userLayer.version || userLayer.disabledReason || !isConfigurationObject(userLayer.config)) {
-			throw new Error(localize('codex.configuration.portableProvider.unavailable', "Cannot switch this ChatGPT conversation to Copilot because the Codex user configuration could not be read safely. The original conversation has not been changed."));
+			throw new Error(localize('codex.configuration.portableProvider.unavailable', "Cannot switch this ChatGPT conversation to Arkai because the Codex user configuration could not be read safely. The original conversation has not been changed."));
 		}
 		const providers = userLayer.config.model_providers;
 		const provider = isConfigurationObject(providers) ? providers['vscode-proxy'] : undefined;
@@ -55,7 +55,7 @@ export async function ensurePortableCodexProxyProvider(client: Pick<ICodexAppSer
 			return layerProvider !== undefined && !isPortableCodexProxyProvider(layerProvider, true);
 		});
 		if (hasConflictingLayer || (providers !== undefined && !isConfigurationObject(providers)) || (provider !== undefined && !isPortableCodexProxyProvider(provider))) {
-			throw new Error(localize('codex.configuration.portableProvider.conflict', "Cannot switch this ChatGPT conversation to Copilot because the Codex configuration already defines an incompatible 'model_providers.vscode-proxy'. Update that definition to use native OpenAI authentication before retrying. The existing configuration and original conversation have not been changed."));
+			throw new Error(localize('codex.configuration.portableProvider.conflict', "Cannot switch this ChatGPT conversation to Arkai because the Codex configuration already defines an incompatible 'model_providers.vscode-proxy'. Update that definition to use native OpenAI authentication before retrying. The existing configuration and original conversation have not been changed."));
 		}
 		if (provider !== undefined) {
 			return;

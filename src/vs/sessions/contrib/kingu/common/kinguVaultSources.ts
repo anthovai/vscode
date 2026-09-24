@@ -135,7 +135,7 @@ export const KINGU_VAULT_SOURCES: readonly IKinguVaultSourceDefinition[] = [
 	},
 	{
 		id: KinguVaultSource.Copilot,
-		label: localize('kingu.vault.source.copilot', "Copilot CLI"),
+		label: localize('kingu.vault.source.copilot', "Arkai CLI"),
 		roots: [['.copilot', 'session-state']],
 		extensions: ['.jsonl'],
 		maxDepth: 2,

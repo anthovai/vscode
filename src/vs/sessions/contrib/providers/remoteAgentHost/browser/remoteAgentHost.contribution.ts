@@ -629,7 +629,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		// `CLOUD_SANDBOX_AGENT_SLUG`.
 		[CloudSandboxEnabledSettingId]: {
 			type: 'boolean',
-			description: nls.localize('chat.agentHost.cloudSandbox.enabled', "Enable Copilot cloud sandbox sessions over a live Agent Host Protocol relay, for slash commands and a responsive, steerable experience instead of only polling logs. Adds a Sandbox option when starting a cloud session, and connects to the sandbox when opening one."),
+			description: nls.localize('chat.agentHost.cloudSandbox.enabled', "Enable Arkai cloud sandbox sessions over a live Agent Host Protocol relay, for slash commands and a responsive, steerable experience instead of only polling logs. Adds a Sandbox option when starting a cloud session, and connects to the sandbox when opening one."),
 			default: false,
 			scope: ConfigurationScope.APPLICATION,
 			tags: ['experimental', 'advanced'],

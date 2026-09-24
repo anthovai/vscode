@@ -623,7 +623,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		const connection = this._byokLmBridgeRegistry.getServingConnection();
 		const model = connection && pickUtilityModel(this._byokLmBridgeRegistry.getModels());
 		if (!connection || !model) {
-			throw new Error(localize('agentHost.changeset.pr.generationNoModel', "No model is available to write a pull request title and description. Sign in to Copilot, or configure a model, or enter them manually."));
+			throw new Error(localize('agentHost.changeset.pr.generationNoModel', "No model is available to write a pull request title and description. Sign in to Arkai, or configure a model, or enter them manually."));
 		}
 		const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n');
 		const user = messages.filter(message => message.role !== 'system').map(message => message.content).join('\n\n');

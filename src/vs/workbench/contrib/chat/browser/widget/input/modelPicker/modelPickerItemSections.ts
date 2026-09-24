@@ -92,12 +92,12 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
 					enabled,
 					checked: false,
 					class: undefined,
-					tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to GitHub Copilot to choose a model."),
-					label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
+					tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to Arkai to choose a model."),
+					label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Arkai..."),
 					run: () => options.actions.onRequestSetup?.(),
 				},
 				kind: ActionListItemKind.Action,
-				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
+				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Arkai..."),
 				group: { title: '', icon: ThemeIcon.fromId(Codicon.signIn.id) },
 				disabled: !enabled,
 				hideIcon: false,
@@ -130,7 +130,7 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
 		? new MarkdownString(localize('chat.modelPicker.upgradeLink', "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"), { isTrusted: true })
 		: undefined;
 	const hover = canUpgrade ? new MarkdownString('', { isTrusted: true, supportThemeIcons: true }) : undefined;
-	hover?.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
+	hover?.appendMarkdown(localize('chat.modelPicker.upgradeHover', "[Upgrade to Arkai Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models."));
 	return [{
 		item: {
 			id: 'noModels',

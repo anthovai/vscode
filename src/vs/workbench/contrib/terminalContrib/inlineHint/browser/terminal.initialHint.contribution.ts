@@ -284,13 +284,13 @@ class TerminalInitialHintWidget extends Disposable {
 				comment: [
 					'Preserve double-square brackets and their order',
 				]
-			}, "Type [[copilot]] to use Copilot CLI.");
+			}, "Type [[copilot]] to use Arkai CLI.");
 			const copilotCliHintHandler: IContentActionHandler = {
 				callback: () => handleCopilotCliClick(),
 				disposables: this._toDispose
 			};
 			hintElement.appendChild(renderFormattedText(copilotCliHint, { actionHandler: copilotCliHintHandler }));
-			ariaLabelParts.push(localize('copilotCliHintAriaLabel', "Type copilot to use Copilot CLI."));
+			ariaLabelParts.push(localize('copilotCliHintAriaLabel', "Type copilot to use Arkai CLI."));
 		}
 
 		// Suggest hint - only shown when AI features are hidden (otherwise the Copilot CLI hint takes precedence)
