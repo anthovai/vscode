@@ -16,11 +16,13 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { IKinguFloatingWorkspaceService } from './kinguFloatingWorkspacePanel.js';
 import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 
 /** Whether the floating-workspace toggle is on, and where the ADE puts it. */
@@ -41,6 +43,27 @@ registerAction2(class extends Action2 {
 	}
 	run(accessor: ServicesAccessor): void {
 		accessor.get(IKinguFloatingWorkspaceService).toggle();
+	}
+});
+
+/** The ADE's "Hide Floating Workspace": the button and the panel go away until it is turned back on. */
+export const KINGU_HIDE_FLOATING_WORKSPACE_COMMAND_ID = 'kingu.floatingWorkspace.hide';
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({ id: KINGU_HIDE_FLOATING_WORKSPACE_COMMAND_ID, title: localize2('kingu.floatingWorkspace.hideCommand', "Hide Floating Workspace"), f1: true });
+	}
+	async run(accessor: ServicesAccessor): Promise<void> {
+		const floating = accessor.get(IKinguFloatingWorkspaceService);
+		const configurationService = accessor.get(IConfigurationService);
+		const notificationService = accessor.get(INotificationService);
+		const commandService = accessor.get(ICommandService);
+		floating.close();
+		await configurationService.updateValue(FLOATING_ENABLED_SETTING_ID, false, ConfigurationTarget.USER);
+		notificationService.prompt(Severity.Info, localize('kingu.floatingWorkspace.hidden', "The floating workspace is hidden. Turn it back on in Settings > Floating Workspace."), [
+			{ label: localize('kingu.floatingWorkspace.undoHide', "Undo"), run: () => void configurationService.updateValue(FLOATING_ENABLED_SETTING_ID, true, ConfigurationTarget.USER) },
+			{ label: localize('kingu.floatingWorkspace.openSettings', "Open Settings"), run: () => void commandService.executeCommand(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, { pane: 'floating-workspace' }) },
+		]);
 	}
 });
 
@@ -92,7 +115,8 @@ function anchorFor(left: number, top: number, width: number, height: number): IT
  * the panels icon, 24px from the right and 72px above the bottom by default,
  * draggable to anywhere (a press that moves less than 4px is a click), and
  * remembered relative to the nearest corner. Right-click moves it to the
- * status bar or hides it, as the ADE's menu does.
+ * status bar or hides it, as the ADE's menu does; a close badge that shows on
+ * hover hides it too, in one click.
  *
  * Shown while the ADE would show it: the floating workspace is enabled and its
  * trigger lives on the floating button (the ADE's default).
@@ -155,6 +179,18 @@ class KinguFloatingWorkspaceButton extends Disposable {
 		const attention = $('span.kingu-orca-floating-attention');
 		attention.setAttribute('aria-hidden', 'true');
 		button.appendChild(attention);
+		// Not in the ADE, where hiding is only in the right-click menu: the same, one click away.
+		const close = $('button.kingu-orca-floating-close') as HTMLButtonElement;
+		close.type = 'button';
+		close.setAttribute('aria-label', localize('kingu.floatingWorkspace.hideAria', "Hide floating workspace"));
+		close.appendChild(lucideIcon('x', 10));
+		wrapper.appendChild(close);
+		store.add(attachFooterTooltip(close, () => [localize('kingu.floatingWorkspace.hideTooltip', "Hide floating workspace")], 400, undefined, 'left'));
+		store.add(addDisposableListener(close, EventType.POINTER_DOWN, (event: PointerEvent) => event.stopPropagation()));
+		store.add(addDisposableListener(close, EventType.CLICK, (event: MouseEvent) => {
+			event.stopPropagation();
+			void this._commandService.executeCommand(KINGU_HIDE_FLOATING_WORKSPACE_COMMAND_ID);
+		}));
 		const refresh = () => {
 			attention.classList.toggle('shown', !open() && this._floating.needsAttention);
 			button.setAttribute('aria-pressed', String(open()));
@@ -239,7 +275,7 @@ class KinguFloatingWorkspaceButton extends Disposable {
 		store.add(addDisposableListener(wrapper, EventType.CONTEXT_MENU, (event: MouseEvent) => {
 			event.preventDefault();
 			event.stopPropagation();
-			showFloatingWorkspaceMenu(this._contextMenuService, this._configurationService, event, 'floating-button');
+			showFloatingWorkspaceMenu(this._contextMenuService, this._configurationService, this._commandService, event, 'floating-button');
 		}));
 		return store;
 	}
@@ -261,14 +297,14 @@ class KinguFloatingWorkspaceButton extends Disposable {
  * The ADE's right-click menu on the floating-workspace toggle, wherever it
  * sits: move it to the other place, or hide the floating workspace.
  */
-export function showFloatingWorkspaceMenu(contextMenuService: IContextMenuService, configurationService: IConfigurationService, event: MouseEvent, location: 'floating-button' | 'status-bar'): void {
+export function showFloatingWorkspaceMenu(contextMenuService: IContextMenuService, configurationService: IConfigurationService, commandService: ICommandService, event: MouseEvent, location: 'floating-button' | 'status-bar'): void {
 	const move = location === 'floating-button'
 		? new Action('kingu.floatingWorkspace.moveToStatusBar', localize('kingu.floatingWorkspace.moveToStatusBar', "Move to Status Bar"), undefined, true,
 			() => configurationService.updateValue(FLOATING_LOCATION_SETTING_ID, 'status-bar', ConfigurationTarget.USER))
 		: new Action('kingu.floatingWorkspace.moveToFloatingButton', localize('kingu.floatingWorkspace.moveToFloatingButton', "Move to Floating Button"), undefined, true,
 			() => configurationService.updateValue(FLOATING_LOCATION_SETTING_ID, 'floating-button', ConfigurationTarget.USER));
 	const hide = new Action('kingu.floatingWorkspace.hide', localize('kingu.floatingWorkspace.hide', "Hide Floating Workspace"), undefined, true,
-		() => configurationService.updateValue(FLOATING_ENABLED_SETTING_ID, false, ConfigurationTarget.USER));
+		() => commandService.executeCommand(KINGU_HIDE_FLOATING_WORKSPACE_COMMAND_ID));
 	contextMenuService.showContextMenu({
 		getAnchor: () => ({ x: event.clientX, y: event.clientY }),
 		getActions: () => [move, new Separator(), hide],

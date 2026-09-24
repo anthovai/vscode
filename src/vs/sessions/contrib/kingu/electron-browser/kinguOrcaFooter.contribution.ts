@@ -306,7 +306,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._register(addDisposableListener(this._panelChip.element, EventType.CONTEXT_MENU, (event: MouseEvent) => {
 			event.preventDefault();
 			event.stopPropagation();
-			showFloatingWorkspaceMenu(this._contextMenuService, this._configurationService, event, 'status-bar');
+			showFloatingWorkspaceMenu(this._contextMenuService, this._configurationService, this._commandService, event, 'status-bar');
 		}));
 		this._register(this._floating.onDidChangeOpen(() => this._renderPanelToggle()));
 

@@ -1549,3 +1549,44 @@
 .kingu-orca-floating-attention.shown {
 	display: block;
 }
+
+/* The hide badge: a small round close at the top-left corner (the attention dot keeps the top-right), shown on hover or focus. */
+.kingu-orca-floating-close {
+	position: absolute;
+	top: -6px;
+	left: -6px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 1px solid color-mix(in srgb, var(--kingu-orca-foreground) 18%, transparent);
+	border-radius: 999px;
+	background-color: var(--vscode-editorWidget-background);
+	color: var(--kingu-orca-muted);
+	box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+	cursor: pointer;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 150ms;
+}
+
+.kingu-orca-floating-trigger:hover > .kingu-orca-floating-close,
+.kingu-orca-floating-trigger:focus-within > .kingu-orca-floating-close {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.kingu-orca-floating-close:hover {
+	color: var(--kingu-orca-foreground);
+	background-color: var(--kingu-orca-accent);
+}
+
+.monaco-workbench .kingu-orca-floating-close:focus {
+	outline: none;
+}
+
+.monaco-workbench .kingu-orca-floating-close:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+}
