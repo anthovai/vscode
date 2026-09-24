@@ -9,6 +9,19 @@
 	src: url("./codicon.ttf") format("truetype");
 }
 
+/*
+ * Kingu: the Copilot and VS Code glyphs drawn as the Kingu IDE mark. A later face of the
+ * same family wins for the codepoints in its range, so every icon that uses them changes
+ * without touching codicon.ttf, which is copied from @vscode/codicons at build time.
+ * Written by build/kingu-brand/generate.py.
+ */
+@font-face {
+	font-family: "codicon";
+	font-display: block;
+	src: url("./kingu-ide-marks.ttf") format("truetype");
+	unicode-range: U+EC1E, U+EC29, U+EC2A, U+EC38, U+EC3A, U+EC3B, U+EC3D, U+EC3E, U+EC42, U+EC4C, U+EC4D, U+EC4E, U+EC52, U+EC8A, U+ECC9, U+ECF2, U+ECF3;
+}
+
 .codicon[class*='codicon-'] {
 	font: normal normal normal 16px/1 codicon;
 	display: inline-block;

@@ -20,6 +20,16 @@
 	border-radius: var(--vscode-cornerRadius-small);
 }
 
+/* ---- Kingu ADE mark ---- */
+
+/* The Copilot glyphs drawn as the Kingu ADE mark in this window, over the IDE mark that codicon.css puts there. Written by build/kingu-brand/generate.py. */
+@font-face {
+	font-family: "codicon";
+	font-display: block;
+	src: url("./kingu-ade-marks.ttf") format("truetype");
+	unicode-range: U+EC1E, U+EC38, U+EC3A, U+EC3B, U+EC3D, U+EC3E, U+EC42, U+EC4C, U+EC4D, U+EC4E, U+EC52, U+EC8A, U+ECF2, U+ECF3;
+}
+
 /* ---- Scrollbars ---- */
 
 /* Thinner, rounded scrollbar sliders scoped to the agents app.
@@ -46,6 +56,36 @@
 
 .agent-sessions-workbench .monaco-scrollable-element > .scrollbar > .slider.active::before {
 	background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* Native scrollbars (the settings screen, the agents page, popovers) drawn
+ * like the slider above: a 10px track and a rounded thumb inset 1px. The thumb
+ * stays shown: Chromium does not repaint a scrollbar whose style depends on
+ * its element's :hover, so a hover-only thumb shows and hides at random. */
+.agent-sessions-workbench *::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+	background: transparent;
+}
+
+.agent-sessions-workbench *::-webkit-scrollbar-track,
+.agent-sessions-workbench *::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+.agent-sessions-workbench *::-webkit-scrollbar-thumb {
+	border: 1px solid transparent;
+	border-radius: var(--vscode-cornerRadius-circle);
+	background-clip: padding-box;
+	background-color: var(--vscode-scrollbarSlider-background);
+}
+
+.agent-sessions-workbench *::-webkit-scrollbar-thumb:hover {
+	background-color: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+.agent-sessions-workbench *::-webkit-scrollbar-thumb:active {
+	background-color: var(--vscode-scrollbarSlider-activeBackground);
 }
 
 /* ---- Sessions Action Widget Pickers ---- */

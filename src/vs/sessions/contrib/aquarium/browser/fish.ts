@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { $ } from '../../../../base/browser/dom.js';
-import { VSCODE_LOGO_PATH } from './vscodeLogoPath.js';
+import { KINGU_LOGO_PATH } from './vscodeLogoPath.js';
 
 /**
  * VS Code logo "fish" used by the Agents window aquarium. Each fish is a small
@@ -243,7 +243,7 @@ function createVSCodeLogoSymbol(): SVGSymbolElement {
 	symbol.setAttribute('overflow', 'visible');
 
 	const logoPath = $.SVG<SVGPathElement>('path');
-	logoPath.setAttribute('d', VSCODE_LOGO_PATH);
+	logoPath.setAttribute('d', KINGU_LOGO_PATH);
 	logoPath.setAttribute('fill', 'currentColor');
 	logoPath.setAttribute('fill-rule', 'evenodd');
 	symbol.appendChild(logoPath);

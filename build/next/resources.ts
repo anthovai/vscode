@@ -27,7 +27,11 @@ const commonResourcePatterns = [
 	'vs/workbench/browser/parts/editor/media/letterpress*.svg',
 	'vs/workbench/contrib/chat/browser/widget/media/chatPet/**/*.{gif,png}',
 	'vs/sessions/contrib/chat/browser/media/*.svg',
-	'vs/sessions/contrib/welcome/browser/media/themePreviews/*.svg'
+	'vs/sessions/contrib/welcome/browser/media/themePreviews/*.svg',
+
+	// Kingu: the fonts that draw the Kingu marks over the codicon Copilot glyphs
+	'vs/base/browser/ui/codicons/codicon/kingu-ide-marks.ttf',
+	'vs/sessions/browser/media/kingu-ade-marks.ttf'
 ];
 
 // Resources for desktop target
