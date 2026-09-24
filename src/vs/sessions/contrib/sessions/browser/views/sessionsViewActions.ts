@@ -27,7 +27,7 @@ import { EditorsVisibleContext, EditorAreaFocusContext, FocusedViewContext, IsSe
 import { SessionsCategories } from '../../../../common/categories.js';
 import { ARCHIVE_SESSION_COMMAND_ID, MARK_SESSION_READ_COMMAND_ID, MARK_SESSION_UNREAD_COMMAND_ID, RENAME_SESSION_COMMAND_ID, UNARCHIVE_SESSION_COMMAND_ID } from '../../../../common/sessionCommands.js';
 import { IsPhoneLayoutContext, SessionSupportsDeleteContext, SessionSupportsRenameContext, IsNewChatSessionContext, SessionIsArchivedContext, SessionIsCreatedContext, SessionIsReadContext, SessionsListPromoteNewChatActionContext } from '../../../../common/contextkeys.js';
-import { SessionItemContextMenuId, SessionSectionToolbarMenuId, SessionGroupToolbarMenuId, SessionSectionTypeContext, SessionSectionHasNonCloudRepositoryContext, SessionGroupHasVisibleSessionsContext, SessionGroupIsEmptyContext, IsSessionPinnedContext, SessionsGrouping, SessionsSorting, ISessionSection, ISessionGroupItem, NEW_SESSION_FOR_WORKSPACE_ACTION_ID } from './sessionsList.js';
+import { SessionItemContextMenuId, SessionSectionToolbarMenuId, SessionGroupToolbarMenuId, SessionSectionTypeContext, SessionSectionHasNonCloudRepositoryContext, SessionGroupHasVisibleSessionsContext, SessionGroupIsEmptyContext, SessionGroupIsComparisonContext, IsSessionPinnedContext, SessionsGrouping, SessionsSorting, ISessionSection, ISessionGroupItem, NEW_SESSION_FOR_WORKSPACE_ACTION_ID } from './sessionsList.js';
 import { ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { IsWorkspaceGroupCappedContext, SessionsViewCompactContext, SessionsViewFilterOptionsSubMenu, SessionsViewFilterSubMenu, SessionsViewGroupingContext, SessionsViewId, SessionsView, SessionsViewSortingContext } from './sessionsView.js';
@@ -64,14 +64,6 @@ registerAction2(class CloseSessionAction extends Action2 {
 		const sessionsService = accessor.get(ISessionsService);
 		sessionsService.openNewSession();
 	}
-});
-
-KeybindingsRegistry.registerKeybindingRule({
-	id: CLOSE_SESSION_COMMAND_ID,
-	weight: KeybindingWeight.SessionsContrib,
-	when: ContextKeyExpr.and(IsNewChatSessionContext.negate(), EditorsVisibleContext.negate()),
-	primary: KeyMod.CtrlCmd | KeyCode.KeyW,
-	win: { primary: KeyMod.CtrlCmd | KeyCode.F4, secondary: [KeyMod.CtrlCmd | KeyCode.KeyW] },
 });
 
 //  Open Session at Index (Ctrl/Cmd+1..9)
@@ -716,12 +708,12 @@ abstract class BaseArchiveSessionsInGroupAction extends Action2 {
 				id: SessionGroupToolbarMenuId,
 				group: 'navigation',
 				order: 2,
-				when: SessionGroupHasVisibleSessionsContext,
+				when: ContextKeyExpr.and(SessionGroupHasVisibleSessionsContext, SessionGroupIsComparisonContext.negate()),
 			}]
 		});
 	}
 	async run(accessor: ServicesAccessor, context?: ISessionGroupItem): Promise<void> {
-		if (!context || !context.sessions || context.sessions.length === 0) {
+		if (!context || context.comparison || !context.sessions || context.sessions.length === 0) {
 			return;
 		}
 
@@ -779,12 +771,12 @@ registerAction2(class DeleteEmptySessionGroupAction extends Action2 {
 				id: SessionGroupToolbarMenuId,
 				group: 'navigation',
 				order: 2,
-				when: SessionGroupIsEmptyContext,
+				when: ContextKeyExpr.and(SessionGroupIsEmptyContext, SessionGroupIsComparisonContext.negate()),
 			}]
 		});
 	}
 	run(accessor: ServicesAccessor, context?: ISessionGroupItem): void {
-		if (!context) {
+		if (!context || context.comparison) {
 			return;
 		}
 		const sessionGroupsService = accessor.get(ISessionGroupsService);
@@ -804,11 +796,12 @@ registerAction2(class NewSessionInGroupAction extends Action2 {
 				id: SessionGroupToolbarMenuId,
 				group: 'navigation',
 				order: 1,
+				when: SessionGroupIsComparisonContext.negate(),
 			}]
 		});
 	}
 	run(accessor: ServicesAccessor, context?: ISessionGroupItem): void {
-		if (!context) {
+		if (!context || context.comparison) {
 			return;
 		}
 		const sessionsService = accessor.get(ISessionsService);
