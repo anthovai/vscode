@@ -454,17 +454,17 @@ CommandsRegistry.registerCommand({
 					'properties': {
 						'installOnlyNewlyAddedFromExtensionPackVSIX': {
 							'type': 'boolean',
-							'description': localize('workbench.extensions.installExtension.option.installOnlyNewlyAddedFromExtensionPackVSIX', "When enabled, VS Code installs only newly added snaps from the snap pack VSIX. This option is considered only while installing a VSIX."),
+							'description': localize('workbench.extensions.installExtension.option.installOnlyNewlyAddedFromExtensionPackVSIX', "When enabled, Kingu installs only newly added snaps from the snap pack VSIX. This option is considered only while installing a VSIX."),
 							default: false
 						},
 						'installPreReleaseVersion': {
 							'type': 'boolean',
-							'description': localize('workbench.extensions.installExtension.option.installPreReleaseVersion', "When enabled, VS Code installs the pre-release version of the snap if available."),
+							'description': localize('workbench.extensions.installExtension.option.installPreReleaseVersion', "When enabled, Kingu installs the pre-release version of the snap if available."),
 							default: false
 						},
 						'donotSync': {
 							'type': 'boolean',
-							'description': localize('workbench.extensions.installExtension.option.donotSync', "When enabled, VS Code do not sync this snap when Settings Sync is on."),
+							'description': localize('workbench.extensions.installExtension.option.donotSync', "When enabled, Kingu do not sync this snap when Settings Sync is on."),
 							default: false
 						},
 						'justification': {
@@ -989,8 +989,8 @@ class ExtensionsContributions extends Disposable implements IWorkbenchContributi
 				if (requireReload) {
 					notificationService.prompt(
 						Severity.Info,
-						vsixs.length > 1 ? localize('InstallVSIXs.successReload', "Completed installing snaps. Please reload Visual Studio Code to enable them.")
-							: localize('InstallVSIXAction.successReload', "Completed installing snap. Please reload Visual Studio Code to enable it."),
+						vsixs.length > 1 ? localize('InstallVSIXs.successReload', "Completed installing snaps. Please reload Kingu to enable them.")
+							: localize('InstallVSIXAction.successReload', "Completed installing snap. Please reload Kingu to enable it."),
 						[{
 							label: localize('InstallVSIXAction.reloadNow', "Reload Now"),
 							run: () => hostService.reload()

@@ -599,7 +599,7 @@
       },
       {
         "name": "copilot_installExtension",
-        "displayName": "Install Extension in VS Code",
+        "displayName": "Install Extension in Kingu",
         "when": "!config.github.copilot.chat.installExtensionSkill.enabled",
         "toolReferenceName": "installExtension",
         "legacyToolReferenceFullNames": [
@@ -627,7 +627,7 @@
       },
       {
         "name": "copilot_runVscodeCommand",
-        "displayName": "Run VS Code Command",
+        "displayName": "Run Kingu Command",
         "toolReferenceName": "runCommand",
         "legacyToolReferenceFullNames": [
           "new/runVscodeCommand"
@@ -868,13 +868,13 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "description": "The code for the new or existing cell to be edited. Code should not be wrapped within <VSCode.Cell> tags. Do NOT include code markers such as (...existing code...) to indicate existing code."
+                  "description": "The code for the new or existing cell to be edited. Code should not be wrapped within <Kingu.Cell> tags. Do NOT include code markers such as (...existing code...) to indicate existing code."
                 },
                 {
                   "type": "array",
                   "items": {
                     "type": "string",
-                    "description": "The code for the new or existing cell to be edited. Code should not be wrapped within <VSCode.Cell> tags"
+                    "description": "The code for the new or existing cell to be edited. Code should not be wrapped within <Kingu.Cell> tags"
                   }
                 }
               ]
@@ -1428,7 +1428,7 @@
             "disambiguation": [
               {
                 "category": "create_new_workspace_or_extension",
-                "description": "The user wants to create a complete Visual Studio Code workspace from scratch, such as a new application or a Visual Studio Code extension. Use this category only if the question relates to generating or creating new workspaces in Visual Studio Code. Do not use this category for updating existing code or generating sample code snippets",
+                "description": "The user wants to create a complete Kingu workspace from scratch, such as a new application or a Kingu extension. Use this category only if the question relates to generating or creating new workspaces in Kingu. Do not use this category for updating existing code or generating sample code snippets",
                 "examples": [
                   "Scaffold a Node server.",
                   "Create a sample project which uses the fileSystemProvider API.",
@@ -1444,7 +1444,7 @@
             "disambiguation": [
               {
                 "category": "create_jupyter_notebook",
-                "description": "The user wants to create a new Jupyter notebook in Visual Studio Code.",
+                "description": "The user wants to create a new Jupyter notebook in Kingu.",
                 "examples": [
                   "Create a notebook to analyze this CSV file."
                 ]
@@ -1558,7 +1558,7 @@
             "disambiguation": [
               {
                 "category": "create_new_workspace_or_extension",
-                "description": "The user wants to create a complete Visual Studio Code workspace from scratch, such as a new application or a Visual Studio Code extension. Use this category only if the question relates to generating or creating new workspaces in Visual Studio Code. Do not use this category for updating existing code or generating sample code snippets",
+                "description": "The user wants to create a complete Kingu workspace from scratch, such as a new application or a Kingu extension. Use this category only if the question relates to generating or creating new workspaces in Kingu. Do not use this category for updating existing code or generating sample code snippets",
                 "examples": [
                   "Scaffold a Node server.",
                   "Create a sample project which uses the fileSystemProvider API.",
@@ -1574,7 +1574,7 @@
             "disambiguation": [
               {
                 "category": "create_jupyter_notebook",
-                "description": "The user wants to create a new Jupyter notebook in Visual Studio Code.",
+                "description": "The user wants to create a new Jupyter notebook in Kingu.",
                 "examples": [
                   "Create a notebook to analyze this CSV file."
                 ]
@@ -1649,7 +1649,7 @@
       {
         "id": "github.copilot.vscode",
         "name": "vscode",
-        "fullName": "VS Code",
+        "fullName": "Kingu",
         "description": "%copilot.vscode.description%",
         "when": "!github.copilot.interactiveSession.disabled",
         "sampleRequest": "%copilot.vscode.sampleRequest%",
@@ -1659,7 +1659,7 @@
         "disambiguation": [
           {
             "category": "vscode_configuration_questions",
-            "description": "The user wants to learn about, use, or configure the Visual Studio Code. Use this category if the users question is specifically about commands, settings, keybindings, extensions and other features available in Visual Studio Code. Do not use this category to answer questions about generating code or creating new projects including Visual Studio Code extensions.",
+            "description": "The user wants to learn about, use, or configure the Kingu. Use this category if the users question is specifically about commands, settings, keybindings, extensions and other features available in Kingu. Do not use this category to answer questions about generating code or creating new projects including Kingu extensions.",
             "examples": [
               "Switch to light mode.",
               "Keyboard shortcut to toggle terminal visibility.",
@@ -1720,7 +1720,7 @@
             "disambiguation": [
               {
                 "category": "terminal_state_questions",
-                "description": "The user wants to learn about specific state such as the selection, command, or failed command in the integrated terminal in Visual Studio Code.",
+                "description": "The user wants to learn about specific state such as the selection, command, or failed command in the integrated terminal in Kingu.",
                 "examples": [
                   "Why did the latest terminal command fail?"
                 ]
@@ -3270,7 +3270,7 @@
               "pl"
             ],
             "enumDescriptions": [
-              "Use VS Code's configured display language",
+              "Use Kingu's configured display language",
               "English",
               "français",
               "italiano",
@@ -3426,7 +3426,7 @@
           "github.copilot.selectedCompletionModel": {
             "type": "string",
             "default": "",
-            "markdownDescription": "The currently selected completion model ID. To select from a list of available models, use the __\"Change Completions Model\"__ command or open the model picker (from the Arkai menu in the VS Code title bar, select __\"Configure Code Completions\"__ then __\"Change Completions Model\"__. The value must be a valid model ID. An empty value indicates that the default model will be used."
+            "markdownDescription": "The currently selected completion model ID. To select from a list of available models, use the __\"Change Completions Model\"__ command or open the model picker (from the Arkai menu in the Kingu title bar, select __\"Configure Code Completions\"__ then __\"Change Completions Model\"__. The value must be a valid model ID. An empty value indicates that the default model will be used."
           },
           "github.copilot.chat.reviewAgent.enabled": {
             "type": "boolean",

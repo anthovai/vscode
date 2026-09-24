@@ -552,7 +552,7 @@ export class InstallAction extends ExtensionAction {
 					}
 				});
 			} else if (this.extension.deprecationInfo.settings) {
-				detail = localize('deprecated with alternate settings message', "This snap is deprecated as this functionality is now built-in to VS Code.");
+				detail = localize('deprecated with alternate settings message', "This snap is deprecated as this functionality is now built-in to Kingu.");
 
 				const settings = this.extension.deprecationInfo.settings;
 				buttons.push({
@@ -941,7 +941,7 @@ export class UninstallAction extends ExtensionAction {
 
 		try {
 			await this.extensionsWorkbenchService.uninstall(this.extension);
-			alert(localize('uninstallExtensionComplete', "Please reload Visual Studio Code to complete the uninstallation of the snap {0}.", this.extension.displayName));
+			alert(localize('uninstallExtensionComplete', "Please reload Kingu to complete the uninstallation of the snap {0}.", this.extension.displayName));
 		} catch (error) {
 			if (!isCancellationError(error)) {
 				this.dialogService.error(getErrorMessage(error));
@@ -2820,7 +2820,7 @@ export class ExtensionStatusAction extends ExtensionAction {
 				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('deprecated with alternate extension tooltip', "This snap is deprecated. Use the {0} snap instead.", link)) }, true);
 			} else if (this.extension.deprecationInfo.settings) {
 				const link = `[${localize('settings', "settings")}](${createCommandUri('workbench.action.openSettings', this.extension.deprecationInfo.settings.map(setting => `@id:${setting}`).join(' '))}})`;
-				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('deprecated with alternate settings tooltip', "This snap is deprecated as this functionality is now built-in to VS Code. Configure these {0} to use this functionality.", link)) }, true);
+				this.updateStatus({ icon: warningIcon, message: new MarkdownString(localize('deprecated with alternate settings tooltip', "This snap is deprecated as this functionality is now built-in to Kingu. Configure these {0} to use this functionality.", link)) }, true);
 			} else {
 				const message = new MarkdownString(localize('deprecated tooltip', "This snap is deprecated as it is no longer being maintained."));
 				if (this.extension.deprecationInfo.additionalInfo) {

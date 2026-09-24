@@ -165,7 +165,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 					Severity.Error,
 					nls.localize('extensionService.versionMismatchCrash', "Snap host cannot start: version mismatch."),
 					[{
-						label: nls.localize('relaunch', "Relaunch VS Code"),
+						label: nls.localize('relaunch', "Relaunch Kingu"),
 						run: () => {
 							this._instantiationService.invokeFunction((accessor) => {
 								const hostService = accessor.get(IHostService);

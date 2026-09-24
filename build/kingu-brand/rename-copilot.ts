@@ -107,17 +107,17 @@ export function renameLocalizeMessages(file: string, mentions: RegExp, transform
 }
 
 /** `package.json` keys whose values the workbench shows as text. */
-const SHOWN_KEYS = new Set(['displayName', 'description', 'userDescription', 'fullName', 'label', 'category', 'title', 'shortTitle',
+export const SHOWN_KEYS = new Set(['displayName', 'description', 'userDescription', 'fullName', 'label', 'category', 'title', 'shortTitle',
 	'markdownDescription', 'enumDescriptions', 'markdownEnumDescriptions', 'deprecationMessage', 'markdownDeprecationMessage',
 	'welcomeTitle', 'welcomeMessage', 'inputPlaceholder', 'contents', 'placeholder']);
 
-/** The shown string values that say Copilot, and the ones that say it but are not shown. */
-function collectJsonStrings(value: unknown, shown: (key: string | undefined) => boolean): { shownValues: Set<string>; hiddenValues: Set<string> } {
+/** The shown string values that match `mentions`, and the ones that match but are not shown. */
+function collectJsonStrings(value: unknown, shown: (key: string | undefined) => boolean, mentions: RegExp): { shownValues: Set<string>; hiddenValues: Set<string> } {
 	const shownValues = new Set<string>();
 	const hiddenValues = new Set<string>();
 	const walk = (node: unknown, key: string | undefined): void => {
 		if (typeof node === 'string') {
-			if (/\bCopilot\b/.test(node)) {
+			if (mentions.test(node)) {
 				(shown(key) ? shownValues : hiddenValues).add(node);
 			}
 		} else if (Array.isArray(node)) {
@@ -136,12 +136,12 @@ function collectJsonStrings(value: unknown, shown: (key: string | undefined) => 
  * Renames the shown values in place in the file's text, so its formatting stays as it is.
  * A value that is also used under a key that is not shown (an id, say) is left alone.
  */
-function renameJsonFile(file: string, shown: (key: string | undefined) => boolean): number {
+export function renameJsonFile(file: string, shown: (key: string | undefined) => boolean, mentions: RegExp, transform: (value: string) => string): number {
 	let text = fs.readFileSync(file, 'utf8');
-	if (!/\bCopilot\b/.test(text)) {
+	if (!mentions.test(text)) {
 		return 0;
 	}
-	const { shownValues, hiddenValues } = collectJsonStrings(JSON.parse(text), shown);
+	const { shownValues, hiddenValues } = collectJsonStrings(JSON.parse(text), shown, mentions);
 	let count = 0;
 	for (const value of shownValues) {
 		if (hiddenValues.has(value)) {
@@ -151,7 +151,7 @@ function renameJsonFile(file: string, shown: (key: string | undefined) => boolea
 		const encoded = JSON.stringify(value).slice(1, -1);
 		const pieces = text.split(`"${encoded}"`);
 		if (pieces.length > 1) {
-			text = pieces.join(`"${JSON.stringify(rename(value)).slice(1, -1)}"`);
+			text = pieces.join(`"${JSON.stringify(transform(value)).slice(1, -1)}"`);
 			count += pieces.length - 1;
 		}
 	}
@@ -179,7 +179,7 @@ function main(): void {
 		const targets: [string, (key: string | undefined) => boolean][] = [[path.join(dir, 'package.nls.json'), () => true], [path.join(dir, 'package.json'), key => !!key && SHOWN_KEYS.has(key)]];
 		for (const [file, shown] of targets) {
 			if (fs.existsSync(file)) {
-				const n = renameJsonFile(file, shown);
+				const n = renameJsonFile(file, shown, /\bCopilot\b/, rename);
 				if (n) {
 					console.log(`${path.relative(ROOT, file)}: ${n}`);
 					total += n;
