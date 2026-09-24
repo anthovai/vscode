@@ -64,7 +64,6 @@ export const dirs = [
 	'.vscode/extensions/vscode-selfhost-import-aid',
 	'.vscode/extensions/vscode-selfhost-test-provider',
 	'.vscode/extensions/vscode-extras',
-	'.vscode/extensions/vscode-pr-pinger',
 ];
 
 if (existsSync(`${import.meta.dirname}/../../.build/distro/npm`)) {
