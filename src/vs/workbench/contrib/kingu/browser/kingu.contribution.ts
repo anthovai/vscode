@@ -16,6 +16,7 @@ import { ILanguageModelsService, IUserFriendlyLanguageModel } from '../../chat/c
 import { KINGU_SETUP_COMMAND_ID, KINGU_VENDOR_ID, kinguVendorConfigurationSchema } from '../common/kinguLanguageModels.js';
 import { KinguLanguageModelProvider } from './kinguLanguageModelProvider.js';
 import { runKinguSetupFlow } from './kinguSetupFlow.js';
+import '../common/kinguProductDefaults.js';
 
 /**
  * Publishes Kingu's own model vendor.
