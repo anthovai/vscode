@@ -7,7 +7,7 @@ import './media/kinguTasksPage.css';
 import { $, addDisposableListener, append, clearNode, EventType } from '../../../../base/browser/dom.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { SelectBox } from '../../../../base/browser/ui/selectBox/selectBox.js';
-import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { constObservable, IObservable } from '../../../../base/common/observable.js';
 import { isLinux, isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -16,7 +16,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -44,6 +44,8 @@ import {
 } from '../common/kinguTasks.js';
 import { KINGU_PROVIDER_LOGOS, IKinguProviderLogo } from '../common/kinguProviderLogos.js';
 import { lucideIcon, logoIcon } from './kinguOrcaFooterParts.js';
+import { KinguTasksJiraList } from './kinguTasksJiraList.js';
+import { KinguTasksLinearList } from './kinguTasksLinearList.js';
 
 /** The two settings the source bar reads and writes. */
 interface ITaskSettings {
@@ -88,8 +90,12 @@ const HOST_LABEL = getLocalHostLabel(isMacintosh ? 'mac' : isWindows ? 'windows'
 class KinguTasksView extends AbstractCustomView {
 
 	readonly title: IObservable<string> = constObservable(localize('kingu.tasks.pageTitle', "Tasks"));
+	/** Full width, as the ADE's page is: its list columns are sized for it. */
+	override readonly maxWidth = Number.POSITIVE_INFINITY;
 
 	private readonly _drawn = this._register(new DisposableStore());
+	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList>());
+	private _listKey: string | undefined;
 	private _container: HTMLElement | undefined;
 
 	private _settings: ITaskSettings | undefined;
@@ -105,6 +111,7 @@ class KinguTasksView extends AbstractCustomView {
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IContextViewService private readonly _contextViewService: IContextViewService,
 		@INotificationService private readonly _notificationService: INotificationService,
+		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 	) {
 		super();
 		this._register(this._orca.onPush('settings:changed')(([updates]) => {
@@ -257,13 +264,14 @@ class KinguTasksView extends AbstractCustomView {
 		switch (taskSource) {
 			case 'github':
 			case 'gitlab':
+				this._list.clear();
 				return this._drawRepoBacked(content, taskSource);
 			case 'linear':
-				return this._drawAccountBacked(content, taskSource, this._linear, this._linearAccountLabel(),
-					localize('kingu.tasks.linear.connectTitle', "Connect your Linear workspace"),
-					localize('kingu.tasks.linear.connectDescription', "Browse, edit, create, and start work from Linear issues directly from here."));
+				return this._drawAccountBacked(content, taskSource, this._linear,
+					localize('kingu.tasks.linear.connectTitle', "Connect your Linear account"),
+					localize('kingu.tasks.linear.connectDescription', "Browse and start work on your assigned Linear issues directly from here."));
 			case 'jira':
-				return this._drawAccountBacked(content, taskSource, this._jira, this._jiraAccountLabel(),
+				return this._drawAccountBacked(content, taskSource, this._jira,
 					localize('kingu.tasks.jira.connectTitle', "Connect your Jira site"),
 					localize('kingu.tasks.jira.connectDescription', "Browse, edit, create, and start work from Jira issues directly from here."));
 		}
@@ -281,25 +289,30 @@ class KinguTasksView extends AbstractCustomView {
 			localize('kingu.tasks.noProjectSourcesDescription', "Select at least one project source so Kingu knows which host/account to fetch tasks from."));
 	}
 
-	private _drawAccountBacked(content: HTMLElement, provider: 'linear' | 'jira', status: IKinguLinearStatus | IKinguJiraStatus | undefined, accountLabel: string | undefined, connectTitle: string, connectDescription: string): void {
-		if (status?.credentialError) {
-			this._emptyCard(content, provider, localize('kingu.tasks.credentialError', "{0} credentials could not be read", labelOf(provider)), status.credentialError);
-			return;
-		}
+	private _drawAccountBacked(content: HTMLElement, provider: 'linear' | 'jira', status: IKinguLinearStatus | IKinguJiraStatus | undefined, connectTitle: string, connectDescription: string): void {
 		if (!status?.connected) {
+			this._list.clear();
 			const card = this._emptyCard(content, provider, connectTitle, connectDescription);
-			const actions = append(card, $('.kingu-tasks-card-actions'));
-			const hide = append(actions, $('button.kingu-tasks-button.outline')) as HTMLButtonElement;
-			hide.type = 'button';
-			hide.textContent = localize('kingu.tasks.hideSource', "Hide {0}", labelOf(provider));
-			this._drawn.add(addDisposableListener(hide, EventType.CLICK, () => this._hideSource(provider)));
+			// Linear has no Hide here: while disconnected it is off the bar unless it is the saved default.
+			if (provider === 'jira') {
+				const actions = append(card, $('.kingu-tasks-card-actions'));
+				const hide = append(actions, $('button.kingu-tasks-button.outline')) as HTMLButtonElement;
+				hide.type = 'button';
+				hide.textContent = localize('kingu.tasks.hideSource', "Hide {0}", labelOf(provider));
+				this._drawn.add(addDisposableListener(hide, EventType.CLICK, () => this._hideSource(provider)));
+			}
 			return;
 		}
-		this._emptyCard(content, provider,
-			localize('kingu.tasks.connectedTo', "Connected to {0}", accountLabel ?? labelOf(provider)),
-			provider === 'linear'
-				? localize('kingu.tasks.linear.ready', "Linear issues from this workspace show here.")
-				: localize('kingu.tasks.jira.ready', "Jira issues from this site show here."));
+		// Kept across redraws of the bar, so a settings push does not refetch or drop the search.
+		const scope = provider === 'jira' ? getSelectedJiraSiteId(this._jira) : this._linear?.selectedWorkspaceId ?? this._linear?.activeWorkspaceId ?? undefined;
+		const key = `${provider}:${scope ?? ''}:${status.credentialError ?? ''}`;
+		if (this._listKey !== key || !this._list.value) {
+			this._listKey = key;
+			this._list.value = provider === 'jira'
+				? this._instantiationService.createInstance(KinguTasksJiraList, scope, status.credentialError)
+				: this._instantiationService.createInstance(KinguTasksLinearList, scope, status.credentialError);
+		}
+		content.appendChild(this._list.value.element);
 	}
 
 	/** The ADE's `hideTaskSource`: drop it from the bar, keeping one other visible. */

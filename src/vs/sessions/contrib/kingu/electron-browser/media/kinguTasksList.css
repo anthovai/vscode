@@ -1,0 +1,892 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * The ADE's issue lists: `task-page/jira/Filters.tsx`, `task-page/jira/Content.tsx`,
+ * `task-page-jira-issue-list.tsx` and `task-page/linear/*`. Tokens are the page's
+ * (`--kingu-tasks-*`, kinguTasksPage.css).
+ */
+
+.kingu-tasks-list-surface {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+/* `rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm` */
+.kingu-tasks-filters {
+	padding: 8px 12px 0;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px 6px 0 0;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 50%, transparent);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.kingu-tasks-filters-top {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.kingu-tasks-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+/* `rounded-md border px-2 py-1 text-xs transition` */
+.kingu-tasks-preset {
+	padding: 4px 8px;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--kingu-tasks-foreground);
+	font: inherit;
+	font-size: 12px;
+	line-height: 16px;
+	cursor: pointer;
+	transition: background-color 150ms, color 150ms;
+}
+
+.kingu-tasks-preset:hover {
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 50%, transparent);
+}
+
+/* active: `bg-foreground/90 text-background` */
+.kingu-tasks-preset.active,
+.kingu-tasks-preset.active:hover {
+	background: color-mix(in srgb, var(--kingu-tasks-foreground) 90%, transparent);
+	color: var(--vscode-editor-background);
+}
+
+.kingu-tasks-preset:focus-visible,
+.kingu-tasks-icon-button:focus-visible,
+.kingu-tasks-sort-button:focus-visible,
+.kingu-tasks-section-trigger:focus-visible,
+.kingu-tasks-row-action:focus-visible,
+.kingu-tasks-search-clear:focus-visible,
+.kingu-tasks-error-toggle:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.kingu-tasks-filters-actions {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 8px;
+}
+
+/* `Button variant="outline" size="icon"`: `size-9 border-border/50 bg-transparent hover:bg-muted/50` */
+.kingu-tasks-icon-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--kingu-tasks-foreground);
+	cursor: pointer;
+}
+
+.kingu-tasks-icon-button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 50%, transparent);
+}
+
+.kingu-tasks-icon-button:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+
+/* `mt-3 flex items-center gap-3` */
+.kingu-tasks-search-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 12px;
+	padding-bottom: 8px;
+}
+
+.kingu-tasks-search-row.first {
+	margin-top: 0;
+}
+
+/* `relative min-w-[320px] flex-1` */
+.kingu-tasks-search {
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 320px;
+}
+
+.kingu-tasks-search-icon {
+	position: absolute;
+	top: 50%;
+	left: 10px;
+	transform: translateY(-50%);
+	color: var(--vscode-descriptionForeground);
+	pointer-events: none;
+}
+
+/* `h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs` */
+.kingu-tasks-search-input {
+	box-sizing: border-box;
+	width: 100%;
+	height: 32px;
+	padding: 0 32px;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px;
+	background: var(--vscode-editor-background);
+	color: var(--kingu-tasks-foreground);
+	font: inherit;
+	font-size: 12px;
+	outline: none;
+}
+
+.kingu-tasks-search-input::placeholder {
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-search-input:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.kingu-tasks-search-clear {
+	position: absolute;
+	top: 50%;
+	right: 12px;
+	display: flex;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--vscode-descriptionForeground);
+	transform: translateY(-50%);
+	cursor: pointer;
+}
+
+.kingu-tasks-search-clear:hover {
+	color: var(--kingu-tasks-foreground);
+}
+
+/* `flex min-h-0 flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm` */
+.kingu-tasks-list-card {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-top: 0;
+	border-radius: 0 0 6px 6px;
+	background: var(--vscode-editor-background);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* `flex h-10 items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3` */
+.kingu-tasks-list-header {
+	display: flex;
+	flex: none;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	height: 40px;
+	padding: 0 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 35%, transparent);
+}
+
+.kingu-tasks-list-title {
+	min-width: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.kingu-tasks-list-count {
+	flex-shrink: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+/* The ADE's Jira grid at its viewport breakpoints (`md` 768, `lg` 1024, `xl` 1280). */
+.kingu-tasks-jira-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+}
+
+@media (min-width: 768px) {
+	.kingu-tasks-jira-grid {
+		grid-template-columns: 90px minmax(0, 1fr) 128px 92px 80px 64px;
+	}
+}
+
+@media (min-width: 1024px) {
+	.kingu-tasks-jira-grid {
+		grid-template-columns: 96px minmax(0, 1.25fr) 132px 120px 136px 96px 64px;
+	}
+}
+
+@media (min-width: 1280px) {
+	.kingu-tasks-jira-grid {
+		grid-template-columns: 104px minmax(0, 1.45fr) 144px 132px 160px 128px 72px;
+	}
+}
+
+/* `grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[var(--linear-grid-template)]` */
+.kingu-tasks-linear-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+}
+
+@media (min-width: 1024px) {
+	.kingu-tasks-linear-grid {
+		grid-template-columns: var(--linear-grid-template);
+	}
+}
+
+/* `h-8 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground` */
+.kingu-tasks-sort-header {
+	flex: none;
+	height: 32px;
+	padding: 0 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 25%, transparent);
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.kingu-tasks-sort-header.static > span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The Assignee heading is centred over its avatars. */
+.kingu-tasks-sort-header.static > span:nth-child(5) {
+	text-align: center;
+}
+
+@media (max-width: 767px) {
+	.kingu-tasks-sort-header.kingu-tasks-jira-grid {
+		display: none;
+	}
+}
+
+@media (max-width: 1023px) {
+	.kingu-tasks-sort-header.kingu-tasks-linear-grid {
+		display: none;
+	}
+
+	.kingu-tasks-sort-button.wide-only {
+		display: none;
+	}
+}
+
+/* `flex items-center gap-1 rounded-sm text-left text-[11px] font-semibold tracking-[0.08em] uppercase select-none hover:text-foreground` */
+.kingu-tasks-sort-button {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0;
+	border: 0;
+	border-radius: 2px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-align: left;
+	text-transform: uppercase;
+	user-select: none;
+	cursor: pointer;
+}
+
+.kingu-tasks-sort-button:hover {
+	color: var(--kingu-tasks-foreground);
+}
+
+/* `min-h-0 flex-1 overflow-y-auto` with a stable gutter */
+.kingu-tasks-list-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+}
+
+/* `border-b border-border px-4 py-4 text-sm text-destructive` */
+.kingu-tasks-credential-error {
+	padding: 16px;
+	border-bottom: 1px solid var(--kingu-tasks-border);
+	color: var(--vscode-errorForeground);
+	font-size: 14px;
+}
+
+/* `border-b border-border bg-destructive/10 px-4 py-3 text-sm text-destructive` */
+.kingu-tasks-error {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--kingu-tasks-border);
+	background: color-mix(in srgb, var(--vscode-errorForeground) 10%, transparent);
+	color: var(--vscode-errorForeground);
+	font-size: 14px;
+}
+
+.kingu-tasks-error-icon {
+	flex: none;
+	margin-top: 2px;
+}
+
+.kingu-tasks-error-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.kingu-tasks-error-title {
+	font-weight: 500;
+	line-height: 20px;
+}
+
+/* `-ml-1 mt-1 h-6 px-1.5 hover:bg-destructive/10` */
+.kingu-tasks-error-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 24px;
+	margin: 4px 0 0 -4px;
+	padding: 0 6px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.kingu-tasks-error-toggle:hover {
+	background: color-mix(in srgb, var(--vscode-errorForeground) 10%, transparent);
+}
+
+/* `mt-1 rounded-md border border-destructive/20 bg-background/80 px-2 py-1.5 font-mono text-xs text-foreground` */
+.kingu-tasks-error-details {
+	margin-top: 4px;
+	padding: 6px 8px;
+	border: 1px solid color-mix(in srgb, var(--vscode-errorForeground) 20%, transparent);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--vscode-editor-background) 80%, transparent);
+	color: var(--kingu-tasks-foreground);
+	font-family: var(--monaco-monospace-font);
+	font-size: 12px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* `px-3 py-3` rows of `h-4 w-4/5 bg-muted/70` and `mt-2 h-3 w-3/5 bg-muted/60`, pulsing */
+.kingu-tasks-skeleton-row {
+	padding: 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+}
+
+.kingu-tasks-skeleton-line {
+	border-radius: 4px;
+	animation: kingu-tasks-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.kingu-tasks-skeleton-line.primary {
+	width: 80%;
+	height: 16px;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 70%, transparent);
+}
+
+.kingu-tasks-skeleton-line.secondary {
+	width: 60%;
+	height: 12px;
+	margin-top: 8px;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 60%, transparent);
+}
+
+@keyframes kingu-tasks-pulse {
+	50% {
+		opacity: 0.5;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.kingu-tasks-skeleton-line {
+		animation: none;
+	}
+}
+
+/* `px-4 py-10 text-center` */
+.kingu-tasks-list-empty {
+	padding: 40px 16px;
+	text-align: center;
+}
+
+.kingu-tasks-list-empty-title {
+	margin: 0;
+	color: var(--kingu-tasks-foreground);
+	font-size: 14px;
+	font-weight: 500;
+}
+
+.kingu-tasks-list-empty-description {
+	margin: 8px 0 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 14px;
+}
+
+.kingu-tasks-section {
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+}
+
+/* `h-9 w-full justify-start rounded-none bg-muted/35 px-3 text-left font-normal hover:bg-accent` */
+.kingu-tasks-section-trigger {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: 36px;
+	padding: 0 12px;
+	border: 0;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 35%, transparent);
+	color: var(--kingu-tasks-foreground);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.kingu-tasks-section-trigger:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.kingu-tasks-section-chevron {
+	flex-shrink: 0;
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-section-label {
+	min-width: 0;
+	overflow: hidden;
+	font-size: 13px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-tasks-section-count {
+	flex-shrink: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+.kingu-tasks-section .kingu-tasks-section-rows {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+}
+
+/* `grid min-h-12 items-center gap-3 px-3 py-2 text-left transition hover:bg-accent`, divided by `border/50` */
+.kingu-tasks-row {
+	min-height: 48px;
+	box-sizing: border-box;
+	padding: 8px 12px;
+	transition: background-color 150ms;
+}
+
+.kingu-tasks-row + .kingu-tasks-row {
+	border-top: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+}
+
+.kingu-tasks-row:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.kingu-tasks-cell-key {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--vscode-descriptionForeground);
+	font-family: var(--monaco-monospace-font);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-tasks-cell-key-wrap {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.kingu-tasks-cell-main {
+	min-width: 0;
+}
+
+.kingu-tasks-title-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.kingu-tasks-key-inline {
+	flex-shrink: 0;
+	color: var(--vscode-descriptionForeground);
+	font-family: var(--monaco-monospace-font);
+	font-size: 11px;
+}
+
+/* `min-w-0 truncate text-[13px] font-medium text-foreground` */
+.kingu-tasks-title {
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	color: var(--kingu-tasks-foreground);
+	font-size: 13px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-tasks-compact-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	margin-top: 4px;
+}
+
+.kingu-tasks-meta {
+	flex-shrink: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+.kingu-tasks-page .truncate {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-tasks-meta.truncate {
+	flex-shrink: 1;
+}
+
+.kingu-tasks-label-line {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	margin-top: 4px;
+}
+
+.kingu-tasks-context {
+	max-width: 160px;
+	overflow: hidden;
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* `max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px]` */
+.kingu-tasks-label {
+	max-width: 140px;
+	padding: 2px 6px;
+	overflow: hidden;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 9999px;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 35%, transparent);
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-tasks-label-more {
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+}
+
+.kingu-tasks-label.linear {
+	max-width: 150px;
+	font-size: 11px;
+}
+
+.kingu-tasks-label-more.linear {
+	font-size: 11px;
+}
+
+.kingu-tasks-cell-labels {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.kingu-tasks-cell-status {
+	display: flex;
+	min-width: 0;
+}
+
+/* `inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium`, toned by `getJiraStatusTone` */
+.kingu-tasks-status {
+	display: inline-flex;
+	align-items: center;
+	max-width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	padding: 2px 8px;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 9999px;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 40%, transparent);
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.kingu-tasks-compact-meta .kingu-tasks-status {
+	padding: 2px 6px;
+}
+
+.kingu-tasks-status > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* emerald-500 /30 border, /10 fill; text emerald-700, emerald-200 on dark */
+.kingu-tasks-status.done {
+	border-color: rgb(16 185 129 / 0.3);
+	background: rgb(16 185 129 / 0.1);
+	color: #047857;
+}
+
+/* sky-500 /30 border, /10 fill; text sky-700, sky-200 on dark */
+.kingu-tasks-status.indeterminate {
+	border-color: rgb(14 165 233 / 0.3);
+	background: rgb(14 165 233 / 0.1);
+	color: #0369a1;
+}
+
+.monaco-workbench.vs-dark .kingu-tasks-status.done,
+.monaco-workbench.hc-black .kingu-tasks-status.done {
+	color: #a7f3d0;
+}
+
+.monaco-workbench.vs-dark .kingu-tasks-status.indeterminate,
+.monaco-workbench.hc-black .kingu-tasks-status.indeterminate {
+	color: #bae6fd;
+}
+
+.kingu-tasks-cell-muted {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-tasks-cell-assignee {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+.kingu-tasks-cell-assignee-center {
+	display: flex;
+	justify-content: center;
+	min-width: 0;
+}
+
+/* `size-5 rounded-full`; the initial in `border border-border/50 bg-muted/40 text-[10px]` */
+.kingu-tasks-avatar {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	overflow: hidden;
+	border-radius: 9999px;
+	font-size: 10px;
+}
+
+.kingu-tasks-avatar.initial {
+	box-sizing: border-box;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 40%, transparent);
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-row-actions {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px;
+}
+
+/* Jira's actions show on hover or focus from `md` up; Linear's always show. */
+@media (min-width: 768px) {
+	.kingu-tasks-row-actions:not(.always) {
+		opacity: 0;
+		transition: opacity 150ms;
+	}
+
+	.kingu-tasks-row:hover .kingu-tasks-row-actions,
+	.kingu-tasks-row:focus-within .kingu-tasks-row-actions {
+		opacity: 1;
+	}
+}
+
+/* `Button variant="ghost" size="icon-xs"` */
+.kingu-tasks-row-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--kingu-tasks-foreground);
+	cursor: pointer;
+}
+
+.kingu-tasks-row-action:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+/* `LinearStateCell`, tinted by the state colour as `linear-state-pill-style.ts` does. */
+.kingu-tasks-linear-state {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	padding: 2px 8px;
+	border: 1px solid color-mix(in srgb, var(--linear-state-color) 24%, var(--kingu-tasks-border));
+	border-radius: 9999px;
+	background: color-mix(in srgb, var(--linear-state-color) 12%, transparent);
+	color: color-mix(in srgb, var(--linear-state-color) 28%, var(--kingu-tasks-foreground));
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.kingu-tasks-linear-state.compact {
+	padding: 2px 6px;
+}
+
+.kingu-tasks-linear-state-marker {
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	border-radius: 9999px;
+	background: color-mix(in srgb, var(--linear-state-color) 42%, var(--kingu-tasks-foreground));
+}
+
+/* `LinearPriorityIcon`: `inline-flex size-4 shrink-0 items-center justify-center` */
+.kingu-tasks-linear-priority {
+	--linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 34%, transparent);
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+}
+
+.monaco-workbench.vs-dark .kingu-tasks-linear-priority,
+.monaco-workbench.hc-black .kingu-tasks-linear-priority {
+	--linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
+}
+
+.kingu-tasks-linear-priority svg {
+	width: 100%;
+	height: 100%;
+}
+
+.kingu-tasks-linear-priority rect.active {
+	fill: lch(39.576 1.25 282);
+}
+
+.kingu-tasks-linear-priority rect.inactive {
+	fill: var(--linear-priority-bar-inactive-fill);
+}
+
+/* Urgent: `rounded-sm text-[10px] font-semibold leading-none text-white` on `lch(66 80 48)` */
+.kingu-tasks-linear-priority.urgent {
+	border-radius: 2px;
+	background: lch(66 80 48);
+	color: #fff;
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 1;
+}
+
+/* None: `size-3 rounded-full border border-muted-foreground/55` */
+.kingu-tasks-linear-priority-none {
+	box-sizing: border-box;
+	width: 12px;
+	height: 12px;
+	border: 1px solid color-mix(in srgb, var(--vscode-descriptionForeground) 55%, transparent);
+	border-radius: 9999px;
+}
+
+/* The ADE's responsive show and hide, by viewport. */
+@media (max-width: 767px) {
+	.kingu-tasks-page .md-up {
+		display: none !important;
+	}
+}
+
+@media (min-width: 768px) {
+	.kingu-tasks-page .md-down {
+		display: none !important;
+	}
+}
+
+@media (max-width: 1023px) {
+	.kingu-tasks-page .lg-up {
+		display: none !important;
+	}
+}
+
+@media (min-width: 1024px) {
+	.kingu-tasks-page .lg-down {
+		display: none !important;
+	}
+}
+
+@media (min-width: 1280px) {
+	.kingu-tasks-page .xl-down {
+		display: none !important;
+	}
+}

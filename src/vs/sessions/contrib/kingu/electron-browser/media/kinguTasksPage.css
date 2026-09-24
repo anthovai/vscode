@@ -26,7 +26,8 @@
 	flex-direction: column;
 	gap: 16px;
 	height: 100%;
-	padding: 16px 20px;
+	/* `px-5 pt-1.5 pb-4 md:px-8 md:pb-5` */
+	padding: 6px 20px 16px;
 	box-sizing: border-box;
 	overflow: auto;
 	color: var(--vscode-foreground);
@@ -106,6 +107,12 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+	.kingu-tasks-page {
+		padding: 6px 32px 20px;
+	}
 }
 
 @media (max-width: 639px) {
