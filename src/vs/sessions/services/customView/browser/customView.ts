@@ -50,6 +50,12 @@ export abstract class AbstractCustomView extends Disposable {
 	 */
 	readonly maxWidth: number | undefined = undefined;
 
+	/**
+	 * Kingu: whether the host draws its title header above the view. A view that
+	 * carries its own chrome, as the ADE's Tasks page does, turns it off.
+	 */
+	readonly showHeader: boolean = true;
+
 	/** Renders the content into the host-provided container. Called once. */
 	abstract render(container: HTMLElement): void;
 

@@ -11,8 +11,10 @@
 
 .kingu-tasks-list-surface {
 	display: flex;
+	flex: 0 1 auto;
 	flex-direction: column;
 	min-height: 0;
+	max-height: 100%;
 }
 
 /* `rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm` */

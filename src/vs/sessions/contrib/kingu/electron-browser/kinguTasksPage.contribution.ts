@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import './media/kinguTasksPage.css';
-import { $, addDisposableListener, append, clearNode, EventType } from '../../../../base/browser/dom.js';
+import { $, addDisposableListener, append, clearNode, EventType, isHTMLElement } from '../../../../base/browser/dom.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { SelectBox } from '../../../../base/browser/ui/selectBox/selectBox.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
@@ -40,10 +40,13 @@ import {
 	KinguTaskProvider,
 	KinguTaskSourceReason,
 	normalizeVisibleTaskProviders,
+	reasonLabel,
 	resolveVisibleTaskProvider,
 } from '../common/kinguTasks.js';
+import { getRepoBackedSummary, getRepoHostId, IKinguRepo, isTaskEligibleRepo, resolveRepoSelection } from '../common/kinguTasksGitHub.js';
 import { KINGU_PROVIDER_LOGOS, IKinguProviderLogo } from '../common/kinguProviderLogos.js';
 import { lucideIcon, logoIcon } from './kinguOrcaFooterParts.js';
+import { KinguTasksGitHubList } from './kinguTasksGitHubList.js';
 import { KinguTasksJiraList } from './kinguTasksJiraList.js';
 import { KinguTasksLinearList } from './kinguTasksLinearList.js';
 
@@ -51,6 +54,8 @@ import { KinguTasksLinearList } from './kinguTasksLinearList.js';
 interface ITaskSettings {
 	readonly visibleTaskProviders?: unknown;
 	readonly defaultTaskSource?: unknown;
+	/** The picked projects; `null` is "All projects", absent is the default pick. */
+	readonly defaultRepoSelection?: unknown;
 }
 
 interface ISourceOption {
@@ -92,11 +97,16 @@ class KinguTasksView extends AbstractCustomView {
 	readonly title: IObservable<string> = constObservable(localize('kingu.tasks.pageTitle', "Tasks"));
 	/** Full width, as the ADE's page is: its list columns are sized for it. */
 	override readonly maxWidth = Number.POSITIVE_INFINITY;
+	/** The ADE's page has no title bar; the source bar is its chrome. */
+	override readonly showHeader = false;
 
 	private readonly _drawn = this._register(new DisposableStore());
-	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList>());
+	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList | KinguTasksGitHubList>());
+	private _repos: readonly IKinguRepo[] = [];
+	private _repoSelection: readonly string[] = [];
 	private _listKey: string | undefined;
 	private _container: HTMLElement | undefined;
+	private _bar: HTMLElement | undefined;
 
 	private _settings: ITaskSettings | undefined;
 	private _preflight: IKinguPreflightStatus | undefined;
@@ -112,6 +122,7 @@ class KinguTasksView extends AbstractCustomView {
 		@IContextViewService private readonly _contextViewService: IContextViewService,
 		@INotificationService private readonly _notificationService: INotificationService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
+		@ICustomViewService private readonly _customViewService: ICustomViewService,
 	) {
 		super();
 		this._register(this._orca.onPush('settings:changed')(([updates]) => {
@@ -125,22 +136,33 @@ class KinguTasksView extends AbstractCustomView {
 	render(container: HTMLElement): void {
 		this._container = container;
 		container.classList.add('kingu-tasks-page');
+		// `Close · Esc`, as the ADE's page closes; a field keeps Escape for itself.
+		this._register(addDisposableListener(container, EventType.KEY_DOWN, (event: KeyboardEvent) => {
+			const target = event.target;
+			if (event.key === 'Escape' && !(isHTMLElement(target) && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'))) {
+				event.preventDefault();
+				this._customViewService.hideCustomView();
+			}
+		}));
 		this._draw();
 		void this._load();
 	}
 
 	private async _load(): Promise<void> {
 		// Each answer stands alone: a provider that fails to report costs its own state, not the page.
-		const [settings, preflight, linear, jira] = await Promise.allSettled([
+		const [settings, preflight, linear, jira, repos] = await Promise.allSettled([
 			this._orca.invoke<ITaskSettings>('settings:get'),
 			this._orca.invoke<IKinguPreflightStatus>('preflight:check'),
 			this._orca.invoke<IKinguLinearStatus>('linear:status'),
 			this._orca.invoke<IKinguJiraStatus>('jira:status'),
+			this._orca.invoke<IKinguRepo[]>('repos:list'),
 		]);
+		this._repos = repos.status === 'fulfilled' ? (repos.value ?? []).filter(isTaskEligibleRepo) : [];
 		this._settings = settings.status === 'fulfilled' ? settings.value ?? {} : {};
 		this._preflight = preflight.status === 'fulfilled' ? preflight.value : undefined;
 		this._linear = linear.status === 'fulfilled' ? linear.value : undefined;
 		this._jira = jira.status === 'fulfilled' ? jira.value : undefined;
+		this._repoSelection = resolveRepoSelection(this._repos, this._settings.defaultRepoSelection);
 		this._loaded = true;
 		this._draw();
 	}
@@ -152,8 +174,44 @@ class KinguTasksView extends AbstractCustomView {
 		});
 	}
 
+	private _selectedRepos(): IKinguRepo[] {
+		return this._repos.filter(repo => this._repoSelection.includes(repo.id));
+	}
+
+	/**
+	 * Why a repo-backed source cannot load. As in the ADE it is asked per picked
+	 * project's host, so with none picked there is nothing to be unavailable;
+	 * only this machine's preflight is read, remote hosts answer for themselves.
+	 */
 	private _reason(provider: KinguTaskProvider): KinguTaskSourceReason | undefined {
-		return provider === 'github' || provider === 'gitlab' ? getRepoBackedProviderReason(provider, this._preflight) : undefined;
+		if (provider !== 'github' && provider !== 'gitlab') {
+			return undefined;
+		}
+		return this._selectedRepos().some(repo => getRepoHostId(repo) === 'local') ? getRepoBackedProviderReason(provider, this._preflight) : undefined;
+	}
+
+	private _hostLabel(repo: IKinguRepo): string {
+		const hostId = getRepoHostId(repo);
+		return hostId === 'local' ? HOST_LABEL : hostId.replace(/^(ssh|runtime):/, '');
+	}
+
+	private _setRepoSelection(ids: readonly string[] | undefined): void {
+		this._repoSelection = ids ? [...ids] : this._repos.map(repo => repo.id);
+		const defaultRepoSelection = ids ? [...ids] : null;
+		this._settings = { ...this._settings, defaultRepoSelection };
+		this._orca.invoke('settings:set', { defaultRepoSelection }).catch(() => {
+			this._notificationService.error(localize('kingu.tasks.saveProjectsFailed', "Failed to save the selected projects."));
+		});
+		// Only the bar's summary changes; redrawing the list would take focus from its open picker.
+		const bar = this._bar;
+		if (bar) {
+			this._drawn.clear();
+			const visible = this._visibleProviders();
+			const next = $('.kingu-tasks-source-bar');
+			this._drawSourceBar(next, visible, resolveVisibleTaskProvider(this._taskSource ?? this._settings?.defaultTaskSource, visible));
+			bar.replaceWith(next);
+			this._bar = next;
+		}
 	}
 
 	private _notice(provider: KinguTaskProvider): IKinguTaskSourceNotice | undefined {
@@ -171,12 +229,21 @@ class KinguTasksView extends AbstractCustomView {
 		const visible = this._visibleProviders();
 		const taskSource = resolveVisibleTaskProvider(this._taskSource ?? this._settings?.defaultTaskSource, visible);
 
-		this._drawSourceBar(append(container, $('.kingu-tasks-source-bar')), visible, taskSource);
+		this._bar = append(container, $('.kingu-tasks-source-bar'));
+		this._drawSourceBar(this._bar, visible, taskSource);
 		this._drawContent(append(container, $('.kingu-tasks-content')), taskSource);
 	}
 
 	private _drawSourceBar(bar: HTMLElement, visible: readonly KinguTaskProvider[], taskSource: KinguTaskProvider): void {
 		const sources = append(bar, $('.kingu-tasks-sources'));
+		// Close is anchored left with the source icons, as the ADE places it.
+		const close = append(sources, $('button.kingu-tasks-close')) as HTMLButtonElement;
+		close.type = 'button';
+		close.setAttribute('aria-label', localize('kingu.tasks.close', "Close tasks"));
+		close.appendChild(lucideIcon('x', 16));
+		this._drawn.add(this._hoverService.setupDelayedHover(close, { content: localize('kingu.tasks.closeHint', "Close · Esc"), position: { hoverPosition: HoverPosition.BELOW } }));
+		this._drawn.add(addDisposableListener(close, EventType.CLICK, () => this._customViewService.hideCustomView()));
+		append(sources, $('.kingu-tasks-divider'));
 		for (const option of SOURCE_OPTIONS.filter(option => visible.includes(option.id))) {
 			const notice = this._notice(option.id);
 			const label = notice?.label ?? option.label;
@@ -191,13 +258,17 @@ class KinguTasksView extends AbstractCustomView {
 			this._drawn.add(addDisposableListener(button, EventType.CLICK, () => this._selectSource(option.id)));
 		}
 
-		const summary = getTaskSourceSummary({
-			provider: taskSource,
-			providerLabel: labelOf(taskSource),
-			hostLabel: HOST_LABEL,
-			reason: this._reason(taskSource),
-			accountLabel: taskSource === 'linear' ? this._linearAccountLabel() : taskSource === 'jira' ? this._jiraAccountLabel() : undefined,
-		});
+		const reason = this._reason(taskSource);
+		const selected = this._selectedRepos();
+		const summary = taskSource === 'github' || taskSource === 'gitlab'
+			? getRepoBackedSummary(labelOf(taskSource), [...new Set(selected.map(repo => this._hostLabel(repo)))], reason ? reasonLabel(reason) : undefined, selected)
+			: getTaskSourceSummary({
+				provider: taskSource,
+				providerLabel: labelOf(taskSource),
+				hostLabel: HOST_LABEL,
+				reason,
+				accountLabel: taskSource === 'linear' ? this._linearAccountLabel() : this._jiraAccountLabel(),
+			});
 		const chip = append(sources, $('.kingu-tasks-summary'));
 		append(chip, $('span')).textContent = summary.label;
 		this._drawn.add(this._hoverService.setupDelayedHover(chip, { content: summary.title, position: { hoverPosition: HoverPosition.BELOW } }));
@@ -264,7 +335,6 @@ class KinguTasksView extends AbstractCustomView {
 		switch (taskSource) {
 			case 'github':
 			case 'gitlab':
-				this._list.clear();
 				return this._drawRepoBacked(content, taskSource);
 			case 'linear':
 				return this._drawAccountBacked(content, taskSource, this._linear,
@@ -280,9 +350,24 @@ class KinguTasksView extends AbstractCustomView {
 	private _drawRepoBacked(content: HTMLElement, provider: 'github' | 'gitlab'): void {
 		const notice = this._notice(provider);
 		if (notice) {
+			this._list.clear();
 			this._emptyCard(content, provider, notice.label, notice.title);
 			return;
 		}
+		if (provider === 'github') {
+			// Kept across redraws; the list owns the query, paging and the picker's popover.
+			if (this._listKey !== 'github' || !this._list.value) {
+				this._listKey = 'github';
+				this._list.value = this._instantiationService.createInstance(KinguTasksGitHubList, {
+					repos: this._repos,
+					hostLabel: repo => this._hostLabel(repo),
+					setSelection: ids => this._setRepoSelection(ids),
+				}, this._repoSelection);
+			}
+			content.appendChild(this._list.value.element);
+			return;
+		}
+		this._list.clear();
 		// The ADE's `getRepoBackedTaskEmptyState` before a project is picked.
 		this._emptyCard(content, provider,
 			localize('kingu.tasks.noProjectSources', "No project sources selected"),
@@ -338,7 +423,12 @@ class KinguTasksView extends AbstractCustomView {
 		return card;
 	}
 
-	layout(_width: number, _height: number): void { }
+	layout(_width: number, height: number): void {
+		// Fill the view, so only the list scrolls as it does in the ADE.
+		if (this._container) {
+			this._container.style.height = `${height}px`;
+		}
+	}
 }
 
 class KinguTasksPageContribution extends Disposable {

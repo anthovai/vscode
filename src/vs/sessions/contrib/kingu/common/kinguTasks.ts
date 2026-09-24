@@ -134,7 +134,7 @@ export function getRepoBackedProviderReason(provider: 'github' | 'gitlab', prefl
 	return status.authenticated ? undefined : 'missing-provider-auth';
 }
 
-function reasonLabel(reason: KinguTaskSourceReason): string {
+export function reasonLabel(reason: KinguTaskSourceReason): string {
 	switch (reason) {
 		case 'missing-provider-auth': return localize('kingu.tasks.reason.auth', "provider auth needed");
 		case 'unavailable-source-tool': return localize('kingu.tasks.reason.tool', "source tool unavailable");

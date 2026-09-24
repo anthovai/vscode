@@ -25,12 +25,19 @@
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
-	height: 100%;
 	/* `px-5 pt-1.5 pb-4 md:px-8 md:pb-5` */
 	padding: 6px 20px 16px;
 	box-sizing: border-box;
 	overflow: auto;
 	color: var(--vscode-foreground);
+}
+
+/* The list takes what the bar leaves and scrolls inside itself (`min-h-0 max-h-full`). */
+.kingu-tasks-content {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
 }
 
 /* `flex items-center justify-between gap-2` */
@@ -86,6 +93,37 @@
 .kingu-tasks-source:focus-visible {
 	outline: 1px solid var(--vscode-focusBorder);
 	outline-offset: 1px;
+}
+
+/* `size-7 rounded-full` ghost icon button */
+.kingu-tasks-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 9999px;
+	background: transparent;
+	color: var(--kingu-tasks-foreground);
+	cursor: pointer;
+}
+
+.kingu-tasks-close:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+.kingu-tasks-close:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* `mx-1 h-5 w-px bg-border/50` */
+.kingu-tasks-divider {
+	width: 1px;
+	height: 20px;
+	margin: 0 4px;
+	background: color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
 }
 
 /* `min-w-0 max-w-[min(420px,40vw)] rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground`, hidden below `sm`. */

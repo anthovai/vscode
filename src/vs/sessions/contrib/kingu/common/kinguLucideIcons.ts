@@ -78,4 +78,9 @@ export const KINGU_LUCIDE_ICONS: Readonly<Record<string, readonly KinguLucideEle
 	'arrow-up': [['path',{'d':'m5 12 7-7 7 7'}],['path',{'d':'M12 19V5'}]],
 	'arrow-down': [['path',{'d':'M12 5v14'}],['path',{'d':'m19 12-7 7-7-7'}]],
 	'arrow-right': [['path',{'d':'M5 12h14'}],['path',{'d':'m12 5 7 7-7 7'}]],
+	'circle-dot': [['circle',{'cx':'12','cy':'12','r':'10'}],['circle',{'cx':'12','cy':'12','r':'1'}]],
+	'git-pull-request': [['circle',{'cx':'18','cy':'18','r':'3'}],['circle',{'cx':'6','cy':'6','r':'3'}],['path',{'d':'M13 6h3a2 2 0 0 1 2 2v7'}],['line',{'x1':'6','x2':'6','y1':'9','y2':'21'}]],
+	'git-pull-request-draft': [['circle',{'cx':'18','cy':'18','r':'3'}],['circle',{'cx':'6','cy':'6','r':'3'}],['path',{'d':'M18 6V5'}],['path',{'d':'M18 11v-1'}],['line',{'x1':'6','x2':'6','y1':'9','y2':'21'}]],
+	'chevrons-up-down': [['path',{'d':'m7 15 5 5 5-5'}],['path',{'d':'m7 9 5-5 5 5'}]],
+	'chevron-left': [['path',{'d':'m15 18-6-6 6-6'}]],
 };

@@ -56,6 +56,9 @@ export class CustomViewNode extends Disposable {
 
 		this._headerEl = $('.custom-view-header');
 		this.element.appendChild(this._headerEl);
+		if (!this._view.showHeader) {
+			this._headerEl.style.display = 'none';
+		}
 
 		this._headerBandEl = $('.custom-view-header-band');
 		this._headerEl.appendChild(this._headerBandEl);
