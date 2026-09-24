@@ -18,7 +18,7 @@ import * as perf from './vs/base/common/performance.js';
 import { resolveNLSConfiguration } from './vs/base/node/nls.js';
 import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
 import { INLSConfiguration } from './vs/nls.js';
-import { isAgentsBoot, isOrcaBoot, ORCA_SCHEME, prepareOrcaBoot, startOrca } from './vs/platform/kinguOrca/electron-main/kinguOrcaHost.js';
+import { isOrcaBoot, ORCA_SCHEME, prepareOrcaBoot, startOrca } from './vs/platform/kinguOrca/electron-main/kinguOrcaHost.js';
 import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
 
 perf.mark('code/didStartMain');
@@ -204,11 +204,12 @@ perf.mark('code/willWaitForAppReady');
 // `vs/code/electron-main/main.js` is not imported until after ready — so a hook
 // there is always too late.
 //
-// `--agents` needs it too: the Agents Window runs the ADE's engine with no ADE
-// renderer, and its status bar and settings call the ADE's handlers directly.
-if (isOrcaBoot() || isAgentsBoot()) {
-	prepareOrcaBoot();
-}
+// Every other boot needs it too: the Agents Window runs the ADE's engine with no
+// ADE renderer, and its status bar and settings call the ADE's handlers directly
+// — and that window can be opened from the editor window of a boot that was not
+// `--agents`, when it is too late to prepare (its footer then had no handlers).
+// The engine itself still starts lazily, on the first call (`startOrcaEngine`).
+prepareOrcaBoot();
 
 app.once('ready', function () {
 	perf.mark('code/didWaitForAppReady');

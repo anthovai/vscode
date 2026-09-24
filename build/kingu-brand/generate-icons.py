@@ -41,9 +41,8 @@ ICONS = {
 	'files': 'files', 'search': 'search', 'source-control': 'git-branch', 'debug-alt': 'bug', 'debug-alt-small': 'bug',
 	'extensions': 'zap', 'extensions-large': 'zap', 'beaker': 'flask-conical', 'remote-explorer': 'monitor-cog',
 	'account': 'circle-user', 'settings-gear': 'settings', 'gear': 'settings', 'settings': 'sliders-horizontal',
-	'layout': 'panels-top-left', 'layout-sidebar-left': 'panel-left', 'layout-sidebar-left-off': 'panel-left-dashed',
-	'layout-panel': 'panel-bottom', 'layout-panel-off': 'panel-bottom-dashed', 'layout-sidebar-right': 'panel-right',
-	'layout-sidebar-right-off': 'panel-right-dashed',
+	# The layout toggles (layout, layout-sidebar-*, layout-panel*) keep their codicons: lucide has no filled
+	# "on" state, so its dashed "off" panels read as broken next to them.
 	# Navigation
 	'arrow-left': 'arrow-left', 'arrow-right': 'arrow-right', 'arrow-up': 'arrow-up', 'arrow-down': 'arrow-down',
 	'chevron-down': 'chevron-down', 'chevron-right': 'chevron-right', 'chevron-left': 'chevron-left', 'chevron-up': 'chevron-up',

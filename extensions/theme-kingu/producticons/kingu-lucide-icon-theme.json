@@ -17,7 +17,7 @@
 			"fontCharacter": "\\e01d"
 		},
 		"add": {
-			"fontCharacter": "\\e06a"
+			"fontCharacter": "\\e063"
 		},
 		"archive": {
 			"fontCharacter": "\\e002"
@@ -35,7 +35,7 @@
 			"fontCharacter": "\\e006"
 		},
 		"attach": {
-			"fontCharacter": "\\e065"
+			"fontCharacter": "\\e05e"
 		},
 		"beaker": {
 			"fontCharacter": "\\e030"
@@ -86,7 +86,7 @@
 			"fontCharacter": "\\e01f"
 		},
 		"close": {
-			"fontCharacter": "\\e08e"
+			"fontCharacter": "\\e087"
 		},
 		"cloud": {
 			"fontCharacter": "\\e020"
@@ -95,7 +95,7 @@
 			"fontCharacter": "\\e025"
 		},
 		"cloud-upload": {
-			"fontCharacter": "\\e087"
+			"fontCharacter": "\\e080"
 		},
 		"code": {
 			"fontCharacter": "\\e021"
@@ -125,25 +125,25 @@
 			"fontCharacter": "\\e00e"
 		},
 		"debug-pause": {
-			"fontCharacter": "\\e066"
+			"fontCharacter": "\\e05f"
 		},
 		"debug-restart": {
-			"fontCharacter": "\\e071"
+			"fontCharacter": "\\e06a"
 		},
 		"debug-start": {
-			"fontCharacter": "\\e069"
+			"fontCharacter": "\\e062"
 		},
 		"debug-stop": {
-			"fontCharacter": "\\e07d"
+			"fontCharacter": "\\e076"
 		},
 		"device-mobile": {
-			"fontCharacter": "\\e07b"
+			"fontCharacter": "\\e074"
 		},
 		"discard": {
-			"fontCharacter": "\\e086"
+			"fontCharacter": "\\e07f"
 		},
 		"edit": {
-			"fontCharacter": "\\e067"
+			"fontCharacter": "\\e060"
 		},
 		"ellipsis": {
 			"fontCharacter": "\\e026"
@@ -155,10 +155,10 @@
 			"fontCharacter": "\\e017"
 		},
 		"extensions": {
-			"fontCharacter": "\\e08f"
+			"fontCharacter": "\\e088"
 		},
 		"extensions-large": {
-			"fontCharacter": "\\e08f"
+			"fontCharacter": "\\e088"
 		},
 		"eye": {
 			"fontCharacter": "\\e029"
@@ -185,7 +185,7 @@
 			"fontCharacter": "\\e032"
 		},
 		"gear": {
-			"fontCharacter": "\\e078"
+			"fontCharacter": "\\e071"
 		},
 		"gift": {
 			"fontCharacter": "\\e035"
@@ -241,27 +241,6 @@
 		"layers": {
 			"fontCharacter": "\\e045"
 		},
-		"layout": {
-			"fontCharacter": "\\e064"
-		},
-		"layout-panel": {
-			"fontCharacter": "\\e05e"
-		},
-		"layout-panel-off": {
-			"fontCharacter": "\\e05f"
-		},
-		"layout-sidebar-left": {
-			"fontCharacter": "\\e060"
-		},
-		"layout-sidebar-left-off": {
-			"fontCharacter": "\\e061"
-		},
-		"layout-sidebar-right": {
-			"fontCharacter": "\\e062"
-		},
-		"layout-sidebar-right-off": {
-			"fontCharacter": "\\e063"
-		},
 		"library": {
 			"fontCharacter": "\\e047"
 		},
@@ -302,13 +281,13 @@
 			"fontCharacter": "\\e033"
 		},
 		"note": {
-			"fontCharacter": "\\e080"
+			"fontCharacter": "\\e079"
 		},
 		"notebook": {
 			"fontCharacter": "\\e05c"
 		},
 		"organization": {
-			"fontCharacter": "\\e089"
+			"fontCharacter": "\\e082"
 		},
 		"package": {
 			"fontCharacter": "\\e05d"
@@ -317,22 +296,22 @@
 			"fontCharacter": "\\e019"
 		},
 		"person": {
-			"fontCharacter": "\\e088"
+			"fontCharacter": "\\e081"
 		},
 		"pin": {
-			"fontCharacter": "\\e068"
+			"fontCharacter": "\\e061"
 		},
 		"pinned": {
-			"fontCharacter": "\\e068"
+			"fontCharacter": "\\e061"
 		},
 		"play": {
-			"fontCharacter": "\\e069"
+			"fontCharacter": "\\e062"
 		},
 		"play-circle": {
 			"fontCharacter": "\\e01b"
 		},
 		"primitive-square": {
-			"fontCharacter": "\\e07d"
+			"fontCharacter": "\\e076"
 		},
 		"pulse": {
 			"fontCharacter": "\\e000"
@@ -341,22 +320,22 @@
 			"fontCharacter": "\\e01a"
 		},
 		"redo": {
-			"fontCharacter": "\\e06b"
+			"fontCharacter": "\\e064"
 		},
 		"refresh": {
-			"fontCharacter": "\\e06c"
+			"fontCharacter": "\\e065"
 		},
 		"regex": {
-			"fontCharacter": "\\e06d"
+			"fontCharacter": "\\e066"
 		},
 		"remote-explorer": {
 			"fontCharacter": "\\e05b"
 		},
 		"replace": {
-			"fontCharacter": "\\e06e"
+			"fontCharacter": "\\e067"
 		},
 		"replace-all": {
-			"fontCharacter": "\\e06f"
+			"fontCharacter": "\\e068"
 		},
 		"repo-forked": {
 			"fontCharacter": "\\e039"
@@ -365,16 +344,16 @@
 			"fontCharacter": "\\e00d"
 		},
 		"rocket": {
-			"fontCharacter": "\\e070"
+			"fontCharacter": "\\e069"
 		},
 		"rss": {
-			"fontCharacter": "\\e073"
+			"fontCharacter": "\\e06c"
 		},
 		"run-all": {
 			"fontCharacter": "\\e01b"
 		},
 		"save": {
-			"fontCharacter": "\\e074"
+			"fontCharacter": "\\e06d"
 		},
 		"screen-full": {
 			"fontCharacter": "\\e054"
@@ -383,22 +362,22 @@
 			"fontCharacter": "\\e059"
 		},
 		"search": {
-			"fontCharacter": "\\e075"
+			"fontCharacter": "\\e06e"
 		},
 		"send": {
-			"fontCharacter": "\\e076"
+			"fontCharacter": "\\e06f"
 		},
 		"server": {
-			"fontCharacter": "\\e077"
+			"fontCharacter": "\\e070"
 		},
 		"settings": {
-			"fontCharacter": "\\e07a"
+			"fontCharacter": "\\e073"
 		},
 		"settings-gear": {
-			"fontCharacter": "\\e078"
+			"fontCharacter": "\\e071"
 		},
 		"shield": {
-			"fontCharacter": "\\e079"
+			"fontCharacter": "\\e072"
 		},
 		"sign-in": {
 			"fontCharacter": "\\e051"
@@ -410,43 +389,43 @@
 			"fontCharacter": "\\e036"
 		},
 		"sparkle": {
-			"fontCharacter": "\\e07c"
+			"fontCharacter": "\\e075"
 		},
 		"split-horizontal": {
 			"fontCharacter": "\\e022"
 		},
 		"split-vertical": {
-			"fontCharacter": "\\e072"
+			"fontCharacter": "\\e06b"
 		},
 		"star-empty": {
-			"fontCharacter": "\\e07f"
+			"fontCharacter": "\\e078"
 		},
 		"stop-circle": {
 			"fontCharacter": "\\e01c"
 		},
 		"sync": {
-			"fontCharacter": "\\e06c"
+			"fontCharacter": "\\e065"
 		},
 		"tag": {
-			"fontCharacter": "\\e081"
+			"fontCharacter": "\\e07a"
 		},
 		"tasklist": {
 			"fontCharacter": "\\e04d"
 		},
 		"terminal": {
-			"fontCharacter": "\\e07e"
+			"fontCharacter": "\\e077"
 		},
 		"thumbsdown": {
-			"fontCharacter": "\\e082"
+			"fontCharacter": "\\e07b"
 		},
 		"thumbsup": {
-			"fontCharacter": "\\e083"
+			"fontCharacter": "\\e07c"
 		},
 		"tools": {
-			"fontCharacter": "\\e08d"
+			"fontCharacter": "\\e086"
 		},
 		"trash": {
-			"fontCharacter": "\\e084"
+			"fontCharacter": "\\e07d"
 		},
 		"unlock": {
 			"fontCharacter": "\\e050"
@@ -455,25 +434,25 @@
 			"fontCharacter": "\\e05a"
 		},
 		"wand": {
-			"fontCharacter": "\\e08a"
+			"fontCharacter": "\\e083"
 		},
 		"warning": {
-			"fontCharacter": "\\e085"
+			"fontCharacter": "\\e07e"
 		},
 		"watch": {
-			"fontCharacter": "\\e08b"
+			"fontCharacter": "\\e084"
 		},
 		"whole-word": {
-			"fontCharacter": "\\e08c"
+			"fontCharacter": "\\e085"
 		},
 		"window": {
 			"fontCharacter": "\\e001"
 		},
 		"zoom-in": {
-			"fontCharacter": "\\e090"
+			"fontCharacter": "\\e089"
 		},
 		"zoom-out": {
-			"fontCharacter": "\\e091"
+			"fontCharacter": "\\e08a"
 		}
 	}
 }
