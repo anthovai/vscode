@@ -6,7 +6,8 @@
 		"vscode": "^1.88.0"
 	},
 	"version": "0.0.1",
-	"publisher": "ms-vscode",
+	"publisher": "anthovai",
+  "author": "Anthovai",
 	"categories": [
 		"Other"
 	],
@@ -16,7 +17,7 @@
 	"main": "./out/extension.js",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/microsoft/vscode.git"
+		"url": "https://github.com/anthovai/vscode.git"
 	},
 	"license": "MIT",
 	"scripts": {
