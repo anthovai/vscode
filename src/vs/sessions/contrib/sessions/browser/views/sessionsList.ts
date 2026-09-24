@@ -30,7 +30,7 @@ import { MenuId, IMenuService, MenuItemAction } from '../../../../../platform/ac
 import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { getFlatContextMenuActions, MenuEntryActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKey, IContextKeyService, RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { MarshalledId } from '../../../../../base/common/marshallingIds.js';
 import { SessionProviderIdContext, SessionSupportsDeleteContext, SessionSupportsMultipleChatsContext, SessionSupportsRenameContext, SessionTypeContext, IsPhoneLayoutContext, IsQuickChatSessionContext, SessionIsArchivedContext, SessionIsReadContext, SessionHasPullRequestContext } from '../../../../common/contextkeys.js';
@@ -105,6 +105,7 @@ import { AICustomizationManagementEditorInput } from '../../../../../workbench/c
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
+import { KINGU_SHOW_TASKS_COMMAND_ID, KINGU_TASKS_VIEW_ID } from '../../../kingu/common/kinguTasks.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
 import { AutomationsNewBadgeState, type AutomationsNewBadgeStyle } from '../automationsNewBadge.js';
 import { OPEN_AI_CUSTOMIZATIONS_COMMAND_ID } from '../customizationsConstants.js';
@@ -117,6 +118,8 @@ const $ = DOM.$;
 
 const AUTOMATIONS_SECTION_ID = 'automations';
 const CUSTOMIZATIONS_SECTION_ID = 'customizations';
+/** Kingu: the ADE's Tasks page, a shortcut like Automations. */
+const KINGU_TASKS_SECTION_ID = 'kingu.tasks';
 const SESSIONS_HEADER_SECTION_ID = 'sessionsHeader';
 const SESSIONS_HEADER_DEFAULT_HEIGHT = 32;
 const SESSIONS_HEADER_VERTICAL_SPACING = 10;
@@ -304,6 +307,8 @@ function getSessionSectionIcon(sectionId: string): ThemeIcon | undefined {
 			return Codicon.calendar;
 		case CUSTOMIZATIONS_SECTION_ID:
 			return Codicon.settingsGear;
+		case KINGU_TASKS_SECTION_ID:
+			return Codicon.listUnordered;
 		case 'archived':
 			return Codicon.archive;
 		case 'recent':
@@ -318,7 +323,7 @@ function getSessionSectionIcon(sectionId: string): ThemeIcon | undefined {
 }
 
 function isShortcutSection(sectionId: string): boolean {
-	return sectionId === AUTOMATIONS_SECTION_ID || sectionId === CUSTOMIZATIONS_SECTION_ID;
+	return sectionId === AUTOMATIONS_SECTION_ID || sectionId === CUSTOMIZATIONS_SECTION_ID || sectionId === KINGU_TASKS_SECTION_ID;
 }
 
 function isSessionShowMore(item: SessionListItem): item is ISessionShowMore {
@@ -2241,6 +2246,12 @@ export class SessionSectionRenderer implements ITreeRenderer<SessionListItem, Fu
 
 		this.updateChevron(template, node.collapsible, node.collapsed);
 
+		if (element.id === KINGU_TASKS_SECTION_ID) {
+			template.elementDisposables.add(autorun(reader => {
+				template.container.classList.toggle('active', this.customViewService.activeCustomView.read(reader)?.id === KINGU_TASKS_VIEW_ID);
+			}));
+		}
+
 		if (element.id === AUTOMATIONS_SECTION_ID) {
 			DOM.clearNode(template.icon);
 			template.icon.style.display = '';
@@ -3978,6 +3989,11 @@ export class SessionsList extends Disposable implements ISessionsList {
 				this.commandService.executeCommand(OPEN_AI_CUSTOMIZATIONS_COMMAND_ID);
 				return;
 			}
+			if (isSessionSection(element) && element.id === KINGU_TASKS_SECTION_ID) {
+				this.tree.setSelection([]);
+				this.commandService.executeCommand(KINGU_SHOW_TASKS_COMMAND_ID);
+				return;
+			}
 			if (!isSessionSection(element) && !isSessionGroupItem(element)) {
 				// Gate the open on workspace trust before any side effect (mark-read,
 				// activation, folder mount). A refused open leaves the current
@@ -4503,6 +4519,10 @@ export class SessionsList extends Disposable implements ISessionsList {
 		if (this.contextKeyService.getContextKeyValue<boolean>(ChatAutomationsEnabledContext.key)) {
 			void this.automationsNewBadgeState.initialize().catch(onUnexpectedError);
 			navigationChildren.push(renderSection({ id: AUTOMATIONS_SECTION_ID, label: localize('automations', "Automations"), sessions: [] }));
+		}
+		// Only where the ADE is: its page is registered by the desktop build alone.
+		if (CommandsRegistry.getCommand(KINGU_SHOW_TASKS_COMMAND_ID)) {
+			navigationChildren.push(renderSection({ id: KINGU_TASKS_SECTION_ID, label: localize('kingu.tasks', "Tasks"), sessions: [] }));
 		}
 		const showNavigationShortcuts = this.options.showNavigationShortcuts?.() === true;
 		if (showNavigationShortcuts) {

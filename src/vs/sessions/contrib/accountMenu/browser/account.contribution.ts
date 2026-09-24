@@ -590,7 +590,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				avatar.referrerPolicy = 'no-referrer';
 			} else {
 				const accountIcon = append(copilotIdentity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
-				accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.github));
+				accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.copilot));
 			}
 			const title = append(copilotIdentity, $('div.sessions-account-titlebar-panel-provider-name'));
 			title.textContent = this.getPanelHeaderLabel();
@@ -627,7 +627,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			}));
 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
 			const accountIcon = append(copilotIdentity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
-			accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.github));
+			accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.copilot));
 			const signInActions = append(copilotIdentity, $('.sessions-account-titlebar-panel-provider-sign-in-actions'));
 			const signInActionBar = panelStore.add(new ActionBar(signInActions));
 			panelStore.add(signInActionBar.onWillRun(() => {

@@ -11,7 +11,7 @@ import { Disposable, DisposableStore, IDisposable, MutableDisposable, toDisposab
 import { Codicon } from '../../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { KINGU_LUCIDE_ICONS } from '../common/kinguLucideIcons.js';
-import { KINGU_PROVIDER_LOGOS } from '../common/kinguProviderLogos.js';
+import { IKinguProviderLogo, KINGU_PROVIDER_LOGOS } from '../common/kinguProviderLogos.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -64,10 +64,17 @@ export function providerIcon(slot: string, size = 13): HTMLElement {
 		return $(`span.kingu-orca-provider-icon${ThemeIcon.asCSSSelector(FALLBACK_PROVIDER_ICONS[slot] ?? Codicon.circleLargeOutline)}`);
 	}
 	const holder = $('span.kingu-orca-provider-icon.logo');
+	holder.appendChild(logoIcon(logo, size));
+	return holder;
+}
+
+/** A filled logo mark as an SVG, in its own colour or the surrounding text colour. */
+export function logoIcon(logo: IKinguProviderLogo, size: number): SVGSVGElement {
 	const svg = mainWindow.document.createElementNS(SVG_NS, 'svg');
 	svg.setAttribute('viewBox', logo.viewBox);
 	svg.setAttribute('width', String(size));
 	svg.setAttribute('height', String(size));
+	svg.setAttribute('aria-hidden', 'true');
 	const path = mainWindow.document.createElementNS(SVG_NS, 'path');
 	path.setAttribute('d', logo.path);
 	path.setAttribute('fill', logo.fill ?? 'currentColor');
@@ -75,8 +82,7 @@ export function providerIcon(slot: string, size = 13): HTMLElement {
 		path.setAttribute('fill-rule', 'evenodd');
 	}
 	svg.appendChild(path);
-	holder.appendChild(svg);
-	return holder;
+	return svg;
 }
 
 /** A piece of a footer chip, in the ADE's vocabulary: an icon, a label, a status dot, a middot. */

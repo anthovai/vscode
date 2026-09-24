@@ -24,7 +24,6 @@ import { generateUuid } from '../../base/common/uuid.js';
 import { registerContextMenuListener } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
 import { KinguHostChannel, KINGU_HOST_CHANNEL_NAME } from '../../platform/kinguHost/electron-main/kinguHostChannel.js';
 import { KinguRuntimeChannel, KINGU_RUNTIME_CHANNEL_NAME } from '../../platform/kinguRuntime/electron-main/kinguRuntimeChannel.js';
-import { KinguTasksChannel, KINGU_TASKS_CHANNEL_NAME } from '../../platform/kinguTasks/electron-main/kinguTasksChannel.js';
 import { KinguOrcaChannel, KINGU_ORCA_CHANNEL_NAME } from '../../platform/kinguOrca/electron-main/kinguOrcaChannel.js';
 import { KINGU_RUNTIME_ENTRY_SETTING, KINGU_RUNTIME_WEB_ROOT_SETTING, KINGU_SIBLING_RUNTIME_ENTRY, KINGU_SIBLING_WEB_ROOT } from '../../platform/kinguRuntime/common/kinguRuntime.js';
 import { KINGU_ALLOW_INPUT_SETTING } from '../../platform/kinguComputer/common/kinguComputerProtocol.js';
@@ -1400,11 +1399,6 @@ export class CodeApplication extends Disposable {
 		// rather than reimplementing them, so its status bar and settings behave
 		// exactly as the ADE's do.
 		mainProcessElectronServer.registerChannel(KINGU_ORCA_CHANNEL_NAME, disposables.add(new KinguOrcaChannel()));
-
-		// The ADE's task providers. No client, no tokens, no provider API here:
-		// the ADE's bundle is already required into this process and implements
-		// all four, so the window asks it rather than growing a second copy.
-		mainProcessElectronServer.registerChannel(KINGU_TASKS_CHANNEL_NAME, new KinguTasksChannel(this.logService));
 
 		// Policies (main & shared process)
 		const policyChannel = disposables.add(new PolicyChannel(accessor.get(IPolicyService)));

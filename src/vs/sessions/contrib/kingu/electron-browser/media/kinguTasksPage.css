@@ -3,61 +3,227 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
+/*
+ * The ADE's Tasks page (`task-page/SourceBar.tsx`, the empty and connect
+ * states in `task-page/*\/Content.tsx`). The ADE's tokens: `muted` (#262626
+ * dark / #f5f5f5 light), `border` (white 7% / #e5e5e5), `foreground`.
+ */
+.monaco-workbench {
+	--kingu-tasks-muted: #f5f5f5;
+	--kingu-tasks-border: #e5e5e5;
+	--kingu-tasks-foreground: #0a0a0a;
+}
+
+.monaco-workbench.vs-dark,
+.monaco-workbench.hc-black {
+	--kingu-tasks-muted: #262626;
+	--kingu-tasks-border: rgb(255 255 255 / 0.07);
+	--kingu-tasks-foreground: #fafafa;
+}
+
 .kingu-tasks-page {
-	padding: 12px 16px;
-	overflow: auto;
-}
-
-.kingu-tasks-loading,
-.kingu-tasks-empty {
-	color: var(--vscode-descriptionForeground);
-}
-
-.kingu-tasks-list {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	max-width: 640px;
+	gap: 16px;
+	height: 100%;
+	padding: 16px 20px;
+	box-sizing: border-box;
+	overflow: auto;
+	color: var(--vscode-foreground);
 }
 
-.kingu-tasks-row {
+/* `flex items-center justify-between gap-2` */
+.kingu-tasks-source-bar {
 	display: flex;
 	align-items: center;
+	justify-content: space-between;
 	gap: 8px;
-	height: 32px;
-	padding: 0 8px;
-	border-radius: var(--vscode-cornerRadius-medium);
 }
 
-.kingu-tasks-row:hover {
-	background: var(--vscode-list-hoverBackground);
-}
-
-/* The name carries the row; the state is a qualifier, so it gives way. */
-.kingu-tasks-row-name {
-	flex: 1 1 auto;
+/* `flex min-w-0 flex-wrap items-center gap-2` */
+.kingu-tasks-sources {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
 	min-width: 0;
+}
+
+/* `group flex h-8 w-8 items-center justify-center rounded-md border transition` */
+.kingu-tasks-source {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 40%, transparent);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--vscode-descriptionForeground);
+	cursor: pointer;
+	transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.kingu-tasks-source:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 40%, transparent);
+	color: var(--kingu-tasks-foreground);
+}
+
+.kingu-tasks-source[aria-pressed='true'] {
+	border-color: color-mix(in srgb, var(--kingu-tasks-foreground) 40%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 70%, transparent);
+	color: var(--kingu-tasks-foreground);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.kingu-tasks-source:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.kingu-tasks-source:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+/* `min-w-0 max-w-[min(420px,40vw)] rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground`, hidden below `sm`. */
+.kingu-tasks-summary {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	max-width: min(420px, 40vw);
+	padding: 4px 8px;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 35%, transparent);
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.kingu-tasks-summary > span {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.kingu-tasks-row-state {
-	flex: 0 0 auto;
+@media (max-width: 639px) {
+	.kingu-tasks-summary {
+		display: none;
+	}
+}
+
+.kingu-tasks-source-controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* `h-8 w-[220px] rounded-md text-xs font-medium` */
+.kingu-tasks-site-select {
+	width: 220px;
+}
+
+.kingu-tasks-site-select .monaco-select-box {
+	height: 32px;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.kingu-tasks-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 56px 0;
 	color: var(--vscode-descriptionForeground);
 }
 
-.kingu-tasks-row-icon {
-	flex: 0 0 auto;
+.kingu-tasks-spin {
+	animation: kingu-tasks-spin 1s linear infinite;
+}
+
+@keyframes kingu-tasks-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.kingu-tasks-spin {
+		animation: none;
+	}
+}
+
+/* `flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm` */
+.kingu-tasks-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 56px 24px;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 50%, transparent);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+	text-align: center;
+}
+
+/* `mb-4 size-8 text-muted-foreground/60` */
+.kingu-tasks-card-icon {
+	margin-bottom: 16px;
+	color: color-mix(in srgb, var(--vscode-descriptionForeground) 60%, transparent);
+}
+
+.kingu-tasks-card-title {
+	margin: 0;
+	color: var(--kingu-tasks-foreground);
+	font-size: 16px;
+	font-weight: 500;
+	line-height: 24px;
+}
+
+.kingu-tasks-card-description {
+	max-width: 384px;
+	margin: 8px 0 0;
 	color: var(--vscode-descriptionForeground);
+	font-size: 14px;
+	line-height: 20px;
 }
 
-.kingu-tasks-row.connected .kingu-tasks-row-icon {
-	color: var(--vscode-charts-green);
+.kingu-tasks-card-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 20px;
 }
 
-/* Unavailable is dimmer than disconnected on purpose: there is nothing the
-   reader can do about it yet, so it should not invite a click. */
-.kingu-tasks-row.unavailable {
-	opacity: 0.6;
+/* The ADE's `Button variant="outline"`: `h-9 rounded-md border px-4 text-sm font-medium shadow-xs`. */
+.kingu-tasks-button {
+	height: 36px;
+	padding: 0 16px;
+	border-radius: 6px;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.kingu-tasks-button.outline {
+	border: 1px solid var(--kingu-tasks-border);
+	background: var(--vscode-editor-background);
+	color: var(--kingu-tasks-foreground);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.kingu-tasks-button.outline:hover {
+	background: var(--kingu-tasks-muted);
+}
+
+.kingu-tasks-button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
 }
