@@ -1,0 +1,359 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * The ADE's GitHub Projects mode (`github-project/ProjectViewWrapper.tsx`,
+ * `ProjectViewToolbar.tsx`, `ProjectViewStates.tsx`, `ProjectViewList.tsx`,
+ * `ProjectCell.tsx`). Tokens are the page's (kinguTasksPage.css).
+ */
+
+.kingu-tasks-gh-projects {
+	display: flex;
+	flex: 0 1 auto;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.kingu-tasks-gh-projects-card {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px;
+	background: var(--vscode-editor-background);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* `flex flex-wrap items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-2` */
+.kingu-tasks-gh-projects-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 30%, transparent);
+}
+
+.kingu-tasks-gh-projects-picker-anchor {
+	position: relative;
+	max-width: 320px;
+}
+
+.kingu-tasks-gh-projects-picker-anchor .kingu-tasks-gh-picker {
+	max-width: 320px;
+}
+
+.kingu-tasks-gh-projects-popover {
+	width: 360px;
+}
+
+.kingu-tasks-gh-projects-add {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-right: 6px;
+	border-top: 1px solid var(--kingu-tasks-border);
+}
+
+.kingu-tasks-gh-projects-add .kingu-tasks-gh-popover-search {
+	border-bottom: 0;
+}
+
+.kingu-tasks-gh-projects-add .kingu-tasks-button {
+	height: 28px;
+	padding: 0 10px;
+	font-size: 12px;
+}
+
+.kingu-tasks-gh-projects-search {
+	flex: 1 1 240px;
+	min-width: 0;
+	box-sizing: border-box;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 60%, transparent);
+	border-radius: 6px;
+	background: var(--vscode-editor-background);
+	color: var(--kingu-tasks-foreground);
+	font: inherit;
+	font-size: 12px;
+	outline: none;
+}
+
+.kingu-tasks-gh-projects-search:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.kingu-tasks-gh-projects-search::placeholder {
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-gh-projects-count {
+	padding: 2px 8px;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 9999px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+/* `flex min-h-[41px] items-end gap-1 overflow-x-auto border-b border-border/50 bg-muted/20 px-3 pt-3` */
+.kingu-tasks-gh-projects-tabs {
+	display: flex;
+	align-items: flex-end;
+	gap: 4px;
+	min-height: 41px;
+	box-sizing: border-box;
+	padding: 12px 12px 0;
+	overflow-x: auto;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 20%, transparent);
+}
+
+/* `rounded-t-md border-x border-t px-3 py-1.5 text-xs`; active `-mb-px border-border/60 bg-background` */
+.kingu-tasks-gh-projects-tab {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border: 1px solid transparent;
+	border-bottom: 0;
+	border-radius: 6px 6px 0 0;
+	background: transparent;
+	color: var(--vscode-descriptionForeground);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.kingu-tasks-gh-projects-tab:hover:not(:disabled) {
+	color: var(--kingu-tasks-foreground);
+}
+
+.kingu-tasks-gh-projects-tab.active {
+	margin-bottom: -1px;
+	border-color: color-mix(in srgb, var(--kingu-tasks-border) 60%, transparent);
+	background: var(--vscode-editor-background);
+	color: var(--kingu-tasks-foreground);
+}
+
+.kingu-tasks-gh-projects-tab:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+
+.kingu-tasks-gh-projects-tab:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
+.kingu-tasks-gh-projects-body {
+	display: flex;
+	flex: 0 1 auto;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.kingu-tasks-gh-projects-scroller {
+	min-height: 0;
+	overflow: auto;
+	scrollbar-gutter: stable;
+}
+
+/* `grid px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground`, sticky */
+.kingu-tasks-gh-projects-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	display: grid;
+	gap: 12px;
+	min-width: max-content;
+	padding: 8px 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 25%, var(--vscode-editor-background));
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.kingu-tasks-gh-projects-header > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* `flex w-full items-center border-b border-border/50 bg-muted/40 px-3 py-1.5 text-xs hover:bg-muted/60` */
+.kingu-tasks-gh-projects-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: max-content;
+	padding: 6px 12px;
+	border: 0;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 40%, transparent);
+	color: var(--kingu-tasks-foreground);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.kingu-tasks-gh-projects-group:hover {
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 60%, transparent);
+}
+
+.kingu-tasks-gh-projects-group .label {
+	font-weight: 500;
+}
+
+.kingu-tasks-gh-projects-group .count {
+	padding: 0 6px;
+	border-radius: 9999px;
+	background: var(--kingu-tasks-muted);
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+}
+
+.kingu-tasks-gh-projects-group .dates {
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+.kingu-tasks-gh-projects-group .current {
+	padding: 0 6px;
+	border: 1px solid rgb(16 185 129 / 0.3);
+	border-radius: 9999px;
+	background: rgb(16 185 129 / 0.1);
+	color: #059669;
+	font-size: 10px;
+}
+
+.monaco-workbench.vs-dark .kingu-tasks-gh-projects-group .current,
+.monaco-workbench.hc-black .kingu-tasks-gh-projects-group .current {
+	color: #6ee7b7;
+}
+
+.kingu-tasks-gh-projects-row {
+	display: grid;
+	align-items: center;
+	gap: 12px;
+	min-width: max-content;
+	min-height: 40px;
+	padding: 6px 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 40%, transparent);
+	font-size: 12px;
+}
+
+.kingu-tasks-gh-projects-row:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.kingu-tasks-gh-projects-cell {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.kingu-tasks-gh-projects-cell.title {
+	flex-wrap: nowrap;
+	gap: 8px;
+	color: var(--kingu-tasks-foreground);
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.kingu-tasks-gh-projects-cell.title .number {
+	flex-shrink: 0;
+	color: var(--vscode-descriptionForeground);
+	font-family: var(--monaco-monospace-font);
+	font-size: 11px;
+	font-weight: 400;
+}
+
+.kingu-tasks-gh-projects-cell.muted,
+.kingu-tasks-gh-projects-cell .muted {
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+.kingu-tasks-gh-projects-type {
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-gh-projects-option,
+.kingu-tasks-gh-projects-label {
+	max-width: 160px;
+	padding: 1px 8px;
+	overflow: hidden;
+	border: 1px solid color-mix(in srgb, var(--label-color, var(--kingu-tasks-border)) 45%, transparent);
+	border-radius: 9999px;
+	background: color-mix(in srgb, var(--label-color, var(--kingu-tasks-muted)) 16%, transparent);
+	color: var(--kingu-tasks-foreground);
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* GitHub's single-select palette names. */
+.kingu-tasks-gh-projects-option[data-color='gray'] { --label-color: #8b949e; }
+.kingu-tasks-gh-projects-option[data-color='blue'] { --label-color: #388bfd; }
+.kingu-tasks-gh-projects-option[data-color='green'] { --label-color: #3fb950; }
+.kingu-tasks-gh-projects-option[data-color='yellow'] { --label-color: #d29922; }
+.kingu-tasks-gh-projects-option[data-color='orange'] { --label-color: #db6d28; }
+.kingu-tasks-gh-projects-option[data-color='red'] { --label-color: #f85149; }
+.kingu-tasks-gh-projects-option[data-color='pink'] { --label-color: #db61a2; }
+.kingu-tasks-gh-projects-option[data-color='purple'] { --label-color: #a371f7; }
+
+.kingu-tasks-gh-projects-user {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 140px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-gh-projects-empty {
+	padding: 40px 16px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 14px;
+	text-align: center;
+}
+
+.kingu-tasks-gh-projects-empty p {
+	margin: 0 0 8px;
+	color: var(--kingu-tasks-foreground);
+}
+
+.kingu-tasks-gh-projects-empty p.muted {
+	color: var(--vscode-descriptionForeground);
+	font-size: 13px;
+}
+
+.kingu-tasks-gh-projects-empty.error p {
+	color: var(--vscode-errorForeground);
+}
+
+.kingu-tasks-gh-projects-skeleton-row {
+	height: 16px;
+	margin: 12px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--kingu-tasks-muted) 70%, transparent);
+	animation: kingu-tasks-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.kingu-tasks-gh-projects-skeleton-row {
+		animation: none;
+	}
+}

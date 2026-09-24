@@ -5,12 +5,14 @@
 
 import './media/kinguTasksList.css';
 import './media/kinguTasksGitHub.css';
+import './media/kinguTasksGitHubFilters.css';
 import { $, addDisposableListener, append, clearNode, EventType, getWindow } from '../../../../base/browser/dom.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { fromNow } from '../../../../base/common/date.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
 import {
@@ -33,7 +35,11 @@ import {
 	sortWorkItemsByNumber,
 	stripRepoQualifiers,
 } from '../common/kinguTasksGitHub.js';
+import { applyFilterChange, parseTaskQuery } from '../common/kinguTasksGitHubQuery.js';
 import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { KinguTasksGitHubFilters } from './kinguTasksGitHubFilters.js';
+import { KinguTasksGitHubIssueDialog } from './kinguTasksGitHubIssueDialog.js';
+import { KinguTasksGitHubProjects } from './kinguTasksGitHubProjects.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 
 /** The ADE's `GITHUB_TASK_SEARCH_IDLE_MS`. */
@@ -75,6 +81,14 @@ export class KinguTasksGitHubList extends Disposable {
 	private readonly _search: HTMLInputElement;
 	private readonly _clear: HTMLButtonElement;
 	private readonly _refresh: HTMLButtonElement;
+	private readonly _newIssue: HTMLButtonElement;
+	private readonly _filters: KinguTasksGitHubFilters;
+	private readonly _issueDialog: KinguTasksGitHubIssueDialog;
+	private readonly _repoSources = new Map<string, IKinguGitHubSlug>();
+	private readonly _projects = this._register(new MutableDisposable<KinguTasksGitHubProjects>());
+	private readonly _filtersCard: HTMLElement;
+	private readonly _card: HTMLElement;
+	private _mode: 'items' | 'project' = 'items';
 	private readonly _header: HTMLElement;
 	private readonly _scroller: HTMLElement;
 	private readonly _body: HTMLElement;
@@ -100,6 +114,7 @@ export class KinguTasksGitHubList extends Disposable {
 		@IKinguOrcaService private readonly _orca: IKinguOrcaService,
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IOpenerService private readonly _openerService: IOpenerService,
+		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 	) {
 		super();
 		this._register({ dispose: () => clearTimeout(this._debounce) });
@@ -125,9 +140,24 @@ export class KinguTasksGitHubList extends Disposable {
 		}));
 
 		// `Filters.tsx`: presets, then the search and the actions.
-		const filters = append(this.element, $('.kingu-tasks-gh-filters'));
+		const filters = this._filtersCard = append(this.element, $('.kingu-tasks-gh-filters'));
 		this._presets = append(filters, $('.kingu-tasks-gh-presets'));
 		const searchRow = append(filters, $('.kingu-tasks-gh-search-row'));
+		this._filters = this._register(this._instantiationService.createInstance(KinguTasksGitHubFilters, append(searchRow, $('div')), {
+			query: () => parseTaskQuery(this._query),
+			kind: () => this._kind,
+			authorLogins: () => [...new Set(this._items.filter(item => item.type === (this._kind === 'prs' ? 'pr' : 'issue')).map(item => item.author).filter((author): author is string => !!author))],
+			primarySlug: () => this._sources ?? this._selected.map(repo => this._repoSources.get(repo.id) ?? getRepoGitHubSlug(repo)).find(slug => !!slug),
+			change: change => {
+				const next = applyFilterChange(scopeGitHubTaskSearch(this._search.value, this._kind), change);
+				this._preset = undefined;
+				this._kind = getQueryKind(next, this._kind);
+				this._query = next;
+				this._search.value = next;
+				this._syncChrome();
+				void this._load(1);
+			},
+		}));
 		const searchBox = append(searchRow, $('.kingu-tasks-gh-search'));
 		searchBox.appendChild(lucideIcon('search', 14, 'kingu-tasks-search-icon'));
 		this._search = append(searchBox, $('input.kingu-tasks-gh-search-input')) as HTMLInputElement;
@@ -139,6 +169,19 @@ export class KinguTasksGitHubList extends Disposable {
 		this._clear.setAttribute('aria-label', localize('kingu.tasks.clearSearch', "Clear search"));
 		this._clear.appendChild(lucideIcon('x', 16));
 		const actions = append(searchRow, $('.kingu-tasks-filters-actions'));
+		this._newIssue = append(actions, $('button.kingu-tasks-gh-action')) as HTMLButtonElement;
+		this._newIssue.type = 'button';
+		const newIssueLabel = localize('kingu.tasks.github.newIssue', "New GitHub issue");
+		this._newIssue.setAttribute('aria-label', newIssueLabel);
+		this._newIssue.appendChild(lucideIcon('plus', 16));
+		this._register(this._hoverService.setupDelayedHover(this._newIssue, { content: newIssueLabel, position: { hoverPosition: HoverPosition.BELOW } }));
+		this._issueDialog = this._register(this._instantiationService.createInstance(KinguTasksGitHubIssueDialog, {
+			container: this.element,
+			selectedRepos: () => this._selected,
+			sourceOf: repo => this._repoSources.get(repo.id),
+			created: () => void this._load(1),
+		}));
+		this._register(addDisposableListener(this._newIssue, EventType.CLICK, () => this._issueDialog.show()));
 		this._refresh = append(actions, $('button.kingu-tasks-gh-action')) as HTMLButtonElement;
 		this._refresh.type = 'button';
 		this._register(this._hoverService.setupDelayedHover(this._refresh, () => ({ content: this._refresh.getAttribute('aria-label') ?? '', position: { hoverPosition: HoverPosition.BELOW } })));
@@ -159,7 +202,7 @@ export class KinguTasksGitHubList extends Disposable {
 		this._register(addDisposableListener(this._clear, EventType.CLICK, () => this._selectPreset(getDefaultPreset(this._kind))));
 
 		// `List.tsx`: the header and rows share one horizontally scrolling grid.
-		const card = append(this.element, $('.kingu-tasks-gh-card'));
+		const card = this._card = append(this.element, $('.kingu-tasks-gh-card'));
 		this._scroller = append(card, $('.kingu-tasks-gh-scroller'));
 		this._header = append(this._scroller, $('.kingu-tasks-gh-header.kingu-tasks-gh-grid'));
 		this._body = append(this._scroller, $('.kingu-tasks-gh-body'));
@@ -169,7 +212,24 @@ export class KinguTasksGitHubList extends Disposable {
 		void this._load(1);
 	}
 
+	/** The Projects mode swaps the items list for the project view, which it keeps while open. */
+	private _selectProjects(): void {
+		this._mode = 'project';
+		if (!this._projects.value) {
+			this._projects.value = this._instantiationService.createInstance(KinguTasksGitHubProjects, {
+				selectedRepositories: () => this._selected.flatMap(repo => {
+					const source = this._repoSources.get(repo.id) ?? getRepoGitHubSlug(repo);
+					return source ? [`${source.owner}/${source.repo}`] : [];
+				}),
+			});
+		}
+		this.element.appendChild(this._projects.value.element);
+		this._syncChrome();
+	}
+
 	private _selectKind(kind: KinguGitHubTaskKind): void {
+		this._mode = 'items';
+		this._projects.value?.element.remove();
 		this._kind = kind;
 		this._selectPreset(getDefaultPreset(kind));
 	}
@@ -202,14 +262,17 @@ export class KinguTasksGitHubList extends Disposable {
 	private _syncChrome(): void {
 		this._chrome.clear();
 		clearNode(this._modes);
-		for (const [kind, label] of [['issues', localize('kingu.tasks.github.issues', "Issues")], ['prs', localize('kingu.tasks.github.prs', "PRs")]] as const) {
+		for (const [kind, label] of [['issues', localize('kingu.tasks.github.issues', "Issues")], ['prs', localize('kingu.tasks.github.prs', "PRs")], ['project', localize('kingu.tasks.github.projects', "Projects")]] as const) {
+			const active = kind === 'project' ? this._mode === 'project' : this._mode === 'items' && this._kind === kind;
 			const button = append(this._modes, $('button.kingu-tasks-gh-mode')) as HTMLButtonElement;
 			button.type = 'button';
 			button.textContent = label;
-			button.classList.toggle('active', this._kind === kind);
-			button.setAttribute('aria-pressed', String(this._kind === kind));
-			this._chrome.add(addDisposableListener(button, EventType.CLICK, () => this._selectKind(kind)));
+			button.classList.toggle('active', active);
+			button.setAttribute('aria-pressed', String(active));
+			this._chrome.add(addDisposableListener(button, EventType.CLICK, () => kind === 'project' ? this._selectProjects() : this._selectKind(kind)));
 		}
+		this._filtersCard.style.display = this._mode === 'project' ? 'none' : '';
+		this._card.style.display = this._mode === 'project' ? 'none' : '';
 
 		clearNode(this._picker);
 		const label = append(this._picker, $('span.kingu-tasks-gh-picker-label'));
@@ -254,6 +317,8 @@ export class KinguTasksGitHubList extends Disposable {
 			? localize('kingu.tasks.github.searchPrs', "Search GitHub PRs...")
 			: localize('kingu.tasks.github.searchIssues', "Search GitHub issues...");
 		this._search.setAttribute('aria-label', this._search.placeholder);
+		this._filters?.render();
+		this._newIssue.disabled = this._selected.length === 0;
 		this._clear.style.display = this._search.value ? '' : 'none';
 
 		this._refresh.disabled = this._loading;
@@ -364,6 +429,7 @@ export class KinguTasksGitHubList extends Disposable {
 
 	private _applySelection(repos: readonly IKinguRepo[], all: boolean): void {
 		this._selected = repos;
+		this._projects.value?.refilter();
 		this._sources = undefined;
 		this._host.setSelection(all ? undefined : repos.map(repo => repo.id));
 		this._syncChrome();
@@ -402,6 +468,7 @@ export class KinguTasksGitHubList extends Disposable {
 						});
 						const source = (this._kind === 'prs' ? result?.sources?.prs ?? result?.sources?.issues : result?.sources?.issues ?? result?.sources?.prs) ?? undefined;
 						if (source) {
+							this._repoSources.set(repo.id, source);
 							this._host.setSource(repo.id, source);
 						}
 						if (repos.length === 1) {

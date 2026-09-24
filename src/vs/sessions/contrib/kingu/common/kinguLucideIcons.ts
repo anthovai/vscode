@@ -83,4 +83,5 @@ export const KINGU_LUCIDE_ICONS: Readonly<Record<string, readonly KinguLucideEle
 	'git-pull-request-draft': [['circle',{'cx':'18','cy':'18','r':'3'}],['circle',{'cx':'6','cy':'6','r':'3'}],['path',{'d':'M18 6V5'}],['path',{'d':'M18 11v-1'}],['line',{'x1':'6','x2':'6','y1':'9','y2':'21'}]],
 	'chevrons-up-down': [['path',{'d':'m7 15 5 5 5-5'}],['path',{'d':'m7 9 5-5 5 5'}]],
 	'chevron-left': [['path',{'d':'m15 18-6-6 6-6'}]],
+	'list-filter': [['path',{'d':'M2 5h20'}],['path',{'d':'M6 12h12'}],['path',{'d':'M9 19h6'}]],
 };
