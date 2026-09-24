@@ -95,6 +95,7 @@ interface IOrcaStartup {
 	invokeKinguHandler(channel: string, event: unknown, args: readonly unknown[]): Promise<unknown>;
 	getLinearStatus(): IOrcaProviderStatus;
 	getJiraStatus(): IOrcaProviderStatus;
+	prepareCodexRuntimeHomeForLaunch(): Promise<string | null>;
 }
 
 /**
@@ -551,6 +552,31 @@ let engine: Promise<BrowserWindow | undefined> | undefined;
  * Idempotent, and lazy: the first caller starts it, the rest wait on the same
  * start.
  */
+/**
+ * Where Codex should keep its home for the account selected in the ADE, or
+ * `undefined` for Codex's own default (~/.codex): the ADE mirrors a plain
+ * `codex login` into its runtime home and writes a selected account there or
+ * into that account's own home. Starts the engine if it is not up, since the
+ * account service is part of it; gives up after a bound rather than hold the
+ * caller, which falls back to the default.
+ */
+export async function getOrcaCodexHome(): Promise<string | undefined> {
+	const orca = loadStartup();
+	if (!orca) {
+		return undefined;
+	}
+	try {
+		const ready = await Promise.race([startOrcaEngine().then(() => true), new Promise<false>(resolve => setTimeout(() => resolve(false), 15_000))]);
+		if (!ready) {
+			return undefined;
+		}
+		return (await orca.prepareCodexRuntimeHomeForLaunch()) ?? undefined;
+	} catch (error) {
+		console.warn('[kingu-orca] could not resolve the Codex home of the ADE', error);
+		return undefined;
+	}
+}
+
 export function startOrcaEngine(): Promise<BrowserWindow | undefined> {
 	engine ??= bringUpEngine();
 	return engine;

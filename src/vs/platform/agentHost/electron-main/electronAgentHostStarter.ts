@@ -26,6 +26,7 @@ import { AgentHostLaunchKind, AgentHostLaunchKindEnvVar, telemetryLevelToAgentHo
 import { AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentBinaryArgsSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostCodexAgentSdkRootSettingId, AgentHostCodexAgentCodexHomeSettingId, AgentHostIpcChannels, AgentHostOTelCaptureContentSettingId, AgentHostOTelDbSpanExporterEnabledSettingId, AgentHostOTelEnabledSettingId, AgentHostOTelExporterTypeSettingId, AgentHostOTelOtlpEndpointSettingId, AgentHostOTelOtlpProtocolSettingId, AgentHostOTelOutfileSettingId, AgentHostOTelResourceAttributesSettingId, AgentHostOTelServiceNameSettingId, AgentHostOTelPolicyIpcChannel, AgentHostRestartIpcChannel, AgentHostWillRestartIpcChannel, buildAgentHostOTelEnv, buildAgentSdkEnv, IAgentHostManagementService, IAgentHostOTelSettings, sanitizeAgentHostOTelPolicySettings } from '../common/agentService.js';
 import { deepClone } from '../../../base/common/objects.js';
 import '../common/agentHostStarter.config.contribution.js';
+import { getOrcaCodexHome } from '../../kinguOrca/electron-main/kinguOrcaHost.js';
 
 export class ElectronAgentHostStarter extends Disposable implements IAgentHostStarter {
 
@@ -121,7 +122,8 @@ export class ElectronAgentHostStarter extends Disposable implements IAgentHostSt
 		// collision — see `buildAgentSdkEnv` for the precedence rule.
 		const sdkEnv = buildAgentSdkEnv({
 			codexSdkRoot: this._configurationService.getValue<string>(AgentHostCodexAgentSdkRootSettingId),
-			codexHome: this._configurationService.getValue<string>(AgentHostCodexAgentCodexHomeSettingId),
+			// Kingu: unset, Codex runs on the account selected in the ADE.
+			codexHome: this._configurationService.getValue<string>(AgentHostCodexAgentCodexHomeSettingId) || await getOrcaCodexHome(),
 			codexBinaryArgs: this._configurationService.getValue<readonly string[]>(AgentHostCodexAgentBinaryArgsSettingId),
 			claudeAgentEnabled: this._configurationService.getValue<boolean>(AgentHostClaudeAgentEnabledSettingId),
 			codexAgentEnabled: this._configurationService.getValue<boolean>(AgentHostCodexAgentEnabledSettingId),

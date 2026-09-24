@@ -129,3 +129,11 @@ export function onHostMessage(
  */
 export { getStatus as getLinearStatus } from './main/linear/client'
 export { getStatus as getJiraStatus } from './main/jira/client'
+
+/**
+ * The CODEX_HOME the ADE's selected Codex account runs in — its runtime home,
+ * a managed per-account home, or `null` for the user's own ~/.codex — prepared
+ * exactly as before one of its own Codex launches, so the fork's agent host
+ * runs Codex on the same account the ADE shows.
+ */
+export { prepareCodexRuntimeHomeForLaunch } from './main/startup/codex-launch-preparation'
