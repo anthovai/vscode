@@ -1,6 +1,6 @@
 {
   "name": "vscode-pr-pinger",
-  "displayName": "VSCode PR Pinger",
+  "displayName": "Kingu PR Pinger",
   "description": "PR Pinger shows a PR in the statusbar for you to review (VS Code Team Only)",
   "engines": {
     "vscode": "^1.67.0"
