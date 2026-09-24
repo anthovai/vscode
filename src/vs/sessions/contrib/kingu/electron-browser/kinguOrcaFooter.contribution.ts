@@ -33,7 +33,7 @@ import { IKinguAdvertisedUrlService } from '../browser/kinguAdvertisedUrlService
 import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
 import { KINGU_SHOW_USAGE_COMMAND_ID } from '../browser/kinguUsagePage.contribution.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
-import { formatFooterWindow, formatOrcaMemory, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, tightestFooterWindow } from '../common/kinguOrcaFooter.js';
+import { formatFooterWindow, formatOrcaMemory, OrcaSshStatus, sshHostStatus, summarizeSshStatuses, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, tightestFooterWindow } from '../common/kinguOrcaFooter.js';
 import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
 import { displayedUsagePercent, KinguUsageDisplay, nextResetTickDelay } from '../common/kinguStatusBar.js';
 import { OrcaUsageMode } from '../common/kinguOrcaUsage.js';
@@ -218,6 +218,7 @@ class KinguOrcaFooterContribution extends Disposable {
 	private _portScan: IKinguPortScan = { workspace: [], external: [] };
 	private _scanningPorts = false;
 	private _sshTargets: readonly IOrcaSshTarget[] = [];
+	private _sshStates = new Map<string, OrcaSshStatus | undefined>();
 	private _updateStatus: IOrcaUpdateStatus | undefined;
 
 	/** The ADE's UI state: Detailed or Compact, and whether percentages count what is used or what is left. */
@@ -325,6 +326,7 @@ class KinguOrcaFooterContribution extends Disposable {
 				this._renderPanelToggle();
 			}
 		}));
+		this._register(this._orca.onPush('ssh:state-changed')(() => void this._readSsh()));
 		this._register(this._orca.onPush('updater:status')(([status]) => this._renderUpdate(status as IOrcaUpdateStatus)));
 		this._register(this._terminalService.onDidChangeInstances(() => this._renderResources()));
 
@@ -1194,20 +1196,53 @@ class KinguOrcaFooterContribution extends Disposable {
 		} catch (error) {
 			this._logService.warn('[kingu-footer] ssh:listTargets failed', error);
 		}
+		const states = new Map<string, OrcaSshStatus | undefined>();
+		await Promise.all(targets.map(async target => {
+			try {
+				const state = await this._orca.invoke<{ readonly status?: OrcaSshStatus } | null>('ssh:getState', { targetId: target.id });
+				states.set(target.id, state?.status);
+			} catch {
+				states.set(target.id, undefined);
+			}
+		}));
 		if (this._store.isDisposed) {
 			return;
 		}
 		this._sshTargets = targets;
+		this._sshStates = states;
+		this._renderSsh();
+	}
+
+	/**
+	 * `SshStatusSegment`'s trigger: the server icon in the state's colour (a
+	 * spinner while connecting), how many hosts are connected, and the dot.
+	 * Shown only once a remote host exists, as in the ADE.
+	 */
+	private _renderSsh(): void {
+		const targets = this._sshTargets;
 		if (targets.length === 0) {
 			this._sshPopover.close();
 			this._ssh.clear();
 			return;
 		}
+		const summary = summarizeSshStatuses(targets.map(target => this._sshStates.get(target.id)));
+		const icon = summary.overall === 'connecting'
+			? { kind: 'icon' as const, name: 'loader-circle', className: 'spin kingu-orca-yellow' }
+			: summary.overall === 'connected'
+				? { kind: 'icon' as const, name: 'server', className: 'kingu-orca-emerald' }
+				: summary.overall === 'partial'
+					? { kind: 'icon' as const, name: 'server', className: 'kingu-orca-muted' }
+					: { kind: 'icon' as const, name: 'server-off', className: 'kingu-orca-muted' };
+		const label = summary.overall === 'connecting'
+			? localize('kingu.footer.ssh.connecting', "Connecting…")
+			: summary.connected === 1
+				? localize('kingu.footer.ssh.hostOne', "{0} host", summary.connected)
+				: localize('kingu.footer.ssh.hostMany', "{0} hosts", summary.connected);
 		const aria = localize('kingu.footer.ssh.aria', "Remote host connection status");
 		this._sshChip.set([
-			{ kind: 'icon', name: 'server-off', className: 'kingu-orca-muted' },
-			{ kind: 'text', text: localize('kingu.footer.ssh.connected', "{0} connected", 0), className: 'kingu-orca-text-11 kingu-orca-muted' },
-			{ kind: 'dot' },
+			icon,
+			{ kind: 'text', text: label, className: 'kingu-orca-text-11 kingu-orca-muted' },
+			{ kind: 'dot', className: summary.dot === 'muted' ? '' : summary.dot },
 		], aria);
 		this._place(this._ssh, {
 			name: localize('kingu.footer.ssh.name', "Remote Hosts"),
@@ -1218,19 +1253,22 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._sshPopover.refresh();
 	}
 
-	/** `SshStatusSegment`'s menu: the heading, a row per host, then Manage Remote Hosts…. */
+	/** `SshStatusSegment`'s menu: the heading, connected hosts first, then Manage Remote Hosts…. */
 	private _sshMenu(close: () => void): HTMLElement {
 		const menu = $('div');
 		append(menu, $('.kingu-orca-menu-heading')).textContent = localize('kingu.footer.ssh.name', "Remote Hosts");
-		for (const target of this._sshTargets) {
+		const ordered = [...this._sshTargets].sort((left, right) =>
+			Number(sshHostStatus(this._sshStates.get(right.id)) === 'connected') - Number(sshHostStatus(this._sshStates.get(left.id)) === 'connected'));
+		for (const target of ordered) {
+			const status = sshHostStatus(this._sshStates.get(target.id));
 			const row = append(menu, $('.kingu-orca-menu-item'));
-			append(row, $('span.kingu-orca-dot'));
+			append(row, $(`span.kingu-orca-dot${status === 'connected' ? '.emerald' : status === 'connecting' ? '.yellow' : ''}`));
 			append(row, $('span.kingu-orca-truncate')).textContent = target.label ?? target.host ?? target.id;
 		}
 		menuSeparator(menu);
 		menuItem(menu, localize('kingu.footer.ssh.manage', "Manage Remote Hosts…"), () => {
 			close();
-			void this._commandService.executeCommand('workbench.action.openSettings', 'kingu.servers');
+			void this._commandService.executeCommand(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, { pane: 'servers' });
 		});
 		wireMenuKeyboard(menu);
 		return menu;

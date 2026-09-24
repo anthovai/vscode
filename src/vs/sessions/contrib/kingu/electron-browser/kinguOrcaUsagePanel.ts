@@ -225,10 +225,22 @@ export class OrcaUsagePanel {
 				this._openSubmenu(row, trigger, false);
 			}
 		});
+		// On move as well as on enter: a row redrawn under a resting pointer gets
+		// no enter, and should still open once the pointer stirs.
+		const hover = () => {
+			if (this._submenuSlot === row.slot || this._hoverTimer !== undefined) {
+				return;
+			}
+			this._hoverTimer = mainWindow.setTimeout(() => {
+				this._hoverTimer = undefined;
+				this._openSubmenu(row, trigger, false);
+			}, SUBMENU_HOVER_DELAY_MS);
+		};
 		store.add(addDisposableListener(trigger, 'pointerenter', () => {
 			this._cancelHover();
-			this._hoverTimer = mainWindow.setTimeout(() => this._openSubmenu(row, trigger, false), SUBMENU_HOVER_DELAY_MS);
+			hover();
 		}));
+		store.add(addDisposableListener(trigger, 'pointermove', hover));
 		store.add(addDisposableListener(trigger, 'pointerleave', () => this._cancelHover()));
 	}
 
@@ -241,7 +253,10 @@ export class OrcaUsagePanel {
 
 	private _closeSubmenuSoon(): void {
 		this._cancelHover();
-		this._hoverTimer = mainWindow.setTimeout(() => this.closeSubmenu(), SUBMENU_HOVER_DELAY_MS);
+		this._hoverTimer = mainWindow.setTimeout(() => {
+			this._hoverTimer = undefined;
+			this.closeSubmenu();
+		}, SUBMENU_HOVER_DELAY_MS);
 	}
 
 	closeSubmenu(): void {

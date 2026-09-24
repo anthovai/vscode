@@ -9,7 +9,6 @@ import { ServicesAccessor } from '../../../../platform/instantiation/common/inst
 import { localize, localize2 } from '../../../../nls.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
-import { KinguHostService } from './kinguHostService.js';
 import { IKinguAdvertisedUrlService, KinguAdvertisedUrlService } from './kinguAdvertisedUrlService.js';
 import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -25,7 +24,6 @@ import { URI } from '../../../../base/common/uri.js';
  * still call.
  */
 
-registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed);
 // Eager, unlike the rest: it has to be listening to the terminals before a dev
 // server prints its address, and a server prints it once. Created lazily when
 // the ports entry first asked, it would have missed every announcement made

@@ -201,3 +201,42 @@ export function normalizeOrcaAwakeMode(mode: unknown, legacyAutoEnabled?: unknow
 	}
 	return legacyAutoEnabled === true ? 'auto' : 'off';
 }
+
+/** `SshConnectionStatus` in the ADE. */
+export type OrcaSshStatus = 'disconnected' | 'connecting' | 'auth-failed' | 'deploying-relay' | 'connected' | 'reconnecting' | 'reconnection-failed' | 'error';
+
+/** What the remote-hosts segment shows: `remote-host-connection-status.ts`, rule for rule. */
+export interface IOrcaSshSummary {
+	readonly overall: 'connected' | 'partial' | 'disconnected' | 'connecting';
+	readonly connected: number;
+	/** `bg-emerald-500`, `bg-yellow-500`, or the muted dot. */
+	readonly dot: 'emerald' | 'yellow' | 'muted';
+}
+
+/** `sshStatusForOverall`: connected, connecting (any step on the way), or not. */
+export function sshHostStatus(status: OrcaSshStatus | undefined): 'connected' | 'connecting' | 'disconnected' {
+	if (status === 'connected') {
+		return 'connected';
+	}
+	return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting' ? 'connecting' : 'disconnected';
+}
+
+/** `overallStatus` and `overallDotColor` over every host's status. */
+export function summarizeSshStatuses(statuses: readonly (OrcaSshStatus | undefined)[]): IOrcaSshSummary {
+	const hosts = statuses.map(sshHostStatus);
+	const connected = hosts.filter(status => status === 'connected').length;
+	let overall: IOrcaSshSummary['overall'];
+	if (hosts.length === 0) {
+		overall = 'disconnected';
+	} else if (hosts.every(status => status === 'connected')) {
+		overall = 'connected';
+	} else if (hosts.some(status => status === 'connecting')) {
+		overall = 'connecting';
+	} else if (connected > 0) {
+		overall = 'partial';
+	} else {
+		overall = 'disconnected';
+	}
+	const dot = overall === 'connected' || (overall === 'partial' && connected > 0) ? 'emerald' : overall === 'connecting' ? 'yellow' : 'muted';
+	return { overall, connected, dot };
+}

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Emitter } from '../../../../base/common/event.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
@@ -135,3 +136,5 @@ export class KinguHostService extends Disposable implements IKinguHostService {
 		}
 	}
 }
+
+registerSingleton(IKinguHostService, KinguHostService, InstantiationType.Delayed);

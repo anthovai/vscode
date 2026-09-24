@@ -109,7 +109,7 @@ if (portable.isPortable) {
 
 // Register custom schemes with privileges
 perf.mark('code/willRegisterSchemesAsPrivileged');
-protocol.registerSchemesAsPrivileged([
+const privilegedSchemes: Electron.CustomScheme[] = [
 	{
 		// The vendored ADE's renderer is served over its own scheme. It belongs in
 		// *this* array and nowhere else: Electron accepts
@@ -136,7 +136,19 @@ protocol.registerSchemesAsPrivileged([
 		scheme: 'vscode-managed-remote-resource',
 		privileges: { secure: true, supportFetchAPI: true, corsEnabled: true }
 	}
-]);
+];
+protocol.registerSchemesAsPrivileged(privilegedSchemes);
+// Electron keeps only the last `registerSchemesAsPrivileged` call. The vendored
+// ADE makes one of its own during its preflight (for its document-preview
+// scheme), which replaced this list and left `vscode-file:` insecure: the
+// Agents Window then had no `crypto.subtle`, so anything hashing with it failed.
+// Every later call now adds to this list instead of replacing it.
+const registerPrivilegedSchemes = protocol.registerSchemesAsPrivileged.bind(protocol);
+protocol.registerSchemesAsPrivileged = (customSchemes: Electron.CustomScheme[]) => {
+	const added = customSchemes.filter(candidate => !privilegedSchemes.some(existing => existing.scheme === candidate.scheme));
+	privilegedSchemes.push(...added);
+	registerPrivilegedSchemes([...privilegedSchemes]);
+};
 perf.mark('code/didRegisterSchemesAsPrivileged');
 
 // Global app listeners

@@ -93,6 +93,15 @@
 	outline-offset: -1px;
 }
 
+/*
+ * A trigger redraws its content as its state changes (a spinner while ports
+ * are scanned). Pressing on a child that is replaced before the release would
+ * lose the click, so the button alone takes the pointer.
+ */
+.kingu-orca-trigger > * {
+	pointer-events: none;
+}
+
 .kingu-orca-trigger:hover,
 .kingu-orca-trigger[aria-expanded="true"] {
 	background-color: var(--kingu-orca-accent);

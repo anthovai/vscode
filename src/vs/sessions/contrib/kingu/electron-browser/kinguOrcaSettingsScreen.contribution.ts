@@ -189,6 +189,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 	private _activePane = 'general';
 	private _query = '';
 	private _pendingSection: string | undefined;
+	private _redrawPending = false;
 	/** The current drawing's sections, by id, for a deep link to scroll to. */
 	private readonly _sectionElements = new Map<string, HTMLElement>();
 
@@ -371,6 +372,21 @@ class KinguOrcaSettingsScreen extends Disposable {
 	private _redrawContent(): void {
 		const content = this._content;
 		if (!content) {
+			return;
+		}
+		// A redraw replaces every control. While one of them is being edited, a
+		// change arriving from elsewhere would throw away what is being typed, so
+		// the redraw waits until the edit ends.
+		const active = content.ownerDocument.activeElement;
+		if (active && content.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+			if (!this._redrawPending) {
+				this._redrawPending = true;
+				active.addEventListener('blur', () => {
+					this._redrawPending = false;
+					// After the blur's own commit has been taken.
+					mainWindow.setTimeout(() => this._redrawContent(), 0);
+				}, { once: true });
+			}
 			return;
 		}
 		const scrollTop = content.scrollTop;

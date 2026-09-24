@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { formatFooterWindow, formatOrcaMemory, formatOrcaWindowLabel, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, providerFooterWindows, tightestFooterWindow } from '../../common/kinguOrcaFooter.js';
+import { formatFooterWindow, formatOrcaMemory, formatOrcaWindowLabel, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, providerFooterWindows, summarizeSshStatuses, tightestFooterWindow } from '../../common/kinguOrcaFooter.js';
 
 const NOW = 1_000_000_000_000;
 const HOUR = 3_600_000;
@@ -75,5 +75,20 @@ suite('kinguOrcaFooter', () => {
 		assert.deepStrictEqual(
 			[normalizeOrcaAwakeMode(undefined, true), normalizeOrcaAwakeMode(undefined, false), normalizeOrcaAwakeMode('on', false)],
 			['auto', 'off', 'on']);
+	});
+	test('summarizes remote hosts as the ADE does', () => {
+		assert.deepStrictEqual([
+			summarizeSshStatuses([]),
+			summarizeSshStatuses(['connected', 'connected']),
+			summarizeSshStatuses(['connected', 'disconnected']),
+			summarizeSshStatuses(['reconnecting', 'connected']),
+			summarizeSshStatuses(['auth-failed', undefined]),
+		], [
+			{ overall: 'disconnected', connected: 0, dot: 'muted' },
+			{ overall: 'connected', connected: 2, dot: 'emerald' },
+			{ overall: 'partial', connected: 1, dot: 'emerald' },
+			{ overall: 'connecting', connected: 1, dot: 'yellow' },
+			{ overall: 'disconnected', connected: 0, dot: 'muted' },
+		]);
 	});
 });
