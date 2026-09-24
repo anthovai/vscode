@@ -29,6 +29,7 @@ import { GestureEvent } from '../../../../base/browser/touch.js';
 import { IPaneCompositePart } from '../paneCompositePart.js';
 import { IPaneCompositeBarOptions, PaneCompositeBar } from '../paneCompositeBar.js';
 import { GlobalCompositeBar } from '../globalCompositeBar.js';
+import { KINGU_GLOBAL_ACTIONS_LOCATION, kinguGlobalActionsInTitleBar } from '../kinguGlobalActions.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { Action2, IMenuService, MenuId, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
@@ -200,6 +201,11 @@ export class ActivitybarPart extends Part {
 				this._onDidChange.fire(undefined); // Signal grid that size constraints changed
 			}
 
+			// Kingu: the Accounts and Manage actions moving between here and the title bar.
+			if (e.affectsConfiguration(KINGU_GLOBAL_ACTIONS_LOCATION)) {
+				this.recreateCompositeBar();
+			}
+
 			// Floating panels changes the reserved left/bottom gutter (and therefore
 			// the fixed part width): signal the grid that the size constraint changed.
 			if (e.affectsConfiguration(LayoutSettings.MODERN_UI) || e.affectsConfiguration(LayoutSettings.MODERN_UI_DENSITY)) {
@@ -289,7 +295,7 @@ export class ActivitybarPart extends Part {
 				activeBackgroundColor: undefined, inactiveBackgroundColor: undefined, activeBorderBottomColor: undefined,
 			}),
 			overflowActionSize: compositeSize,
-		}, Parts.ACTIVITYBAR_PART, this.paneCompositePart, { actionHeight: this.actionHeight, actionGap: this.actionGap });
+		}, Parts.ACTIVITYBAR_PART, this.paneCompositePart, kinguGlobalActionsInTitleBar(this.configurationService) ? undefined : { actionHeight: this.actionHeight, actionGap: this.actionGap });
 	}
 
 	protected override createContentArea(parent: HTMLElement): HTMLElement {

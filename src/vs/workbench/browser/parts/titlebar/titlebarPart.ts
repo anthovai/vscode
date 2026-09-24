@@ -24,6 +24,7 @@ import { IInstantiationService, ServicesAccessor } from '../../../../platform/in
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { Parts, IWorkbenchLayoutService, ActivityBarPosition, LayoutSettings, EditorActionsLocation, EditorTabsMode } from '../../../services/layout/browser/layoutService.js';
+import { KINGU_GLOBAL_ACTIONS_LOCATION, kinguGlobalActionsInTitleBar } from '../kinguGlobalActions.js';
 import { createActionViewItem, fillInActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { Action2, IMenu, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
@@ -385,7 +386,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		// Actions
 		if (hasCustomTitlebar(this.configurationService, this.titleBarStyle) && this.actionToolBar) {
 			const affectsLayoutControl = event.affectsConfiguration(LayoutSettings.LAYOUT_ACTIONS);
-			const affectsActivityControl = event.affectsConfiguration(LayoutSettings.ACTIVITY_BAR_LOCATION);
+			const affectsActivityControl = event.affectsConfiguration(LayoutSettings.ACTIVITY_BAR_LOCATION) || event.affectsConfiguration(KINGU_GLOBAL_ACTIONS_LOCATION);
 
 			if (affectsLayoutControl || affectsActivityControl) {
 				this.createActionToolBarMenus({ layoutActions: affectsLayoutControl, activityActions: affectsActivityControl });
@@ -744,6 +745,20 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 				}
 			}
 
+			// --- Activity Actions
+			const pushActivityActions = () => {
+				if (isAccountsActionVisible(this.storageService)) {
+					actions.primary.push(ACCOUNTS_ACTIVITY_TILE_ACTION);
+				}
+				actions.primary.push(GLOBAL_ACTIVITY_TITLE_ACTION);
+			};
+			// Kingu: moved up from the side activity bar, they sit where the title bar's
+			// sign-in button would, before the layout controls (kinguGlobalActions.ts).
+			const activityActionsBeforeLayout = this.activityActionsEnabled && this.configurationService.getValue<ActivityBarPosition>(LayoutSettings.ACTIVITY_BAR_LOCATION) === ActivityBarPosition.DEFAULT;
+			if (activityActionsBeforeLayout) {
+				pushActivityActions();
+			}
+
 			// --- Layout Actions
 			if (this.layoutToolbarMenu) {
 				fillInActionBarActions(
@@ -763,13 +778,9 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 				);
 			}
 
-			// --- Activity Actions (always at the end)
-			if (this.activityActionsEnabled) {
-				if (isAccountsActionVisible(this.storageService)) {
-					actions.primary.push(ACCOUNTS_ACTIVITY_TILE_ACTION);
-				}
-
-				actions.primary.push(GLOBAL_ACTIVITY_TITLE_ACTION);
+			// --- Activity Actions (at the end, unless placed before the layout controls above)
+			if (this.activityActionsEnabled && !activityActionsBeforeLayout) {
+				pushActivityActions();
 			}
 
 			this.actionToolBar.setActions(prepareActions(actions.primary), prepareActions(actions.secondary));
@@ -910,7 +921,9 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 
 	private get activityActionsEnabled(): boolean {
 		const activityBarPosition = this.configurationService.getValue<ActivityBarPosition>(LayoutSettings.ACTIVITY_BAR_LOCATION);
-		return !this.isCompact && !this.isAuxiliary && (activityBarPosition === ActivityBarPosition.TOP || activityBarPosition === ActivityBarPosition.BOTTOM);
+		return !this.isCompact && !this.isAuxiliary && (activityBarPosition === ActivityBarPosition.TOP || activityBarPosition === ActivityBarPosition.BOTTOM
+			// Kingu: the side activity bar leaves them to the title bar (kinguGlobalActions.ts).
+			|| ((activityBarPosition ?? ActivityBarPosition.DEFAULT) === ActivityBarPosition.DEFAULT && kinguGlobalActionsInTitleBar(this.configurationService)));
 	}
 
 	private get globalActionsEnabled(): boolean {
