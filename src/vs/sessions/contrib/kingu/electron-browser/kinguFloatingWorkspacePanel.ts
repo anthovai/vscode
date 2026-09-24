@@ -30,6 +30,8 @@ import { ITerminalInstance, ITerminalService } from '../../../../workbench/contr
 import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { IPathService } from '../../../../workbench/services/path/common/pathService.js';
 import { ITextFileService } from '../../../../workbench/services/textfile/common/textfiles.js';
+import { KinguAgentTerminalStatus } from '../common/kinguJevTerminal.js';
+import { IKinguJevService } from './kinguJev.contribution.js';
 import { attachFooterTooltip, lucideIcon, providerIcon } from './kinguOrcaFooterParts.js';
 
 /** `floating-terminal-panel-bounds.ts`. */
@@ -65,6 +67,9 @@ export interface IKinguFloatingWorkspaceService {
 	readonly _serviceBrand: undefined;
 	readonly isOpen: boolean;
 	readonly onDidChangeOpen: Event<boolean>;
+	/** A tab has something new — an agent waiting, finished or stopped — while the panel is closed: the ADE's amber dot. */
+	readonly needsAttention: boolean;
+	readonly onDidChangeAttention: Event<boolean>;
 	toggle(): void;
 	open(): void;
 	close(): void;
@@ -86,6 +91,9 @@ export class KinguFloatingWorkspaceService extends Disposable implements IKinguF
 
 	private readonly _onDidChangeOpen = this._register(new Emitter<boolean>());
 	readonly onDidChangeOpen = this._onDidChangeOpen.event;
+	private readonly _onDidChangeAttention = this._register(new Emitter<boolean>());
+	readonly onDidChangeAttention = this._onDidChangeAttention.event;
+	private _needsAttention = false;
 
 	private _open = false;
 	private _maximized = false;
@@ -114,8 +122,15 @@ export class KinguFloatingWorkspaceService extends Disposable implements IKinguF
 		@IFileDialogService private readonly _fileDialogService: IFileDialogService,
 		@IPathService private readonly _pathService: IPathService,
 		@ILogService private readonly _logService: ILogService,
+		@IKinguJevService private readonly _jev: IKinguJevService,
 	) {
 		super();
+		this._register(this._jev.onDidChangeStatus(instance => {
+			if (this._tabs.some(tab => tab.kind === 'terminal' && tab.instance === instance)) {
+				this._renderTabs();
+				this._updateAttention();
+			}
+		}));
 		this._maximized = this._storageService.getBoolean(MAXIMIZED_KEY, StorageScope.PROFILE, false);
 		try {
 			const stored = JSON.parse(this._storageService.get(BOUNDS_KEY, StorageScope.PROFILE, '')) as Partial<IPanelBounds>;
@@ -129,6 +144,25 @@ export class KinguFloatingWorkspaceService extends Disposable implements IKinguF
 
 	get isOpen(): boolean {
 		return this._open;
+	}
+
+	get needsAttention(): boolean {
+		return this._needsAttention;
+	}
+
+	/** Anything that wants the user, in a tab they are not looking at: the panel is closed. */
+	private _updateAttention(): void {
+		const wanted = !this._open && this._tabs.some(tab => {
+			if (tab.kind !== 'terminal') {
+				return false;
+			}
+			const status = this._jev.statusOf(tab.instance);
+			return status === KinguAgentTerminalStatus.NeedsInput || status === KinguAgentTerminalStatus.Done || status === KinguAgentTerminalStatus.Error;
+		});
+		if (wanted !== this._needsAttention) {
+			this._needsAttention = wanted;
+			this._onDidChangeAttention.fire(wanted);
+		}
 	}
 
 	toggle(): void {
@@ -153,6 +187,7 @@ export class KinguFloatingWorkspaceService extends Disposable implements IKinguF
 			this._frame!.focus();
 		}
 		this._onDidChangeOpen.fire(true);
+		this._updateAttention();
 	}
 
 	close(): void {
@@ -167,6 +202,7 @@ export class KinguFloatingWorkspaceService extends Disposable implements IKinguF
 			}
 		}
 		this._onDidChangeOpen.fire(false);
+		this._updateAttention();
 	}
 
 	// #region Frame
@@ -396,6 +432,13 @@ export class KinguFloatingWorkspaceService extends Disposable implements IKinguF
 			const element = append(strip, $('.kingu-orca-floating-tab'));
 			element.classList.toggle('active', tab.id === this._activeTabId);
 			element.appendChild(lucideIcon(tab.kind === 'terminal' ? 'terminal' : 'file-text', 12));
+			const status = tab.kind === 'terminal' ? this._jev.statusOf(tab.instance) : undefined;
+			if (status && status !== KinguAgentTerminalStatus.Working) {
+				const dot = append(element, $(`span.kingu-orca-floating-tab-status.${status}`));
+				dot.setAttribute('aria-label', status === KinguAgentTerminalStatus.NeedsInput
+					? localize('kingu.floating.needsInput', "Waiting for input")
+					: status === KinguAgentTerminalStatus.Done ? localize('kingu.floating.done', "Finished") : localize('kingu.floating.error', "Stopped on an error"));
+			}
 			append(element, $('span.kingu-orca-floating-tab-title')).textContent = tab.kind === 'terminal' ? (tab.instance.title || localize('kingu.floating.terminal', "Terminal")) : basename(tab.uri);
 			const close = append(element, $('button.kingu-orca-floating-tab-close')) as HTMLButtonElement;
 			close.type = 'button';

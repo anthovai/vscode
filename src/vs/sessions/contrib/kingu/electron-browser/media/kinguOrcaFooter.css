@@ -1527,3 +1527,25 @@
 }
 
 /* #endregion */
+
+/* The floating button's attention dot: `absolute right-1 top-1 size-2 rounded-full bg-amber-500 ring-2 ring-card`. */
+.kingu-orca-floating-button {
+	position: relative;
+}
+
+.kingu-orca-floating-attention {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	display: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background-color: oklch(0.769 0.188 70.08);
+	box-shadow: 0 0 0 2px var(--vscode-editorWidget-background);
+	pointer-events: none;
+}
+
+.kingu-orca-floating-attention.shown {
+	display: block;
+}

@@ -13,6 +13,7 @@ import { KINGU_QUOTA_PROVIDERS, KinguQuotaProvider } from '../../../../platform/
 import { KinguQuotaResult } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
 import { IKinguHostService, IKinguMemoryReading } from '../../../../platform/kinguHost/common/kinguHostService.js';
 import { IKinguListeningPort, IKinguPortScan, IKinguProcessUsage, IKinguStopPortRequest, KinguStopPortResult } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
+import { IJevRequest, JevResult } from '../../../../platform/kinguHost/common/kinguJev.js';
 import { KINGU_HOST_CHANNEL_NAME } from '../../../../platform/kinguHost/common/kinguHostTypes.js';
 import { IKinguComputerRequest, KinguComputerResult } from '../../../../platform/kinguComputer/common/kinguComputerProtocol.js';
 
@@ -92,6 +93,14 @@ export class KinguHostService extends Disposable implements IKinguHostService {
 			return await this._channel.call<readonly IKinguProcessUsage[]>('measureProcesses', pids);
 		} catch {
 			return [];
+		}
+	}
+
+	async jevDecide(request: IJevRequest, apiKey: string): Promise<JevResult> {
+		try {
+			return await this._channel.call<JevResult>('jevDecide', { request, apiKey });
+		} catch {
+			return { ok: false, problem: 'unavailable' };
 		}
 	}
 

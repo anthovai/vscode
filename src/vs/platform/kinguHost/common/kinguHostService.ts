@@ -8,6 +8,7 @@ import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { KinguQuotaProvider } from './kinguQuotaProviders.js';
 import { KinguQuotaResult } from './kinguRateLimits.js';
 import { IKinguListeningPort, IKinguPortScan, IKinguProcessUsage, IKinguStopPortRequest, KinguStopPortResult } from './kinguHostPorts.js';
+import { IJevRequest, JevResult } from './kinguJev.js';
 import { IKinguComputerRequest, KinguComputerResult } from '../../kinguComputer/common/kinguComputerProtocol.js';
 
 /** What the app is holding, and what is holding it. */
@@ -57,6 +58,9 @@ export interface IKinguHostService {
 
 	/** CPU and memory for each of these processes and everything below it; unknown pids are left out. */
 	measureProcesses(pids: readonly number[]): Promise<readonly IKinguProcessUsage[]>;
+
+	/** One decision from TypeSafe's Jev, made from the main process with the given key. */
+	jevDecide(request: IJevRequest, apiKey: string): Promise<JevResult>;
 
 	/**
 	 * Where each of these commands is installed, for the ones that are.

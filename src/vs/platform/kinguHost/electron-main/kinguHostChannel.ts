@@ -52,6 +52,7 @@ import {
 	parseNetstatPorts,
 	parseSsPorts,
 } from '../common/kinguHostPorts.js';
+import { IJevRequest, jevProblemForStatus, resolveJevEndpoint, jevRequestBody, JevResult, parseJevResponse } from '../common/kinguJev.js';
 import { cpuBetweenSweeps, IKinguProcessRow, parseWindowsProcessTable, processSubtree, WINDOWS_PROCESS_TABLE_SCRIPT } from '../common/kinguProcessTable.js';
 import { executableNames, executableSearchDirectories, MAX_COMMANDS_PER_REQUEST, MAX_SEARCH_DIRECTORIES } from '../common/kinguExecutables.js';
 import { KNOWN_AGENT_COMMANDS } from '../common/kinguAgentCommands.js';
@@ -125,6 +126,10 @@ export class KinguHostChannel implements IServerChannel {
 		if (command === 'stopPortProcess') {
 			return await this._stopPortProcess(arg as IKinguStopPortRequest | undefined) as T;
 		}
+		if (command === 'jevDecide') {
+			const { request, apiKey } = (arg ?? {}) as { request?: IJevRequest; apiKey?: string };
+			return await this._jevDecide(request, apiKey) as T;
+		}
 		if (command === 'measureProcesses') {
 			return await this._measureProcesses(Array.isArray(arg) ? arg.filter((pid): pid is number => Number.isSafeInteger(pid) && pid > 0) : []) as T;
 		}
@@ -180,6 +185,42 @@ export class KinguHostChannel implements IServerChannel {
 		} catch {
 			// A missing tool, a denied read: the strip simply shows no ports.
 			return [];
+		}
+	}
+
+	/**
+	 * One decision from TypeSafe's Jev.
+	 *
+	 * Made here rather than in the window: the window is a `vscode-file://`
+	 * origin and the request would be refused by CORS. The key is the caller's,
+	 * read from the window's secret storage for this one call; it goes out in
+	 * the Authorization header and nowhere else — not into a log, not into the
+	 * reply.
+	 */
+	private async _jevDecide(request: IJevRequest | undefined, apiKey: string | undefined): Promise<JevResult> {
+		if (!apiKey) {
+			return { ok: false, problem: 'no-key' };
+		}
+		if (!request || typeof request.state !== 'string' || !request.questions || typeof request.questions !== 'object') {
+			return { ok: false, problem: 'invalid' };
+		}
+		const endpoint = resolveJevEndpoint(request.endpoint);
+		if (!endpoint) {
+			return { ok: false, problem: 'invalid' };
+		}
+		try {
+			const response = await net.fetch(endpoint, {
+				method: 'POST',
+				headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+				body: jevRequestBody(request),
+				signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
+			});
+			if (!response.ok) {
+				return { ok: false, problem: jevProblemForStatus(response.status) };
+			}
+			return parseJevResponse(await response.json());
+		} catch {
+			return { ok: false, problem: 'unavailable' };
 		}
 	}
 
@@ -555,6 +596,8 @@ export class KinguHostChannel implements IServerChannel {
 
 /** How long a listing tool is given before the strip does without it. */
 const PORT_LISTING_TIMEOUT_MS = 5_000;
+/** A Jev decision takes well under a second; one that takes this long is abandoned. */
+const JEV_TIMEOUT_MS = 10_000;
 /** A PowerShell sweep can take a few seconds on a busy machine; the ADE allows the same. */
 const PROCESS_SWEEP_TIMEOUT_MS = 15_000;
 /** Readings asked for within this of each other share one sweep. */

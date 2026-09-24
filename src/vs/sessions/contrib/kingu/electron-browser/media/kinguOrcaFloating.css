@@ -314,3 +314,15 @@
 .kingu-orca-floating-resize.sw { bottom: -3px; left: -3px; width: 12px; height: 12px; cursor: nesw-resize; }
 .kingu-orca-floating-resize.nw { top: -3px; left: -3px; width: 12px; height: 12px; cursor: nwse-resize; }
 .kingu-orca-floating-resize.se { bottom: -3px; right: -3px; width: 12px; height: 12px; cursor: nwse-resize; }
+
+/* An agent's status on its tab, as Jev reads it: amber waiting, green finished, red stopped. */
+.kingu-orca-floating-tab-status {
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+}
+
+.kingu-orca-floating-tab-status.needs_input { background-color: oklch(0.769 0.188 70.08); }
+.kingu-orca-floating-tab-status.done { background-color: oklch(0.696 0.17 162.48); }
+.kingu-orca-floating-tab-status.error { background-color: var(--vscode-errorForeground); }

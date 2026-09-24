@@ -152,12 +152,21 @@ class KinguFloatingWorkspaceButton extends Disposable {
 				? localize('kingu.floatingWorkspace.tooltip', "{0} floating workspace ({1})", action, shortcut)
 				: localize('kingu.floatingWorkspace.tooltipNoShortcut', "{0} floating workspace", action);
 		};
+		const attention = $('span.kingu-orca-floating-attention');
+		attention.setAttribute('aria-hidden', 'true');
+		button.appendChild(attention);
 		const refresh = () => {
+			attention.classList.toggle('shown', !open() && this._floating.needsAttention);
 			button.setAttribute('aria-pressed', String(open()));
-			button.setAttribute('aria-label', open() ? localize('kingu.floatingWorkspace.minimizeAria', "Minimize floating workspace") : localize('kingu.floatingWorkspace.showAria', "Show floating workspace"));
+			button.setAttribute('aria-label', open()
+				? localize('kingu.floatingWorkspace.minimizeAria', "Minimize floating workspace")
+				: this._floating.needsAttention
+					? localize('kingu.floatingWorkspace.showActivityAria', "Show floating workspace, new activity")
+					: localize('kingu.floatingWorkspace.showAria', "Show floating workspace"));
 		};
 		refresh();
 		store.add(this._floating.onDidChangeOpen(refresh));
+		store.add(this._floating.onDidChangeAttention(refresh));
 		store.add(attachFooterTooltip(button, () => [label()], 400, undefined, 'left'));
 
 		// Position: the stored corner anchor, re-resolved when the window resizes.
