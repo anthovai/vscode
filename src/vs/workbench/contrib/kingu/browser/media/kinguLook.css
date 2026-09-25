@@ -62,3 +62,27 @@ body .monaco-workbench.linux {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }
+
+/*
+ * Arkai's chat mark (the Arkai robot with a speech bubble), for the chat
+ * button beside the search box. A mask over the text colour, so it follows the
+ * theme like a codicon does.
+ */
+.monaco-workbench .kingu-arkai-chat-icon {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	background-color: currentColor;
+	-webkit-mask: url('./arkai-chat.svg') center / contain no-repeat;
+	mask: url('./arkai-chat.svg') center / contain no-repeat;
+}
+
+/* The chat button's own rule clears its label's background, which is what the mark is painted with. */
+.monaco-workbench .agent-status-badge-section.sparkle .action-label.kingu-arkai-chat-icon {
+	background: currentColor !important;
+	/* The size of the title bar's other icons; the button's padding would otherwise stretch the mark. */
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	box-sizing: content-box;
+}

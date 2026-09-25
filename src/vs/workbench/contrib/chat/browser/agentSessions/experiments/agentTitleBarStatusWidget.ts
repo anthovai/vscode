@@ -32,7 +32,6 @@ import { InEditorZenModeContext } from '../../../../../common/contextkeys.js';
 import { HiddenItemStrategy, WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { StandardMouseEvent } from '../../../../../../base/browser/mouseEvent.js';
-import { ThemeIcon } from '../../../../../../base/common/themables.js';
 import { createActionViewItem } from '../../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { FocusAgentSessionsAction } from '../agentSessionsActions.js';
@@ -867,10 +866,10 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 
 		const primaryActionId = TOGGLE_CHAT_ACTION_ID;
 
-		// Kingu: one icon, Arkai's mark, rather than a split button — the chat is
+		// Kingu: one icon, Arkai's chat mark (kinguLook.css), rather than a split button — the chat is
 		// Kingu's AI, and its menu moves to a right-click (or the down arrow) so
 		// nothing it offered is lost.
-		const sparkleButton = append(append(sparkleContainer, $('span.action-container')), $(`a.action-label${ThemeIcon.asCSSSelector(Codicon.copilot)}`, { role: 'button', 'aria-label': localize('kingu.toggleChat.aria', "Toggle Chat, right-click for more chat actions") }));
+		const sparkleButton = append(append(sparkleContainer, $('span.action-container')), $('a.action-label.kingu-arkai-chat-icon', { role: 'button', 'aria-label': localize('kingu.toggleChat.aria', "Toggle Chat, right-click for more chat actions") }));
 		disposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), sparkleContainer, localize('kingu.toggleChat.hover', "Toggle Chat (Arkai) — right-click for more")));
 		const showSparkleMenu = (anchor: HTMLElement | StandardMouseEvent) => {
 			this.hoverService.hideHover(true);
