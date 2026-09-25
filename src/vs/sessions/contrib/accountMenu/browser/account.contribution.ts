@@ -794,7 +794,9 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				section.classList.remove('signed-out');
 				append(identity, $('.sessions-account-titlebar-panel-provider-name')).textContent = status.email
 					?? (provider === 'claude' ? localize('kinguClaudeSystemLogin', "Claude (your Claude Code login)") : label);
-				return;
+				if (!status.signInLabel) {
+					return;
+				}
 			}
 			const actions = append(identity, $('.sessions-account-titlebar-panel-provider-sign-in-actions'));
 			const actionBar = panelStore.add(new ActionBar(actions));
@@ -802,7 +804,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				this.hoverService.hideHover(true);
 				this.clickPanelDisposable.clear();
 			}));
-			actionBar.push(panelStore.add(new Action(`kingu.ai.signIn.${provider}.panel`, localize('kinguSignInTo', "Sign in to {0}", label), undefined, true,
+			actionBar.push(panelStore.add(new Action(`kingu.ai.signIn.${provider}.panel`, status.signInLabel ?? localize('kinguSignInTo', "Sign in to {0}", label), undefined, true,
 				() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, provider))), { icon: false, label: true });
 		}, () => { /* no ADE in this window */ });
 	}

@@ -54,10 +54,26 @@ import {
 	type Turn,
 } from '../../common/state/sessionState.js';
 import { ensureWorkspacelessScratchDir } from '../workspacelessScratchDir.js';
-import { ACP_AUTH_REQUIRED, AcpClient, AcpError, IAcpModel, IAcpNewSessionResult, IAcpPermissionRequest, IAcpToolCall, IAcpToolCallContent, AcpSessionUpdate, resolveGeminiCommand } from './acpClient.js';
-import { readGeminiAuthStatus } from './geminiAuth.js';
+import { ACP_AUTH_REQUIRED, AcpClient, AcpError, IAcpInitializeResult, IAcpModel, IAcpNewSessionResult, IAcpPermissionRequest, IAcpSpawnCommand, IAcpToolCall, IAcpToolCallContent, AcpSessionUpdate } from './acpClient.js';
 
-export const GEMINI_AGENT_PROVIDER_ID: AgentProvider = 'gemini';
+/**
+ * What sets one ACP agent apart from another: its CLI, how its models are
+ * named, and what it says when it is not installed or not signed in.
+ */
+export interface IAcpAgentProfile {
+	readonly id: AgentProvider;
+	readonly displayName: string;
+	readonly description: string;
+	/** How to start the CLI in ACP mode; `undefined` while it is not installed. */
+	resolveCommand(): Promise<IAcpSpawnCommand | undefined>;
+	readonly notInstalledMessage: string;
+	/** The message for a turn refused for want of a login, or `undefined` when the agent is signed in. */
+	signedOutMessage(): Promise<string | undefined>;
+	/** A readable model name; the CLI's own name otherwise. */
+	modelDisplayName?(model: IAcpModel): string;
+	/** Models the CLI runs by id without listing them. */
+	readonly extraModels?: readonly IAcpModel[];
+}
 
 interface IToolState {
 	started: boolean;
@@ -81,7 +97,7 @@ interface IActiveTurn {
 	cancelled: boolean;
 }
 
-interface IGeminiChat {
+interface IAcpChat {
 	readonly chat: URI;
 	readonly session: URI;
 	workingDirectory: URI | undefined;
@@ -108,7 +124,7 @@ interface IGeminiChat {
 }
 
 /** What a chat keeps on disk, so it opens again after the agent host restarts. */
-interface IPersistedGeminiChat {
+interface IPersistedAcpChat {
 	readonly acpSessionId?: string;
 	readonly workingDirectory?: string;
 	readonly model?: ModelSelection;
@@ -154,35 +170,15 @@ function historyPreamble(turns: readonly Turn[]): string | undefined {
 }
 
 /**
- * The CLI's `auto` model, renamed on the way out: the chat UI reads a model id
- * of `auto` as its own Auto router and shows a routing step for it.
+ * The chat UI reads a model id of `auto` as its own Auto router and shows a
+ * routing step for it, so an agent's `auto` model is renamed on the way out.
  */
-const AUTO_MODEL_ID = 'gemini-auto';
-
-function fromAcpModelId(modelId: string): string {
-	return modelId === 'auto' ? AUTO_MODEL_ID : modelId;
-}
-
-function toAcpModelId(modelId: string): string {
-	return modelId === AUTO_MODEL_ID ? 'auto' : modelId;
+function autoModelId(agent: AgentProvider): string {
+	return `${agent}-auto`;
 }
 
 /**
- * A name that says which Gemini it is: the CLI names most models by their id
- * (`gemini-3.1-pro-preview`), which reads as `Gemini 3.1 Pro Preview`.
- */
-function geminiModelDisplayName(model: IAcpModel): string {
-	if (model.modelId === 'auto') {
-		return localize('gemini.autoModel', "Gemini Auto");
-	}
-	if (!/^gemini-[a-z0-9.-]+$/.test(model.name)) {
-		return model.name;
-	}
-	return model.name.split('-').map(word => /^\d/.test(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-}
-
-/**
- * Token counts Gemini attaches to a finished prompt (`_meta.quota`), read
+ * Token counts an ACP agent attaches to a finished prompt (`_meta.quota`), read
  * defensively: the field is the CLI's extension, not part of ACP.
  */
 function readPromptUsage(result: object): { inputTokens?: number; outputTokens?: number; model?: string } | undefined {
@@ -213,16 +209,16 @@ function permissionKindOf(kind: string | undefined): 'shell' | 'write' | 'read' 
 }
 
 /**
- * Kingu: the Gemini agent, running the user's Gemini CLI over the Agent Client
- * Protocol (`gemini --acp`). One CLI process per chat, started on the chat's
- * first message in its working directory. The CLI does its own model calls,
- * tools and file edits on the user's own Gemini login (API key or Google);
- * this agent maps its stream onto the host's chat actions and routes its
- * permission prompts to the user.
+ * Kingu: an agent CLI driven over the Agent Client Protocol (`gemini --acp`,
+ * `qwen --acp`, `opencode acp`, ...). One CLI process per chat, started on the
+ * chat's first message in its working directory. The CLI does its own model
+ * calls, tools and file edits on the user's own login; this agent maps its
+ * stream onto the host's chat actions and routes its permission prompts to the
+ * user. {@link IAcpAgentProfile} holds what differs between CLIs.
  */
-export class GeminiAgent extends Disposable implements IAgent {
+export class AcpAgent extends Disposable implements IAgent {
 
-	readonly id = GEMINI_AGENT_PROVIDER_ID;
+	readonly id: AgentProvider;
 	readonly agentHostCapabilities = { workspaceConversion: false } as const;
 
 	private readonly _onDidChatProgress = this._register(new Emitter<AgentSignal>());
@@ -236,30 +232,35 @@ export class GeminiAgent extends Disposable implements IAgent {
 	private readonly _models = observableValue<readonly IAgentModelInfo[]>(this, []);
 	readonly models = this._models;
 
-	private readonly _chats = new Map<string, IGeminiChat>();
+	private readonly _chats = new Map<string, IAcpChat>();
 	private readonly _permissions = new PendingRequestRegistry<boolean>();
 	private _refreshing: Promise<void> | undefined;
 	private readonly _saves = new Map<string, Promise<void>>();
 
+	/** Whether the CLI can resume a session it saved (`session/load`). */
+	private _canLoadSessions = false;
+
 	constructor(
+		private readonly _profile: IAcpAgentProfile,
 		@ILogService private readonly _logService: ILogService,
 		@INativeEnvironmentService private readonly _environmentService: INativeEnvironmentService,
 	) {
 		super();
+		this.id = _profile.id;
 		queueMicrotask(() => { void this.refreshModels(); });
 	}
 
 	getDescriptor(): IAgentDescriptor {
 		return {
 			provider: this.id,
-			displayName: localize('gemini.displayName', "Gemini"),
-			description: localize('gemini.description', "Gemini agent backed by your Gemini CLI"),
+			displayName: this._profile.displayName,
+			description: this._profile.description,
 		};
 	}
 
 	/**
 	 * The models the CLI offers, read from a throwaway ACP session (creating one
-	 * needs no login and runs no model call). Empty while no Gemini CLI is
+	 * needs no login and runs no model call). Empty while the CLI is not
 	 * installed, which leaves the harness unusable rather than failing later.
 	 */
 	refreshModels(): Promise<void> {
@@ -268,29 +269,43 @@ export class GeminiAgent extends Disposable implements IAgent {
 	}
 
 	private async _readModels(): Promise<void> {
-		const command = await resolveGeminiCommand();
+		const command = await this._profile.resolveCommand();
 		if (!command) {
-			this._logService.info('[Gemini] no Gemini CLI on PATH; the agent offers no models');
+			this._logService.info(`[${this._profile.displayName}] CLI not found; the agent offers no models`);
 			this._models.set([], undefined);
 			return;
 		}
 		const client = new AcpClient(command, tmpdir(), this._inertHandlers(), message => this._logService.info(message));
 		try {
-			await client.request('initialize', this._initializeParams());
+			this._noteCapabilities(await client.request<IAcpInitializeResult>('initialize', this._initializeParams()));
 			const session = await client.request<IAcpNewSessionResult>('session/new', { cwd: tmpdir(), mcpServers: [] });
-			const models = (session.models?.availableModels ?? []).map(model => ({
+			const available = session.models?.availableModels ?? [];
+			const extra = (this._profile.extraModels ?? []).filter(model => !available.some(candidate => candidate.modelId === model.modelId));
+			const models = [...available, ...extra].map(model => ({
 				provider: this.id,
-				id: fromAcpModelId(model.modelId),
-				name: geminiModelDisplayName(model),
+				id: this._fromAcpModelId(model.modelId),
+				name: this._profile.modelDisplayName?.(model) ?? model.name,
 				supportsVision: true,
 			} satisfies IAgentModelInfo));
-			this._logService.info(`[Gemini] Models refreshed. Count: ${models.length}, ${models.map(model => model.name).join(', ')}`);
+			this._logService.info(`[${this._profile.displayName}] Models refreshed. Count: ${models.length}, ${models.map(model => model.name).join(', ')}`);
 			this._models.set(models, undefined);
 		} catch (error) {
-			this._logService.error(error, '[Gemini] could not read the CLI\'s models');
+			this._logService.error(error, `[${this._profile.displayName}] could not read the CLI's models`);
 		} finally {
 			client.dispose();
 		}
+	}
+
+	private _noteCapabilities(result: IAcpInitializeResult): void {
+		this._canLoadSessions = !!result.agentCapabilities?.loadSession;
+	}
+
+	private _fromAcpModelId(modelId: string): string {
+		return modelId === 'auto' ? autoModelId(this.id) : modelId;
+	}
+
+	private _toAcpModelId(modelId: string): string {
+		return modelId === autoModelId(this.id) ? 'auto' : modelId;
 	}
 
 	private _initializeParams(): unknown {
@@ -317,7 +332,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 		abort: async chat => this._abort(chat),
 		getModel: chat => this._chats.get(chat.toString())?.model,
 		changeModel: async (chat, model) => this._changeModel(chat, model),
-		changeAgent: async (_chat: URI, _agent: AgentSelection | undefined) => { /* Gemini has no sub-agents to pick */ },
+		changeAgent: async (_chat: URI, _agent: AgentSelection | undefined) => { /* ACP has no sub-agents to pick */ },
 		getMessages: async (chat, context) => {
 			const record = this._chatFor(chat, context);
 			await this._hydrate(record);
@@ -325,7 +340,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 		},
 	};
 
-	private _chatFor(chat: URI, context?: AgentChatOperationContext): IGeminiChat {
+	private _chatFor(chat: URI, context?: AgentChatOperationContext): IAcpChat {
 		const key = chat.toString();
 		let record = this._chats.get(key);
 		if (!record) {
@@ -377,7 +392,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 			try {
 				await fs.rm(this._storePath(record), { force: true });
 			} catch (error) {
-				this._logService.warn(`[Gemini] could not remove the saved chat: ${error instanceof Error ? error.message : String(error)}`);
+				this._logService.warn(`[${this._profile.displayName}] could not remove the saved chat: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		}
 	}
@@ -385,17 +400,17 @@ export class GeminiAgent extends Disposable implements IAgent {
 	// ---- Persistence ---------------------------------------------------------------
 
 	/** One file per session, under the agent host's user data. */
-	private _storePath(record: IGeminiChat): string {
-		return join(this._environmentService.userDataPath, 'geminiAgent', `${AgentSession.id(record.session)}.json`);
+	private _storePath(record: IAcpChat): string {
+		return join(this._environmentService.userDataPath, `${this.id}Agent`, `${AgentSession.id(record.session)}.json`);
 	}
 
-	private _hydrate(record: IGeminiChat): Promise<void> {
+	private _hydrate(record: IAcpChat): Promise<void> {
 		record.hydrated ??= this._readSaved(record);
 		return record.hydrated;
 	}
 
-	private async _readSaved(record: IGeminiChat): Promise<void> {
-		let saved: IPersistedGeminiChat;
+	private async _readSaved(record: IAcpChat): Promise<void> {
+		let saved: IPersistedAcpChat;
 		try {
 			saved = JSON.parse(await fs.readFile(this._storePath(record), 'utf8'));
 		} catch {
@@ -412,8 +427,8 @@ export class GeminiAgent extends Disposable implements IAgent {
 	}
 
 	/** Writes the chat's record; writes queue per chat so the last one lands last. */
-	private _save(record: IGeminiChat): void {
-		const saved: IPersistedGeminiChat = {
+	private _save(record: IAcpChat): void {
+		const saved: IPersistedAcpChat = {
 			acpSessionId: record.savedAcpSessionId,
 			workingDirectory: record.workingDirectory?.toString(),
 			model: record.model,
@@ -431,7 +446,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 				await fs.mkdir(dirname(path), { recursive: true });
 				await fs.writeFile(path, content, 'utf8');
 			} catch (error) {
-				this._logService.warn(`[Gemini] could not save the chat: ${error instanceof Error ? error.message : String(error)}`);
+				this._logService.warn(`[${this._profile.displayName}] could not save the chat: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		});
 		this._saves.set(path, next);
@@ -454,7 +469,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 	}
 
 	/** Starts the chat's CLI process and ACP session, once, in its working directory. */
-	private _ensureStarted(record: IGeminiChat): Promise<void> {
+	private _ensureStarted(record: IAcpChat): Promise<void> {
 		if (record.client && !record.client.exited && record.acpSessionId) {
 			return Promise.resolve();
 		}
@@ -468,10 +483,10 @@ export class GeminiAgent extends Disposable implements IAgent {
 		return record.startup;
 	}
 
-	private async _start(record: IGeminiChat): Promise<void> {
-		const command = await resolveGeminiCommand();
+	private async _start(record: IAcpChat): Promise<void> {
+		const command = await this._profile.resolveCommand();
 		if (!command) {
-			throw new Error(localize('gemini.notInstalled', "The Gemini CLI is not installed. Install it with `npm install -g @google/gemini-cli`, then try again."));
+			throw new Error(this._profile.notInstalledMessage);
 		}
 		const cwd = record.workingDirectory ?? await ensureWorkspacelessScratchDir(URI.file(homedir()), AgentSession.id(record.session));
 		record.workingDirectory = cwd;
@@ -500,19 +515,21 @@ export class GeminiAgent extends Disposable implements IAgent {
 			}
 		});
 		client.onDidExit(({ code }) => {
-			this._logService.info(`[Gemini] CLI for ${record.chat.toString()} exited (${code})`);
+			this._logService.info(`[${this._profile.displayName}] CLI for ${record.chat.toString()} exited (${code})`);
 			if (record.client === client) {
 				record.client = undefined;
 				record.acpSessionId = undefined;
 				record.startup = undefined;
 			}
 		});
-		await client.request('initialize', this._initializeParams());
+		this._noteCapabilities(await client.request<IAcpInitializeResult>('initialize', this._initializeParams()));
 		// Resume the CLI's own session when there is one, so the model keeps the
 		// conversation. The CLI replays its history as updates just after it
 		// answers; those are dropped until the stream goes quiet.
 		let session: IAcpNewSessionResult | undefined;
-		if (record.savedAcpSessionId) {
+		if (record.savedAcpSessionId && !this._canLoadSessions) {
+			record.historyPreamble = historyPreamble(record.turns);
+		} else if (record.savedAcpSessionId) {
 			record.replaying = true;
 			record.lastReplayUpdate = Date.now();
 			try {
@@ -520,7 +537,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 				session = { ...loaded, sessionId: record.savedAcpSessionId };
 				await this._replayQuiet(record);
 			} catch (error) {
-				this._logService.warn(`[Gemini] could not resume session ${record.savedAcpSessionId}, starting a new one: ${error instanceof Error ? error.message : String(error)}${error instanceof AcpError && error.data ? ` ${JSON.stringify(error.data)}` : ''}`);
+				this._logService.warn(`[${this._profile.displayName}] could not resume session ${record.savedAcpSessionId}, starting a new one: ${error instanceof Error ? error.message : String(error)}${error instanceof AcpError && error.data ? ` ${JSON.stringify(error.data)}` : ''}`);
 				// The CLI keeps no session it cannot find (it also loses one resumed within a
 				// minute of its start); the model still needs the conversation so far.
 				record.historyPreamble = historyPreamble(record.turns);
@@ -534,27 +551,27 @@ export class GeminiAgent extends Disposable implements IAgent {
 			record.savedAcpSessionId = session.sessionId;
 			this._save(record);
 		}
-		if (record.model?.id && toAcpModelId(record.model.id) !== session.models?.currentModelId) {
+		if (record.model?.id && this._toAcpModelId(record.model.id) !== session.models?.currentModelId) {
 			await this._applyModel(record, record.model.id);
 		}
 	}
 
 	/** Resolves once the CLI has sent no replayed update for a moment (at most a few seconds). */
-	private async _replayQuiet(record: IGeminiChat): Promise<void> {
+	private async _replayQuiet(record: IAcpChat): Promise<void> {
 		const deadline = Date.now() + 5000;
 		while (Date.now() < deadline && Date.now() - record.lastReplayUpdate < 400) {
 			await new Promise(resolve => setTimeout(resolve, 100));
 		}
 	}
 
-	private async _applyModel(record: IGeminiChat, modelId: string): Promise<void> {
+	private async _applyModel(record: IAcpChat, modelId: string): Promise<void> {
 		if (!record.client || !record.acpSessionId) {
 			return;
 		}
 		try {
-			await record.client.request('session/set_model', { sessionId: record.acpSessionId, modelId: toAcpModelId(modelId) });
+			await record.client.request('session/set_model', { sessionId: record.acpSessionId, modelId: this._toAcpModelId(modelId) });
 		} catch (error) {
-			this._logService.warn(`[Gemini] could not switch the model to ${modelId}: ${error instanceof Error ? error.message : String(error)}`);
+			this._logService.warn(`[${this._profile.displayName}] could not switch the model to ${modelId}: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -596,11 +613,9 @@ export class GeminiAgent extends Disposable implements IAgent {
 			if (active.cancelled) {
 				return;
 			}
-			const signedOut = error instanceof AcpError && (error.code === ACP_AUTH_REQUIRED || /auth/i.test(error.message)) && !(await readGeminiAuthStatus()).signedIn;
-			const message = signedOut
-				? localize('gemini.signIn', "Gemini is not signed in. Choose Sign in to Gemini in the account menu, or set GEMINI_API_KEY, then try again.")
-				: error instanceof Error ? error.message : String(error);
-			this._fire(record, { type: ActionType.ChatError, turnId: id, duration: Date.now() - active.startedAt, part: createErrorResponsePart({ errorType: signedOut ? 'authentication' : 'gemini', message }) });
+			const signedOut = error instanceof AcpError && (error.code === ACP_AUTH_REQUIRED || /auth/i.test(error.message)) ? await this._profile.signedOutMessage() : undefined;
+			const message = signedOut ?? (error instanceof Error ? error.message : String(error));
+			this._fire(record, { type: ActionType.ChatError, turnId: id, duration: Date.now() - active.startedAt, part: createErrorResponsePart({ errorType: signedOut ? 'authentication' : this.id, message }) });
 			this._finishTurn(record, active, TurnState.Error);
 		} finally {
 			if (record.active === active) {
@@ -610,7 +625,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 	}
 
 	/** The prompt as ACP content: the text, then attached files as links the CLI reads itself. */
-	private _promptBlocks(record: IGeminiChat, prompt: string, attachments: readonly MessageAttachment[] | undefined): unknown[] {
+	private _promptBlocks(record: IAcpChat, prompt: string, attachments: readonly MessageAttachment[] | undefined): unknown[] {
 		const blocks: unknown[] = [];
 		if (record.historyPreamble) {
 			blocks.push({ type: 'text', text: record.historyPreamble });
@@ -629,7 +644,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 		return blocks;
 	}
 
-	private _finishTurn(record: IGeminiChat, active: IActiveTurn, state: TurnState): void {
+	private _finishTurn(record: IAcpChat, active: IActiveTurn, state: TurnState): void {
 		const responseParts: ResponsePart[] = [...active.markdown].map(([id, content]): ResponsePart => ({ kind: ResponsePartKind.Markdown, id, content }));
 		record.turns.push({
 			id: active.turnId,
@@ -660,15 +675,15 @@ export class GeminiAgent extends Disposable implements IAgent {
 
 	// ---- Stream mapping ----------------------------------------------------------
 
-	private _fire(record: IGeminiChat, action: ChatAction): void {
+	private _fire(record: IAcpChat, action: ChatAction): void {
 		this._onDidChatProgress.fire({ kind: 'action', resource: record.chat, action });
 	}
 
 	private _newPartId(active: IActiveTurn): string {
-		return `${active.turnId}#gemini#${active.partCounter++}`;
+		return `${active.turnId}#${this.id}#${active.partCounter++}`;
 	}
 
-	private _onUpdate(record: IGeminiChat, update: AcpSessionUpdate): void {
+	private _onUpdate(record: IAcpChat, update: AcpSessionUpdate): void {
 		const active = record.active;
 		if (!active || active.cancelled) {
 			return;
@@ -707,7 +722,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 		}
 	}
 
-	private _startTool(record: IGeminiChat, active: IActiveTurn, call: IAcpToolCall): IToolState {
+	private _startTool(record: IAcpChat, active: IActiveTurn, call: IAcpToolCall): IToolState {
 		let tool = active.tools.get(call.toolCallId);
 		if (!tool) {
 			tool = { started: false, ready: false, done: false, title: toolTitle(call, call.kind ?? 'tool'), kind: call.kind ?? 'other' };
@@ -726,7 +741,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 		return tool;
 	}
 
-	private _readyTool(record: IGeminiChat, active: IActiveTurn, call: IAcpToolCall, tool: IToolState): void {
+	private _readyTool(record: IAcpChat, active: IActiveTurn, call: IAcpToolCall, tool: IToolState): void {
 		if (!tool.ready) {
 			tool.ready = true;
 			this._fire(record, {
@@ -740,7 +755,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 		}
 	}
 
-	private _onToolCall(record: IGeminiChat, active: IActiveTurn, call: IAcpToolCall): void {
+	private _onToolCall(record: IAcpChat, active: IActiveTurn, call: IAcpToolCall): void {
 		const tool = this._startTool(record, active, call);
 		if (call.status === 'in_progress') {
 			this._readyTool(record, active, call, tool);
@@ -753,7 +768,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 				success,
 				pastTenseMessage: tool.title,
 				...(text ? { content: [{ type: ToolResultContentType.Text, text }] } : {}),
-				...(success ? {} : { error: { message: text ?? localize('gemini.toolFailed', "The tool failed.") } }),
+				...(success ? {} : { error: { message: text ?? localize('acp.toolFailed', "The tool failed.") } }),
 			};
 			this._fire(record, { type: ActionType.ChatToolCallComplete, turnId: active.turnId, toolCallId: call.toolCallId, result });
 		}
@@ -764,7 +779,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 	 * confirmation, and the answer goes back as the CLI's allow-once or
 	 * reject-once option. Keyed by the tool call id, as the host answers it.
 	 */
-	private async _requestPermission(record: IGeminiChat, request: IAcpPermissionRequest): Promise<{ outcome: 'cancelled' } | { outcome: 'selected'; optionId: string }> {
+	private async _requestPermission(record: IAcpChat, request: IAcpPermissionRequest): Promise<{ outcome: 'cancelled' } | { outcome: 'selected'; optionId: string }> {
 		const active = record.active;
 		if (!active || active.cancelled) {
 			return { outcome: 'cancelled' };
@@ -799,7 +814,7 @@ export class GeminiAgent extends Disposable implements IAgent {
 	// ---- The rest of the contract, answered minimally ------------------------------
 
 	async setWorkingDirectory(): Promise<void> {
-		throw new Error('The Gemini agent does not support changing the working directory of an existing session.');
+		throw new Error(`The ${this._profile.displayName} agent does not support changing the working directory of an existing session.`);
 	}
 
 	getOrCreateActiveClient(_chat: URI, _context: URI | IAgentChatContext, client: { readonly clientId: string; readonly displayName?: string }): IActiveClient {
@@ -864,9 +879,9 @@ export class GeminiAgent extends Disposable implements IAgent {
 	}
 
 	/**
-	 * Gemini runs on the user's own Gemini login, never GitHub: the Copilot
-	 * resource is declared optional, as Claude and Codex declare it, so the
-	 * Agents window does not ask for GitHub before offering Gemini.
+	 * An ACP agent runs on the user's own login with its CLI, never GitHub: the
+	 * Copilot resource is declared optional, as Claude and Codex declare it, so
+	 * the Agents window does not ask for GitHub before offering it.
 	 */
 	getProtectedResources(): ProtectedResourceMetadata[] {
 		return [{ ...GITHUB_COPILOT_PROTECTED_RESOURCE, required: false }];

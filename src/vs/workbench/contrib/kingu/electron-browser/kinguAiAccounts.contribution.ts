@@ -64,6 +64,7 @@ async function readStatus(mainProcessService: IMainProcessService, languageModel
 		return {
 			signedIn: gemini.signedIn,
 			email: gemini.email ?? (gemini.signedIn && gemini.method === 'gemini-api-key' ? localize('kingu.ai.geminiApiKey', "Gemini (API key)") : undefined),
+			signInLabel: gemini.signedIn && gemini.method !== 'oauth-personal' ? localize('kingu.ai.geminiGoogle', "Sign in with Google") : undefined,
 		};
 	}
 	const status = statusOf(await invokeOrca<IAccountsState>(mainProcessService, `${provider}Accounts:list`));
@@ -146,6 +147,10 @@ CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_COMMAND_ID, async (accessor: S
 				location: ProgressLocation.Notification,
 				title: localize('kingu.ai.signingInGoogle', "Signing in to Gemini with Google. Finish in the browser window that opened."),
 			}, () => mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME).call('geminiSignIn'));
+			// A Google login has a quota the ADE can read, but only once it may use the
+			// Gemini CLI's credentials; signing in here is that consent.
+			await invokeOrca(mainProcessService, 'settings:set', { geminiCliOAuthEnabled: true }).catch(() => undefined);
+			void invokeOrca(mainProcessService, 'rateLimits:refresh').catch(() => undefined);
 			setupService.requestReload(kinguAiAgentId(provider));
 			await KinguAiAccountsContribution.refresh();
 			notificationService.info(localize('kingu.ai.signedIn', "Signed in to {0}.", label));

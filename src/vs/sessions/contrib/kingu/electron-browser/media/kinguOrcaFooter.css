@@ -197,6 +197,9 @@
 	align-items: center;
 	gap: 6px;
 	font-variant-numeric: tabular-nums;
+	/* A narrow window squeezes the pill; its readings stay on one line. */
+	white-space: nowrap;
+	flex-shrink: 0;
 }
 
 .kingu-orca-segment.quiet {

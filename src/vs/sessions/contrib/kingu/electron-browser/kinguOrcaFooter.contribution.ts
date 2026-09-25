@@ -42,6 +42,9 @@ import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettings
 import { attachFooterTooltip, FooterChip, FooterPopover, iconButton, lucideIcon, menuItem, menuLabel, menuRadioItem, menuSeparator, providerIcon, wireMenuKeyboard } from './kinguOrcaFooterParts.js';
 import { FLOATING_ENABLED_SETTING_ID, FLOATING_LOCATION_SETTING_ID, KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID, showFloatingWorkspaceMenu } from './kinguFloatingWorkspace.contribution.js';
 import './kinguOrcaService.js';
+import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
+import { IKinguGeminiStatus, IKinguGeminiUsage, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
+import { formatTokens } from '../common/kinguVaultUsage.js';
 
 /**
  * How often the memory reading is retaken while the Resource Manager is closed.
@@ -118,6 +121,31 @@ function renderProviderSegment(slot: string, provider: IOrcaProviderRateLimits, 
 		segment.appendChild(lucideIcon('triangle-alert', 11, 'kingu-orca-muted'));
 	}
 	return segment;
+}
+
+/** How often Gemini's own meter is read again: its CLI writes a reply's tokens as it finishes. */
+const GEMINI_USAGE_INTERVAL_MS = 60_000;
+
+/** Gemini signed in without a quota the ADE can read (an API key), and its tokens today. */
+interface IKinguGeminiMeter {
+	readonly status: IKinguGeminiStatus;
+	readonly usage: IKinguGeminiUsage;
+}
+
+/**
+ * Gemini's segment when the ADE has none to show. The ADE reads Gemini's quota
+ * only for a Google login; an API key has no quota at all, so the segment
+ * counts today's tokens instead of a percentage.
+ */
+function renderGeminiMeterSegment(meter: IKinguGeminiMeter): HTMLElement {
+	const segment = $('span.kingu-orca-segment');
+	segment.appendChild(providerIcon('gemini'));
+	append(segment, $('span.kingu-orca-tabular')).textContent = localize('kingu.footer.gemini.tokensToday', "{0} today", formatTokens(meter.usage.inputTokens + meter.usage.outputTokens));
+	return segment;
+}
+
+function geminiMeterLabel(meter: IKinguGeminiMeter): string {
+	return localize('kingu.footer.gemini.aria', "Gemini: {0} tokens today ({1} in, {2} out) over {3} replies; an API key has no quota to show", formatTokens(meter.usage.inputTokens + meter.usage.outputTokens), formatTokens(meter.usage.inputTokens), formatTokens(meter.usage.outputTokens), meter.usage.replies);
 }
 
 /** `UpdateStatus` in the ADE, as far as the footer reads it. */
@@ -210,6 +238,7 @@ class KinguOrcaFooterContribution extends Disposable {
 	private readonly _resourcePoll = this._register(new MutableDisposable());
 
 	private _rateLimits: OrcaRateLimitState | undefined;
+	private _geminiMeter: IKinguGeminiMeter | undefined;
 	private _refreshing = false;
 	private _awakeStatus: IOrcaAwakeStatus = { mode: 'off', active: false };
 	private _memory: IOrcaMemorySnapshot | undefined;
@@ -289,6 +318,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
 		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@ILogService private readonly _logService: ILogService,
+		@IMainProcessService private readonly _mainProcessService: IMainProcessService,
 	) {
 		super();
 
@@ -333,6 +363,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._register(this._interval(() => void this._readResources(), RESOURCE_INTERVAL_MS));
 		this._register(this._interval(() => void this._readSsh(), SSH_INTERVAL_MS));
 		this._register(this._interval(() => void this._readPorts(false), PORTS_INTERVAL_MS));
+		this._register(this._interval(() => void this._readGeminiMeter(), GEMINI_USAGE_INTERVAL_MS));
 
 		this._hideForeignEntries();
 		this._renderAwake();
@@ -350,6 +381,7 @@ class KinguOrcaFooterContribution extends Disposable {
 	private async _start(): Promise<void> {
 		await Promise.all([
 			this._read('rateLimits:get', state => this._renderUsage(state as OrcaRateLimitState)),
+			this._readGeminiMeter(),
 			this._readUsageUiState(),
 			this._read('agentAwake:getStatus', status => {
 				this._awakeStatus = status as IOrcaAwakeStatus;
@@ -398,6 +430,10 @@ class KinguOrcaFooterContribution extends Disposable {
 		for (const { slot, name } of ORCA_FOOTER_PROVIDERS) {
 			const provider = state?.[slot];
 			if (!isProviderShown(provider)) {
+				if (slot === 'gemini' && this._geminiMeter) {
+					segments.push(renderGeminiMeterSegment(this._geminiMeter));
+					labels.push(geminiMeterLabel(this._geminiMeter));
+				}
 				continue;
 			}
 			anyFetching ||= provider.status === 'fetching';
@@ -439,6 +475,27 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._scheduleTick(resets);
 	}
 
+	/**
+	 * Gemini's own meter, for when it is signed in with an API key: the ADE
+	 * shows Gemini only for a Google login, whose quota it can read.
+	 */
+	private async _readGeminiMeter(): Promise<void> {
+		try {
+			const channel = this._mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME);
+			const status = await channel.call<IKinguGeminiStatus>('geminiStatus');
+			const meter = status.signedIn && status.method !== 'oauth-personal'
+				? { status, usage: await channel.call<IKinguGeminiUsage>('geminiUsageToday') }
+				: undefined;
+			if (this._store.isDisposed) {
+				return;
+			}
+			this._geminiMeter = meter;
+			this._renderUsage(this._rateLimits);
+		} catch (error) {
+			this._logService.warn('[kingu-footer] could not read Gemini usage', error);
+		}
+	}
+
 	private _anyFetching(): boolean {
 		return ORCA_FOOTER_PROVIDERS.some(({ slot }) => {
 			const provider = this._rateLimits?.[slot];
@@ -474,7 +531,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._refreshing = true;
 		this._renderUsage(this._rateLimits);
 		try {
-			const state = await this._orca.invoke<OrcaRateLimitState>('rateLimits:refresh');
+			const [state] = await Promise.all([this._orca.invoke<OrcaRateLimitState>('rateLimits:refresh'), this._readGeminiMeter()]);
 			this._refreshing = false;
 			this._renderUsage(state ?? this._rateLimits);
 		} catch (error) {

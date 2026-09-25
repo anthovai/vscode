@@ -27,6 +27,11 @@ export const KINGU_AI_PROVIDERS: readonly KinguAiProvider[] = ['claude', 'codex'
 export interface IKinguAiAccountStatus {
 	readonly signedIn: boolean;
 	readonly email?: string;
+	/**
+	 * A sign-in still worth offering while signed in, by its label: Gemini on an
+	 * API key can move to a Google login, whose quota the usage meter shows.
+	 */
+	readonly signInLabel?: string;
 }
 
 /** Whether each provider has an account in use, for menus. */

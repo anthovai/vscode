@@ -7,10 +7,11 @@ import { tmpdir } from 'os';
 import { Event } from '../../../base/common/event.js';
 import { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { ILogService } from '../../log/common/log.js';
-import { AcpClient, resolveGeminiCommand } from '../../agentHost/node/gemini/acpClient.js';
-import { readGeminiAuthStatus } from '../../agentHost/node/gemini/geminiAuth.js';
+import { AcpClient, resolveGeminiCommand } from '../../agentHost/node/acp/acpClient.js';
+import { readGeminiAuthStatus } from '../../agentHost/node/acp/geminiAuth.js';
 import { getOrcaCodexHome } from '../../kinguOrca/electron-main/kinguOrcaHost.js';
 import { IKinguGeminiStatus } from '../common/kinguAi.js';
+import { readGeminiUsageToday } from '../node/geminiUsage.js';
 
 /**
  * Gemini's sign-in, which the ADE does not keep: the CLI's own record in
@@ -32,6 +33,7 @@ export class KinguAiChannel implements IServerChannel {
 	async call<T>(_context: unknown, command: string): Promise<T> {
 		switch (command) {
 			case 'geminiStatus': return await this._geminiStatus() as T;
+			case 'geminiUsageToday': return await readGeminiUsageToday() as T;
 			case 'geminiSignIn': return await (this._signIn ??= this._geminiSignIn().finally(() => { this._signIn = undefined; })) as T;
 			// After the ADE selects another Codex account: record its home for the next app-server launch.
 			case 'refreshCodexHome': return await getOrcaCodexHome() as T;

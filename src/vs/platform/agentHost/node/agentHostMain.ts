@@ -24,7 +24,9 @@ import { IAgentConfigurationService } from './agentConfigurationService.js';
 import { IAgentHostCompletions } from './agentHostCompletions.js';
 import { CopilotAgent } from './copilot/copilotAgent.js';
 import { ClaudeAgent } from './claude/claudeAgent.js';
-import { GeminiAgent } from './gemini/geminiAgent.js';
+import { AcpAgent } from './acp/acpAgent.js';
+import { detectAcpAgentProfiles } from './acp/acpAgentProfiles.js';
+import { GeminiAgent } from './acp/geminiAgent.js';
 import { ClaudeSdkPackage } from './claude/claudeAgentSdkService.js';
 import { CodexAgent, CodexSdkPackage } from './codex/codexAgent.js';
 import { createCodexProviderConfiguration } from './codex/codexProviderConfiguration.js';
@@ -173,6 +175,14 @@ async function startAgentHost(): Promise<void> {
 		// Kingu: Gemini runs the user's own Gemini CLI over ACP; with no CLI
 		// installed it offers no models and stays unusable in the pickers.
 		providerService.registerProvider(instantiationService.createInstance(GeminiAgent));
+		// Kingu: the ADE's other agents whose CLIs serve ACP (Qwen Code, OpenCode,
+		// Goose, Kimi, ...), each once its CLI is found on PATH. Registered as they
+		// are found, like Codex, so the host does not wait on their `--help`.
+		void detectAcpAgentProfiles(logService).then(profiles => {
+			for (const profile of profiles) {
+				providerService.registerProvider(instantiationService.createInstance(AcpAgent, profile));
+			}
+		}, error => logService.warn('[ACP] could not look for agent CLIs', error));
 		// Codex registration is one-way (register-on-enable): the env-var toggle
 		// or the renderer-forwarded `codexAgentEnabled` root config enables it.
 		// Disabling requires an agent host restart.

@@ -25,6 +25,7 @@ export interface IAcpInitializeResult {
 	readonly protocolVersion: number;
 	readonly authMethods?: readonly IAcpAuthMethod[];
 	readonly agentInfo?: { readonly name?: string; readonly title?: string; readonly version?: string };
+	readonly agentCapabilities?: { readonly loadSession?: boolean };
 }
 
 export interface IAcpModel {
@@ -286,44 +287,78 @@ async function isFile(path: string): Promise<boolean> {
 	}
 }
 
-/**
- * How to start `gemini --acp`. On Windows the npm install is a `.cmd` shim, so
- * its script is run with Node directly (no `cmd.exe` in between, which would
- * mangle arguments and outlive a kill); elsewhere the `gemini` executable runs
- * as is. `undefined` when no Gemini CLI is installed.
- */
-export async function resolveGeminiCommand(env: NodeJS.ProcessEnv = process.env): Promise<IAcpSpawnCommand | undefined> {
-	const pathValue = Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? '';
-	const dirs = pathValue.split(delimiter).filter(Boolean);
+/** The environment an agent CLI runs in: the host's own, less what would make it act as Electron or VS Code. */
+function agentEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 	const childEnv: NodeJS.ProcessEnv = { ...env };
 	for (const key of Object.keys(childEnv)) {
 		if (key.startsWith('VSCODE_') || key.startsWith('ELECTRON_') || key === 'NODE_OPTIONS') {
 			delete childEnv[key];
 		}
 	}
-	if (process.platform === 'win32') {
+	return childEnv;
+}
+
+function pathDirs(env: NodeJS.ProcessEnv): string[] {
+	const pathValue = Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1] ?? '';
+	return pathValue.split(delimiter).filter(Boolean);
+}
+
+/**
+ * How to start an agent CLI found on PATH with `args`, or `undefined` when it
+ * is not installed. On Windows an npm install is a `.cmd` shim; its script is
+ * run with Node directly (no `cmd.exe` in between, which would mangle
+ * arguments and outlive a kill), and a shim that wraps an executable runs that
+ * executable. Elsewhere the executable runs as is.
+ */
+export async function resolveAcpCommand(executable: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): Promise<IAcpSpawnCommand | undefined> {
+	const dirs = pathDirs(env);
+	const childEnv = agentEnv(env);
+	if (process.platform !== 'win32') {
 		for (const dir of dirs) {
-			if (!await isFile(join(dir, 'gemini.cmd'))) {
-				continue;
+			const candidate = join(dir, executable);
+			if (await isFile(candidate)) {
+				return { command: candidate, args: [...args], env: childEnv };
 			}
-			const script = join(dir, 'node_modules', '@google', 'gemini-cli', 'bundle', 'gemini.js');
-			if (!await isFile(script)) {
-				continue;
-			}
-			const node = await findNode(dirs);
-			return node
-				? { command: node, args: [script, '--acp'], env: childEnv }
-				: { command: process.execPath, args: [script, '--acp'], env: { ...childEnv, ELECTRON_RUN_AS_NODE: '1' } };
 		}
 		return undefined;
 	}
 	for (const dir of dirs) {
-		const candidate = join(dir, 'gemini');
-		if (await isFile(candidate)) {
-			return { command: candidate, args: ['--acp'], env: childEnv };
+		const exe = join(dir, `${executable}.exe`);
+		if (await isFile(exe)) {
+			return { command: exe, args: [...args], env: childEnv };
 		}
+		const shim = join(dir, `${executable}.cmd`);
+		if (!await isFile(shim)) {
+			continue;
+		}
+		let text: string;
+		try {
+			text = await fs.readFile(shim, 'utf8');
+		} catch {
+			continue;
+		}
+		const target = /"%~?dp0%?\\(?<target>[^"%]+\.(?<kind>m?js|cjs|exe))"/i.exec(text)?.groups;
+		if (!target) {
+			continue;
+		}
+		const script = join(dir, target.target);
+		if (!await isFile(script)) {
+			continue;
+		}
+		if (target.kind.toLowerCase() === 'exe') {
+			return { command: script, args: [...args], env: childEnv };
+		}
+		const node = await findNode(dirs);
+		return node
+			? { command: node, args: [script, ...args], env: childEnv }
+			: { command: process.execPath, args: [script, ...args], env: { ...childEnv, ELECTRON_RUN_AS_NODE: '1' } };
 	}
 	return undefined;
+}
+
+/** How to start `gemini --acp`, or `undefined` when no Gemini CLI is installed. */
+export function resolveGeminiCommand(env: NodeJS.ProcessEnv = process.env): Promise<IAcpSpawnCommand | undefined> {
+	return resolveAcpCommand('gemini', ['--acp'], env);
 }
 
 async function findNode(dirs: readonly string[]): Promise<string | undefined> {

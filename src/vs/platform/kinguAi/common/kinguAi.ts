@@ -16,3 +16,15 @@ export interface IKinguGeminiStatus {
 	/** Whether a Gemini CLI is installed at all. */
 	readonly installed: boolean;
 }
+
+/** Gemini's tokens since local midnight, from the chats its CLI records. */
+export interface IKinguGeminiUsage {
+	readonly inputTokens: number;
+	/** Output and thinking tokens. */
+	readonly outputTokens: number;
+	/** The part of `inputTokens` served from cache. */
+	readonly cachedTokens: number;
+	readonly replies: number;
+	/** Local midnight, as epoch milliseconds. */
+	readonly since: number;
+}
