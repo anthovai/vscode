@@ -582,11 +582,79 @@ export function startOrcaEngine(): Promise<BrowserWindow | undefined> {
 	return engine;
 }
 
+/** `codexBinaryTriple` in the agent host's Codex agent, for the targets Kingu ships. */
+const CODEX_TRIPLES: Readonly<Record<string, string>> = {
+	'win32-x64': 'x86_64-pc-windows-msvc',
+	'win32-arm64': 'aarch64-pc-windows-msvc',
+	'darwin-x64': 'x86_64-apple-darwin',
+	'darwin-arm64': 'aarch64-apple-darwin',
+	'linux-x64': 'x86_64-unknown-linux-musl',
+	'linux-arm64': 'aarch64-unknown-linux-musl',
+};
+
+async function isExecutableFile(path: string): Promise<boolean> {
+	try {
+		return (await fs.stat(path)).isFile();
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The ADE runs `codex` (its account login, its preflight, its terminal agents)
+ * by PATH lookup, and a machine without the Codex CLI makes its login fail
+ * after the fact ("no such file … auth.json"). Kingu already carries a Codex
+ * binary for its own agent — this checkout's `@openai/codex` in development,
+ * the downloaded SDK in a built product — so when PATH has none, that binary's
+ * folder is appended, and the ADE finds the same Codex the agent host runs.
+ */
+async function addKinguCodexToPath(): Promise<void> {
+	const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path') ?? 'PATH';
+	const pathValue = process.env[pathKey] ?? '';
+	const delimiter = process.platform === 'win32' ? ';' : ':';
+	const names = process.platform === 'win32' ? ['codex.exe', 'codex.cmd', 'codex.bat', 'codex.ps1'] : ['codex'];
+	for (const dir of pathValue.split(delimiter).filter(Boolean)) {
+		for (const name of names) {
+			if (await isExecutableFile(join(dir, name))) {
+				return;
+			}
+		}
+	}
+	const target = `${process.platform}-${process.arch}`;
+	const triple = CODEX_TRIPLES[target];
+	if (!triple) {
+		return;
+	}
+	const binary = process.platform === 'win32' ? 'codex.exe' : 'codex';
+	const binDir = (root: string) => join(root, 'node_modules', '@openai', `codex-${target}`, 'vendor', triple, 'bin');
+	const candidates: string[] = [];
+	try {
+		// <root>/node_modules/@openai/codex/package.json → <root>
+		candidates.push(binDir(dirname(dirname(dirname(dirname(createRequire(import.meta.url).resolve('@openai/codex/package.json')))))));
+	} catch {
+		// Not a source checkout.
+	}
+	const cache = join(app.getPath('userData'), 'agent-host', 'sdk-cache', 'codex');
+	try {
+		const versions = (await fs.readdir(cache)).sort().reverse();
+		candidates.push(...versions.map(version => binDir(join(cache, version, target))));
+	} catch {
+		// Nothing downloaded yet.
+	}
+	for (const dir of candidates) {
+		if (await isExecutableFile(join(dir, binary))) {
+			process.env[pathKey] = pathValue ? `${pathValue}${delimiter}${dir}` : dir;
+			return;
+		}
+	}
+}
+
 async function bringUpEngine(): Promise<BrowserWindow | undefined> {
 	const orca = loadStartup();
 	if (!orca) {
 		return undefined;
 	}
+	await addKinguCodexToPath().catch(error => console.warn('[kingu-orca] could not offer the bundled Codex CLI', error));
 	const window = new BrowserWindow({
 		show: false,
 		width: 800,
