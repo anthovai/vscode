@@ -12,8 +12,7 @@ import type { ModelInfo } from '@anthropic-ai/claude-agent-sdk';
  * beside the family rows for anyone who needs a particular one. The ids are the
  * ones the bundled CLI knows, each run once to check it answers as itself:
  * retired ones (Opus 4.1, Sonnet 4) are left out, since the CLI either refuses
- * them or quietly runs a newer model, and Opus 5.5 needs a newer CLI than the
- * one bundled.
+ * them or quietly runs a newer model.
  */
 interface IPinnedClaudeModel {
 	readonly id: string;
@@ -24,7 +23,11 @@ interface IPinnedClaudeModel {
 }
 
 const PINNED_CLAUDE_MODELS: readonly IPinnedClaudeModel[] = [
+	{ id: 'claude-fable-5-1[1m]', name: 'Fable 5.1', family: 'fable', oneMillionContext: true },
+	{ id: 'claude-fable-5-1', name: 'Fable 5.1', family: 'fable' },
 	{ id: 'claude-fable-5', name: 'Fable 5', family: 'fable' },
+	{ id: 'claude-opus-5-5', name: 'Opus 5.5', family: 'opus' },
+	{ id: 'claude-opus-5[1m]', name: 'Opus 5', family: 'opus', oneMillionContext: true },
 	{ id: 'claude-opus-5', name: 'Opus 5', family: 'opus' },
 	{ id: 'claude-opus-4-8[1m]', name: 'Opus 4.8', family: 'opus', oneMillionContext: true },
 	{ id: 'claude-opus-4-8', name: 'Opus 4.8', family: 'opus' },

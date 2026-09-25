@@ -40,10 +40,28 @@ export interface IAcpMode {
 	readonly description?: string;
 }
 
+export interface IAcpConfigOptionValue {
+	readonly value: string;
+	readonly name: string;
+	readonly description?: string;
+}
+
+/** A session setting the agent offers (`configOptions`), which is how some agents offer their models. */
+export interface IAcpConfigOption {
+	readonly id: string;
+	readonly name: string;
+	readonly category?: string;
+	readonly type: string;
+	readonly currentValue?: string;
+	/** Values, flat or in named groups. */
+	readonly options?: readonly (IAcpConfigOptionValue | { readonly group: string; readonly name?: string; readonly options: readonly IAcpConfigOptionValue[] })[];
+}
+
 export interface IAcpNewSessionResult {
 	readonly sessionId: string;
 	readonly models?: { readonly availableModels: readonly IAcpModel[]; readonly currentModelId?: string };
 	readonly modes?: { readonly availableModes: readonly IAcpMode[]; readonly currentModeId?: string };
+	readonly configOptions?: readonly IAcpConfigOption[];
 }
 
 export type AcpContentBlock =
@@ -337,7 +355,10 @@ export async function resolveAcpCommand(executable: string, args: readonly strin
 		} catch {
 			continue;
 		}
-		const target = /"%~?dp0%?\\(?<target>[^"%]+\.(?<kind>m?js|cjs|exe))"/i.exec(text)?.groups;
+		// The shim's target, not the `node.exe` it looks for beside itself first.
+		const target = [...text.matchAll(/"%~?dp0%?\\(?<target>[^"%]+\.(?<kind>m?js|cjs|exe))"/gi)]
+			.map(match => match.groups)
+			.find(groups => groups && !/(^|\\)node\.exe$/i.test(groups.target));
 		if (!target) {
 			continue;
 		}

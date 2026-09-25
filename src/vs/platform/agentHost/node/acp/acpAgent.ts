@@ -9,6 +9,7 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { dirname, join } from '../../../../base/common/path.js';
+import { hasKey } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
@@ -54,7 +55,7 @@ import {
 	type Turn,
 } from '../../common/state/sessionState.js';
 import { ensureWorkspacelessScratchDir } from '../workspacelessScratchDir.js';
-import { ACP_AUTH_REQUIRED, AcpClient, AcpError, IAcpInitializeResult, IAcpModel, IAcpNewSessionResult, IAcpPermissionRequest, IAcpSpawnCommand, IAcpToolCall, IAcpToolCallContent, AcpSessionUpdate } from './acpClient.js';
+import { ACP_AUTH_REQUIRED, AcpClient, AcpError, IAcpAuthMethod, IAcpConfigOption, IAcpInitializeResult, IAcpModel, IAcpNewSessionResult, IAcpPermissionRequest, IAcpSpawnCommand, IAcpToolCall, IAcpToolCallContent, AcpSessionUpdate } from './acpClient.js';
 
 /**
  * What sets one ACP agent apart from another: its CLI, how its models are
@@ -67,8 +68,12 @@ export interface IAcpAgentProfile {
 	/** How to start the CLI in ACP mode; `undefined` while it is not installed. */
 	resolveCommand(): Promise<IAcpSpawnCommand | undefined>;
 	readonly notInstalledMessage: string;
-	/** The message for a turn refused for want of a login, or `undefined` when the agent is signed in. */
-	signedOutMessage(): Promise<string | undefined>;
+	/**
+	 * The message for a turn refused for want of a login, or `undefined` when
+	 * the agent is signed in. `authMethods` are the ways the CLI says it can be
+	 * signed in.
+	 */
+	signedOutMessage(authMethods: readonly IAcpAuthMethod[]): Promise<string | undefined>;
 	/** A readable model name; the CLI's own name otherwise. */
 	modelDisplayName?(model: IAcpModel): string;
 	/** Models the CLI runs by id without listing them. */
@@ -177,6 +182,26 @@ function autoModelId(agent: AgentProvider): string {
 	return `${agent}-auto`;
 }
 
+/** Whether an ACP failure is the agent asking to be signed in. */
+function isAuthError(error: unknown): boolean {
+	return error instanceof AcpError && (error.code === ACP_AUTH_REQUIRED || /auth/i.test(error.message));
+}
+
+/** The one model offered for an agent that names none: whatever its CLI is configured to use. */
+function defaultModelId(agent: AgentProvider): string {
+	return `${agent}-default`;
+}
+
+/** The session setting through which an agent offers its models, when it has one. */
+function modelConfigOption(session: IAcpNewSessionResult): IAcpConfigOption | undefined {
+	return session.configOptions?.find(option => option.type === 'select' && (option.category === 'model' || option.id === 'model'));
+}
+
+/** A model setting's values as models, its groups flattened. */
+function modelsOfConfigOption(option: IAcpConfigOption): IAcpModel[] {
+	return (option.options ?? []).flatMap(entry => hasKey(entry, { group: true }) ? entry.options : [entry]).map(value => ({ modelId: value.value, name: value.name, description: value.description }));
+}
+
 /**
  * Token counts an ACP agent attaches to a finished prompt (`_meta.quota`), read
  * defensively: the field is the CLI's extension, not part of ACP.
@@ -239,6 +264,10 @@ export class AcpAgent extends Disposable implements IAgent {
 
 	/** Whether the CLI can resume a session it saved (`session/load`). */
 	private _canLoadSessions = false;
+	/** The session setting that picks the model, for an agent that offers models that way rather than through `session/set_model`. */
+	private _modelConfigId: string | undefined;
+	/** How the CLI says it can be signed in, from its `initialize`. */
+	private _authMethods: readonly IAcpAuthMethod[] = [];
 
 	constructor(
 		private readonly _profile: IAcpAgentProfile,
@@ -279,9 +308,12 @@ export class AcpAgent extends Disposable implements IAgent {
 		try {
 			this._noteCapabilities(await client.request<IAcpInitializeResult>('initialize', this._initializeParams()));
 			const session = await client.request<IAcpNewSessionResult>('session/new', { cwd: tmpdir(), mcpServers: [] });
-			const available = session.models?.availableModels ?? [];
+			const configOption = session.models ? undefined : modelConfigOption(session);
+			this._modelConfigId = configOption?.id;
+			const available = session.models?.availableModels ?? (configOption ? modelsOfConfigOption(configOption) : []);
 			const extra = (this._profile.extraModels ?? []).filter(model => !available.some(candidate => candidate.modelId === model.modelId));
-			const models = [...available, ...extra].map(model => ({
+			const listed = [...available, ...extra];
+			const models = (listed.length ? listed : [{ modelId: defaultModelId(this.id), name: localize('acp.defaultModel', "{0} (configured model)", this._profile.displayName) }]).map(model => ({
 				provider: this.id,
 				id: this._fromAcpModelId(model.modelId),
 				name: this._profile.modelDisplayName?.(model) ?? model.name,
@@ -290,7 +322,14 @@ export class AcpAgent extends Disposable implements IAgent {
 			this._logService.info(`[${this._profile.displayName}] Models refreshed. Count: ${models.length}, ${models.map(model => model.name).join(', ')}`);
 			this._models.set(models, undefined);
 		} catch (error) {
-			this._logService.error(error, `[${this._profile.displayName}] could not read the CLI's models`);
+			if (isAuthError(error)) {
+				// Signed out, which hides the models too: still offer the agent, so its
+				// first turn can say how to sign in.
+				this._logService.info(`[${this._profile.displayName}] not signed in; offering its configured model`);
+				this._models.set([{ provider: this.id, id: defaultModelId(this.id), name: localize('acp.defaultModel', "{0} (configured model)", this._profile.displayName), supportsVision: true }], undefined);
+			} else {
+				this._logService.error(error, `[${this._profile.displayName}] could not read the CLI's models`);
+			}
 		} finally {
 			client.dispose();
 		}
@@ -298,6 +337,7 @@ export class AcpAgent extends Disposable implements IAgent {
 
 	private _noteCapabilities(result: IAcpInitializeResult): void {
 		this._canLoadSessions = !!result.agentCapabilities?.loadSession;
+		this._authMethods = result.authMethods ?? [];
 	}
 
 	private _fromAcpModelId(modelId: string): string {
@@ -551,7 +591,11 @@ export class AcpAgent extends Disposable implements IAgent {
 			record.savedAcpSessionId = session.sessionId;
 			this._save(record);
 		}
-		if (record.model?.id && this._toAcpModelId(record.model.id) !== session.models?.currentModelId) {
+		if (!session.models) {
+			this._modelConfigId ??= modelConfigOption(session)?.id;
+		}
+		const current = session.models?.currentModelId ?? (this._modelConfigId ? session.configOptions?.find(option => option.id === this._modelConfigId)?.currentValue : undefined);
+		if (record.model?.id && record.model.id !== defaultModelId(this.id) && this._toAcpModelId(record.model.id) !== current) {
 			await this._applyModel(record, record.model.id);
 		}
 	}
@@ -565,11 +609,13 @@ export class AcpAgent extends Disposable implements IAgent {
 	}
 
 	private async _applyModel(record: IAcpChat, modelId: string): Promise<void> {
-		if (!record.client || !record.acpSessionId) {
+		if (!record.client || !record.acpSessionId || modelId === defaultModelId(this.id)) {
 			return;
 		}
 		try {
-			await record.client.request('session/set_model', { sessionId: record.acpSessionId, modelId: this._toAcpModelId(modelId) });
+			await (this._modelConfigId
+				? record.client.request('session/set_config_option', { sessionId: record.acpSessionId, configId: this._modelConfigId, value: modelId })
+				: record.client.request('session/set_model', { sessionId: record.acpSessionId, modelId: this._toAcpModelId(modelId) }));
 		} catch (error) {
 			this._logService.warn(`[${this._profile.displayName}] could not switch the model to ${modelId}: ${error instanceof Error ? error.message : String(error)}`);
 		}
@@ -613,7 +659,7 @@ export class AcpAgent extends Disposable implements IAgent {
 			if (active.cancelled) {
 				return;
 			}
-			const signedOut = error instanceof AcpError && (error.code === ACP_AUTH_REQUIRED || /auth/i.test(error.message)) ? await this._profile.signedOutMessage() : undefined;
+			const signedOut = isAuthError(error) ? await this._profile.signedOutMessage(this._authMethods) : undefined;
 			const message = signedOut ?? (error instanceof Error ? error.message : String(error));
 			this._fire(record, { type: ActionType.ChatError, turnId: id, duration: Date.now() - active.startedAt, part: createErrorResponsePart({ errorType: signedOut ? 'authentication' : this.id, message }) });
 			this._finishTurn(record, active, TurnState.Error);

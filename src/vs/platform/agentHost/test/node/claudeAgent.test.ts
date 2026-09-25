@@ -914,6 +914,8 @@ class FakeQuery implements AsyncGenerator<SDKMessage, void> {
 	}
 	getContextUsage(): never { throw new Error('FakeQuery: getContextUsage not modeled'); }
 	usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(): never { throw new Error('FakeQuery: usage_EXPERIMENTAL not modeled'); }
+	reloadOutputStyles(): never { throw new Error('not modeled'); }
+	readMcpResource(): never { throw new Error('not modeled'); }
 	/** Phase 11 — programmable tool-name snapshot returned by `reloadPlugins()`. */
 	reloadPluginsResults: readonly string[][] = [];
 	reloadPluginsCallCount = 0;
