@@ -23,7 +23,7 @@ import { extensionHostGraceTimeMs, IExtensionHostProcessOptions, IExtensionHostS
 import { ILabelService } from '../../../../platform/label/common/label.js';
 import { ILogService, ILoggerService } from '../../../../platform/log/common/log.js';
 import { INativeHostService } from '../../../../platform/native/common/native.js';
-import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
+import { INotificationHandle, INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { isLoggingOnly } from '../../../../platform/telemetry/common/telemetryUtils.js';
@@ -351,6 +351,8 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 
 		// Help in case we fail to start it
 		let startupTimeoutHandle: Timeout | undefined;
+		// A slow machine running from sources can pass 10 seconds and still start; the warning goes once it does.
+		let startupNotification: INotificationHandle | undefined;
 		if (!this._environmentService.isBuilt && !this._environmentService.remoteAuthority || this._isExtensionDevHost) {
 			startupTimeoutHandle = setTimeout(() => {
 				this._logService.error(`[LocalProcessExtensionHost]: Extension host did not start in 10 seconds (debugBrk: ${this._isExtensionDevDebugBrk})`);
@@ -359,7 +361,7 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 					? nls.localize('extensionHost.startupFailDebug', "Snap host did not start in 10 seconds, it might be stopped on the first line and needs a debugger to continue.")
 					: nls.localize('extensionHost.startupFail', "Snap host did not start in 10 seconds, that might be a problem.");
 
-				this._notificationService.prompt(Severity.Warning, msg,
+				startupNotification = this._notificationService.prompt(Severity.Warning, msg,
 					[{
 						label: nls.localize('reloadWindow', "Reload Window"),
 						run: () => this._hostService.reload()
@@ -376,6 +378,10 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 		const protocol = await this._establishProtocol(this._extensionHostProcess, opts);
 		await this._performHandshake(protocol);
 		clearTimeout(startupTimeoutHandle);
+		if (startupNotification) {
+			this._logService.info('[LocalProcessExtensionHost]: Extension host started after the 10 second warning; closing it.');
+			startupNotification.close();
+		}
 		return protocol;
 	}
 
