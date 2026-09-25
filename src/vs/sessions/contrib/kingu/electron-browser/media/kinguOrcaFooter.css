@@ -192,6 +192,14 @@
  * bar (`bg-muted`, filled `bg-muted-foreground/40`), then every window's
  * reading in tabular figures, muted middots between.
  */
+/*
+ * The workbench caps a status bar entry at 40vw; the ADE's usage pill has no
+ * cap, and past it the pill runs under the refresh button beside it.
+ */
+.monaco-workbench .part.statusbar > .items-container > .statusbar-item[id="kingu.footer.usage"] {
+	max-width: none;
+}
+
 .kingu-orca-segment {
 	display: inline-flex;
 	align-items: center;

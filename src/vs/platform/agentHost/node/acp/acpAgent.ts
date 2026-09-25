@@ -307,7 +307,7 @@ export class AcpAgent extends Disposable implements IAgent {
 		const client = new AcpClient(command, tmpdir(), this._inertHandlers(), message => this._logService.info(message));
 		try {
 			this._noteCapabilities(await client.request<IAcpInitializeResult>('initialize', this._initializeParams()));
-			const session = await client.request<IAcpNewSessionResult>('session/new', { cwd: tmpdir(), mcpServers: [] });
+			const session = await this._newSession(client, tmpdir(), command);
 			const configOption = session.models ? undefined : modelConfigOption(session);
 			this._modelConfigId = configOption?.id;
 			const available = session.models?.availableModels ?? (configOption ? modelsOfConfigOption(configOption) : []);
@@ -332,6 +332,35 @@ export class AcpAgent extends Disposable implements IAgent {
 			}
 		} finally {
 			client.dispose();
+		}
+	}
+
+	/**
+	 * `session/new`, signing in first when the CLI asks for a login that the
+	 * user has already set up in the environment: an auth method whose
+	 * description names the variables it reads (Qwen Code's "Requires setting
+	 * the `OPENAI_API_KEY` environment variable") is used when they are set.
+	 */
+	private async _newSession(client: AcpClient, cwd: string, command: IAcpSpawnCommand): Promise<IAcpNewSessionResult> {
+		try {
+			return await client.request<IAcpNewSessionResult>('session/new', { cwd, mcpServers: [] });
+		} catch (error) {
+			const method = isAuthError(error) ? this._authMethods.find(candidate => {
+				const variables = [...(candidate.description ?? '').matchAll(/`(?<name>[A-Z][A-Z0-9_]{2,})`/g)].map(match => match.groups?.name ?? '');
+				return variables.length > 0 && variables.every(name => !!command.env[name]);
+			}) : undefined;
+			if (!method) {
+				throw error;
+			}
+			this._logService.info(`[${this._profile.displayName}] signing in with ${method.id}, set up in the environment`);
+			try {
+				await client.request('authenticate', { methodId: method.id });
+			} catch (authError) {
+				// Still signed out; the caller reports it as the sign-in it is.
+				this._logService.warn(`[${this._profile.displayName}] could not sign in with ${method.id}: ${authError instanceof AcpError && authError.data ? JSON.stringify(authError.data) : String(authError)}`);
+				throw error;
+			}
+			return await client.request<IAcpNewSessionResult>('session/new', { cwd, mcpServers: [] });
 		}
 	}
 
@@ -585,7 +614,7 @@ export class AcpAgent extends Disposable implements IAgent {
 				record.replaying = false;
 			}
 		}
-		session ??= await client.request<IAcpNewSessionResult>('session/new', { cwd: cwd.fsPath, mcpServers: [] });
+		session ??= await this._newSession(client, cwd.fsPath, command);
 		record.acpSessionId = session.sessionId;
 		if (record.savedAcpSessionId !== session.sessionId) {
 			record.savedAcpSessionId = session.sessionId;

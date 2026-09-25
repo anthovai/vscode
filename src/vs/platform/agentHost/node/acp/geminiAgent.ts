@@ -14,10 +14,16 @@ import { readGeminiAuthStatus } from './geminiAuth.js';
 export const GEMINI_AGENT_PROVIDER_ID: AgentProvider = 'gemini';
 
 /**
- * Models the CLI runs by id without listing them. `gemini-2.5-flash` is not
- * here: the CLI routes it to its newer Flash.
+ * Models the CLI (0.61) runs by id without listing them, each run once to
+ * check it answers as itself. Left out: `gemini-3.5-flash` and
+ * `gemini-3.1-flash-lite`, which the CLI routes to their successors, and
+ * `gemini-2.5-flash`, which Google no longer serves to new users.
  */
 const EXTRA_GEMINI_MODELS: readonly IAcpModel[] = [
+	{ modelId: 'gemini-3.7-flash', name: 'gemini-3.7-flash' },
+	{ modelId: 'gemini-3.6-flash', name: 'gemini-3.6-flash' },
+	{ modelId: 'gemini-flash-latest', name: 'gemini-flash-latest' },
+	{ modelId: 'gemini-flash-lite-latest', name: 'gemini-flash-lite-latest' },
 	{ modelId: 'gemini-2.5-flash-lite', name: 'gemini-2.5-flash-lite' },
 ];
 

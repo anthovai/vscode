@@ -19,6 +19,11 @@ interface IAcpCliCandidate {
 	readonly executables: readonly string[];
 	/** An executable that is itself the ACP server, run with no arguments. */
 	readonly dedicatedExecutable?: string;
+	/**
+	 * Environment variables the CLI reads under another name than the one the
+	 * user set, as `{ [name the CLI reads]: name the user set }`.
+	 */
+	readonly envAliases?: Readonly<Record<string, string>>;
 }
 
 /** The ways agent CLIs spell ACP mode, a subcommand or a flag, newest first. */
@@ -38,8 +43,9 @@ const ACP_CLI_CANDIDATES: readonly IAcpCliCandidate[] = [
 	{ id: 'trae', displayName: 'Trae', executables: ['traecli'] },
 	{ id: 'muse', displayName: 'Muse', executables: ['muse'] },
 	{ id: 'autohand', displayName: 'Autohand Code', executables: ['autohand'] },
-	{ id: 'opencode', displayName: 'OpenCode', executables: ['opencode'] },
-	{ id: 'opencode2', displayName: 'OpenCode 2', executables: ['opencode2'] },
+	// OpenCode lists Google's models on `GEMINI_API_KEY` but calls them with `GOOGLE_GENERATIVE_AI_API_KEY`.
+	{ id: 'opencode', displayName: 'OpenCode', executables: ['opencode'], envAliases: { GOOGLE_GENERATIVE_AI_API_KEY: 'GEMINI_API_KEY' } },
+	{ id: 'opencode2', displayName: 'OpenCode 2', executables: ['opencode2'], envAliases: { GOOGLE_GENERATIVE_AI_API_KEY: 'GEMINI_API_KEY' } },
 	{ id: 'mimo-code', displayName: 'MiMo Code', executables: ['mimo'] },
 	{ id: 'pi', displayName: 'Pi', executables: ['pi'] },
 	{ id: 'omp', displayName: 'OMP', executables: ['omp'] },
@@ -112,7 +118,19 @@ function profileFor(candidate: IAcpCliCandidate, executable: string, args: reado
 		id: candidate.id,
 		displayName: candidate.displayName,
 		description: localize('acp.description', "{0} agent backed by your {0} CLI over the Agent Client Protocol", candidate.displayName),
-		resolveCommand: () => resolveAcpCommand(executable, args),
+		resolveCommand: async () => {
+			const command = await resolveAcpCommand(executable, args);
+			if (!command || !candidate.envAliases) {
+				return command;
+			}
+			const env = { ...command.env };
+			for (const [name, source] of Object.entries(candidate.envAliases)) {
+				if (!env[name] && env[source]) {
+					env[name] = env[source];
+				}
+			}
+			return { ...command, env };
+		},
 		notInstalledMessage: localize('acp.notInstalled', "The {0} CLI (`{1}`) is no longer on PATH. Install it again, then restart Kingu.", candidate.displayName, executable),
 		signedOutMessage: async authMethods => {
 			const ways = authMethods.map(method => method.description ? `${method.name}: ${method.description}` : method.name);
