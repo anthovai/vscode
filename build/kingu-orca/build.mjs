@@ -121,6 +121,33 @@ function shared(bundleDir) {
 }
 
 /**
+ * Where the startup bundle finds the ADE's worker threads.
+ *
+ * The ADE resolves a worker entry (`usage-scan-worker-entry.js`, the port
+ * scanner, the theme parser, ...) next to the module asking, by `__dirname`,
+ * rather than under its app path as it does for forked sidecars. The startup
+ * bundle lives in `out-kingu-orca/`, the worker entries in `kingu-orca/out/main/`
+ * with the other sidecars, so the ADE's resolver is pointed there; without it
+ * every worker fails to spawn (the Usage scans read nothing).
+ */
+const workerEntryDir = path.relative(outDir, path.join(vendored, 'out/main')).split(path.sep).join('/');
+const workerEntryPlugin = {
+	name: 'kingu-orca-worker-entry',
+	setup(build) {
+		build.onLoad({ filter: /[\\/]main[\\/]worker-thread-entry-path\.ts$/ }, args => {
+			const source = fs.readFileSync(args.path, 'utf8');
+			// Both branches: the fork is "packaged" to the ADE's app environment even
+			// in development, and its resources tree holds no ADE `app.asar` either.
+			const resolver = /(export function resolveWorkerThreadEntryPath\([^)]*\)[^{]*\{)[\s\S]*?\n\}/;
+			if (!resolver.test(source)) {
+				throw new Error(`kingu-orca: ${args.path} no longer declares resolveWorkerThreadEntryPath; update the worker entry plugin.`);
+			}
+			return { contents: source.replace(resolver, `$1\n  return join(layout.moduleDir, ${JSON.stringify(workerEntryDir)}, entryFileName)\n}`), loader: 'ts' };
+		});
+	},
+};
+
+/**
  * `fork-entry.ts`, not `main/index.ts`.
  *
  * The ADE's entry is an application: it takes the single-instance lock,
@@ -131,6 +158,7 @@ function shared(bundleDir) {
  */
 const result = await esbuild.build({
 	...shared(outDir),
+	plugins: [...shared(outDir).plugins, workerEntryPlugin],
 	entryPoints: [path.join(root, 'kingu-orca/fork-entry.ts')],
 	outfile: path.join(outDir, 'startup.cjs'),
 });

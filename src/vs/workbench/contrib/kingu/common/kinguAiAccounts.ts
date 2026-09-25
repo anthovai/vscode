@@ -36,15 +36,33 @@ export interface IKinguAiAgentAccount {
 	/** Whether the agent offers models of its own, rather than only its configured one (which it does while signed out). */
 	readonly signedIn: boolean;
 	readonly modelCount: number;
+	readonly usage?: IKinguAiUsage;
 }
 
 export type KinguAiProvider = 'claude' | 'codex' | 'gemini';
 
 export const KINGU_AI_PROVIDERS: readonly KinguAiProvider[] = ['claude', 'codex', 'gemini'];
 
+/**
+ * What an AI account has used, as the account panel shows it: a limit's share
+ * where the ADE reads one (Claude's session limit), otherwise the tokens spent
+ * today (an API key, which has no limit to read).
+ */
+export interface IKinguAiUsage {
+	readonly usedPercent?: number;
+	/** Epoch milliseconds. */
+	readonly resetsAt?: number;
+	/** The limit's window in minutes, to name it (session, weekly). */
+	readonly windowMinutes?: number;
+	readonly tokensToday?: number;
+}
+
 export interface IKinguAiAccountStatus {
 	readonly signedIn: boolean;
 	readonly email?: string;
+	/** The plan, as its provider names it (`Claude Team`). */
+	readonly plan?: string;
+	readonly usage?: IKinguAiUsage;
 	/**
 	 * A sign-in still worth offering while signed in, by its label: Gemini on an
 	 * API key can move to a Google login, whose quota the usage meter shows.

@@ -9,6 +9,7 @@ import { resolveGeminiCommand } from '../../agentHost/node/acp/acpClient.js';
 import { readGeminiAuthStatus } from '../../agentHost/node/acp/geminiAuth.js';
 import { getOrcaCodexHome } from '../../kinguOrca/electron-main/kinguOrcaHost.js';
 import { IKinguGeminiStatus } from '../common/kinguAi.js';
+import { readClaudeAccount } from '../node/claudeAccount.js';
 import { readGeminiUsageToday } from '../node/geminiUsage.js';
 
 /**
@@ -28,6 +29,7 @@ export class KinguAiChannel implements IServerChannel {
 		switch (command) {
 			case 'geminiStatus': return await this._geminiStatus() as T;
 			case 'geminiUsageToday': return await readGeminiUsageToday() as T;
+			case 'claudeAccount': return await readClaudeAccount() as T;
 			// After the ADE selects another Codex account: record its home for the next app-server launch.
 			case 'refreshCodexHome': return await getOrcaCodexHome() as T;
 		}

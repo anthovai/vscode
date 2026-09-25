@@ -28,3 +28,11 @@ export interface IKinguGeminiUsage {
 	/** Local midnight, as epoch milliseconds. */
 	readonly since: number;
 }
+
+/** The Claude login in use, as Claude Code records it. */
+export interface IKinguClaudeAccount {
+	readonly email: string;
+	/** `Claude Team`, `Claude Max 5x`, … when the record names it. */
+	readonly plan?: string;
+	readonly organization?: string;
+}

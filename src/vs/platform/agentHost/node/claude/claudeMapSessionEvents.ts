@@ -12,6 +12,7 @@ import { createErrorResponsePart, ResponsePartKind, ToolResultContentType, type 
 import { extractForwardedErrorInfo } from '../shared/proxyChatError.js';
 import { buildTopLevelSubagentReadyAction, emitInnerAssistantSignals, mapSubagentSystemMessage, SUBAGENT_SPAWNING_TOOL_NAMES, tagWithParent } from './claudeSubagentSignals.js';
 import type { SubagentRegistry } from './claudeSubagentRegistry.js';
+import { mapClaudeWaitNotice } from './claudeWaitNotices.js';
 import { stripClientToolNamePrefix, hasClientToolNamePrefix } from './clientTools/claudeClientToolMcpServer.js';
 import { buildClaudeToolMeta, getClaudePastTenseMessage, getClaudeToolDisplayName, isClaudeFileEditTool } from './claudeToolDisplay.js';
 import { claudeToolDenialCode } from './claudeToolDenial.js';
@@ -269,10 +270,12 @@ export function mapSDKMessageToAgentSignals(
 				message.parent_tool_use_id,
 				registry,
 			);
+		case 'rate_limit_event':
+			return mapClaudeWaitNotice(message, chat, turnId);
 		default:
 			// Phase 12 step 7 — system subtypes for subagent task discrimination.
 			if (message.type === 'system') {
-				return mapSubagentSystemMessage(message, chat, registry);
+				return message.subtype === 'api_retry' ? mapClaudeWaitNotice(message, chat, turnId) : mapSubagentSystemMessage(message, chat, registry);
 			}
 			return [];
 	}

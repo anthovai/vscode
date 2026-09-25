@@ -11,7 +11,7 @@ import { ContextKeyExpr, IContextKey, IContextKeyService } from '../../../../pla
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { KINGU_ORCA_CHANNEL_NAME } from '../../../../platform/kinguOrca/common/kinguOrca.js';
-import { IKinguGeminiStatus, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
+import { IKinguClaudeAccount, IKinguGeminiStatus, IKinguGeminiUsage, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService, ProgressLocation } from '../../../../platform/progress/common/progress.js';
@@ -25,6 +25,7 @@ import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import {
 	IKinguAiAccountStatus,
 	IKinguAiAgentAccount,
+	IKinguAiUsage,
 	isKinguAiProvider,
 	KINGU_AI_ACCOUNT_STATUS_COMMAND_ID,
 	KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID,
@@ -57,6 +58,52 @@ function statusOf(state: IAccountsState | undefined): IKinguAiAccountStatus {
 	return state?.systemDefault?.hasAuth ? { signedIn: true, email: state.systemDefault.email ?? undefined } : { signedIn: false };
 }
 
+/** One limit window as the ADE's `rateLimits:get` reports it. */
+interface IRateLimitWindow {
+	readonly usedPercent: number;
+	readonly resetsAt: number | null;
+	readonly windowMinutes?: number;
+}
+
+/** The ADE's rate-limit snapshot for one provider, as far as the account panel reads it. */
+interface IProviderRateLimits {
+	readonly status?: string;
+	readonly session?: IRateLimitWindow | null;
+	readonly weekly?: IRateLimitWindow | null;
+}
+
+/** Claude's session limit, else its weekly one, from the ADE's rate limits (the footer's source). */
+async function readClaudeUsage(mainProcessService: IMainProcessService): Promise<IKinguAiUsage | undefined> {
+	const state = await invokeOrca<{ readonly claude?: IProviderRateLimits | null } | undefined>(mainProcessService, 'rateLimits:get').catch(() => undefined);
+	const window = state?.claude?.session ?? state?.claude?.weekly;
+	return window ? { usedPercent: window.usedPercent, resetsAt: window.resetsAt ?? undefined, windowMinutes: window.windowMinutes ?? (state?.claude?.session ? 300 : 10080) } : undefined;
+}
+
+/** The ADE's `OpenCodeUsageDailyPoint`, as far as the account panel reads it. */
+interface IOpenCodeDailyPoint {
+	readonly day: string;
+	readonly totalTokens: number;
+}
+
+/**
+ * OpenCode's tokens today, from the ADE's OpenCode usage scan of OpenCode's
+ * own database (`openCodeUsage:*`), switched on the first time it is asked.
+ */
+async function readOpenCodeUsage(mainProcessService: IMainProcessService): Promise<IKinguAiUsage | undefined> {
+	try {
+		const scan = await invokeOrca<{ readonly enabled: boolean } | undefined>(mainProcessService, 'openCodeUsage:getScanState');
+		if (!scan?.enabled) {
+			await invokeOrca(mainProcessService, 'openCodeUsage:setEnabled', { enabled: true });
+		}
+		const daily = await invokeOrca<readonly IOpenCodeDailyPoint[] | undefined>(mainProcessService, 'openCodeUsage:getDaily', { scope: 'all', range: '7d' });
+		const now = new Date();
+		const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+		return { tokensToday: daily?.find(point => point.day === today)?.totalTokens ?? 0 };
+	} catch {
+		return undefined;
+	}
+}
+
 /**
  * The ADE reports no system-default Claude login (its pane only says "use your
  * current login"), so for Claude the agent's own finding stands in: it lists
@@ -65,17 +112,27 @@ function statusOf(state: IAccountsState | undefined): IKinguAiAccountStatus {
 async function readStatus(mainProcessService: IMainProcessService, languageModelsService: ILanguageModelsService, provider: KinguAiProvider): Promise<IKinguAiAccountStatus> {
 	if (provider === 'gemini') {
 		// Gemini's login is its CLI's own, read in the main process.
-		const gemini = await mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME).call<IKinguGeminiStatus>('geminiStatus');
+		const channel = mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME);
+		const gemini = await channel.call<IKinguGeminiStatus>('geminiStatus');
+		const usage = gemini.signedIn ? await channel.call<IKinguGeminiUsage>('geminiUsageToday').catch(() => undefined) : undefined;
 		return {
 			signedIn: gemini.signedIn,
 			email: gemini.email ?? (gemini.signedIn && gemini.method === 'gemini-api-key' ? localize('kingu.ai.geminiApiKey', "Gemini (API key)") : undefined),
+			plan: gemini.signedIn ? (gemini.method === 'gemini-api-key' ? localize('kingu.ai.geminiApiPlan', "Gemini API") : localize('kingu.ai.geminiGooglePlan', "Gemini Code Assist")) : undefined,
+			usage: usage ? { tokensToday: usage.inputTokens + usage.outputTokens } : undefined,
 		};
 	}
 	const status = statusOf(await invokeOrca<IAccountsState>(mainProcessService, `${provider}Accounts:list`));
-	if (!status.signedIn && provider === 'claude' && hasAnyModelTargetingSessionType(languageModelsService, agentSdkSetupSessionType(kinguAiAgentId(provider)))) {
-		return { signedIn: true };
+	if (provider !== 'claude') {
+		return status;
 	}
-	return status;
+	// Claude Code's own record names the login in use, the ADE's or the user's own.
+	const [account, usage] = await Promise.all([
+		mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME).call<IKinguClaudeAccount | undefined>('claudeAccount').catch(() => undefined),
+		readClaudeUsage(mainProcessService),
+	]);
+	const signedIn = status.signedIn || !!account || hasAnyModelTargetingSessionType(languageModelsService, agentSdkSetupSessionType(kinguAiAgentId(provider)));
+	return signedIn ? { signedIn, email: status.email ?? account?.email, plan: account?.plan, usage } : { signedIn };
 }
 
 /** Keeps the signed-in context keys current for the menus that offer sign-in. */
@@ -197,10 +254,11 @@ async function runInTerminal(terminalService: ITerminalService, name: string, co
  * The ACP agents this machine runs, from the models they offer: each offers a
  * single configured model while its CLI is signed out.
  */
-CommandsRegistry.registerCommand(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, (accessor: ServicesAccessor): IKinguAiAgentAccount[] => {
+CommandsRegistry.registerCommand(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, async (accessor: ServicesAccessor): Promise<IKinguAiAgentAccount[]> => {
 	const languageModelsService = accessor.get(ILanguageModelsService);
+	const mainProcessService = accessor.get(IMainProcessService);
 	const models = languageModelsService.getLanguageModelIds().map(id => languageModelsService.lookupLanguageModel(id));
-	return ACP_AGENT_CATALOG.flatMap(entry => {
+	const accounts = ACP_AGENT_CATALOG.flatMap(entry => {
 		const own = models.filter(model => model?.targetChatSessionType === agentSdkSetupSessionType(entry.id));
 		if (!own.length) {
 			return [];
@@ -208,6 +266,10 @@ CommandsRegistry.registerCommand(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, (accessor: 
 		const signedIn = !(own.length === 1 && own[0]?.id === `${entry.id}-default`);
 		return [{ id: entry.id, displayName: entry.displayName, signedIn, modelCount: signedIn ? own.length : 0 }];
 	});
+	// The ADE reads OpenCode's usage from OpenCode's own database; the other agents have no source it reads.
+	return Promise.all(accounts.map(async account => account.id === 'opencode' || account.id === 'opencode2'
+		? { ...account, usage: await readOpenCodeUsage(mainProcessService) }
+		: account));
 });
 
 CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, async (accessor: ServicesAccessor, agentId: unknown): Promise<void> => {

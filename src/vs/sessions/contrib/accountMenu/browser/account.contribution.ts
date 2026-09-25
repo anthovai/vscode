@@ -44,7 +44,7 @@ import { ACCOUNTS_AVATAR_SETTING, IAuthenticationService } from '../../../../wor
 import { URI } from '../../../../base/common/uri.js';
 import { IChatDashboardService } from '../../../browser/chatDashboardService.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { IKinguAiAccountStatus, IKinguAiAgentAccount, KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, KINGU_AI_SIGN_IN_COMMAND_ID, KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
+import { IKinguAiAccountStatus, IKinguAiAgentAccount, IKinguAiUsage, KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, KINGU_AI_SIGN_IN_COMMAND_ID, KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
 import { createCodexAccountMenuActions, hasSignedInCodexChatGPTAccount, ICodexAccountService, shouldShowCodexAccount, type ICodexAccountViewInfo } from '../../../../workbench/services/agentHost/browser/codexAccountService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
@@ -70,6 +70,11 @@ const PERSONALIZE_ACTION_IDS: readonly string[] = [
 ];
 const SIGN_OUT_ACTION_ID = 'workbench.action.agenticSignOut';
 const accountDateFormatter = safeIntl.DateTimeFormat(language, { month: 'short', day: 'numeric' });
+
+/** A token count at a glance: `1.2M`, `34.4k`, `97`. */
+function formatTokenCount(value: number): string {
+	return value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 1_000 ? `${(value / 1_000).toFixed(1)}k` : String(value);
+}
 const accountTimeFormatter = safeIntl.DateTimeFormat(language, { hour: 'numeric', minute: 'numeric' });
 
 export function shouldShowAccountPanelSummary(state: Pick<IAccountTitleBarState, 'source' | 'kind'>, hasCopilotDashboard: boolean, isAccountLoading: boolean): boolean {
@@ -773,9 +778,10 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 	}
 
 	/**
-	 * Kingu: an AI account in use — Claude or Gemini — or a sign-in through its
-	 * own login (`kingu.ai.signIn`). Filled in once the answer arrives; absent
-	 * where the command is not registered (no ADE in this window).
+	 * Kingu: an AI account in use — Claude or Gemini — laid out like the ChatGPT
+	 * account above it (who, what to manage, the plan and what it has used), or
+	 * a sign-in through its own login (`kingu.ai.signIn`). Filled in once the
+	 * answer arrives; absent where the command is not registered (no ADE here).
 	 */
 	private appendKinguAiAccount(identities: HTMLElement, panelStore: DisposableStore, provider: 'claude' | 'gemini'): void {
 		const label = provider === 'claude' ? localize('kinguClaude', "Claude") : localize('kinguGemini', "Gemini");
@@ -783,37 +789,41 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			'aria-label': localize('kinguAiAccountSectionLabel', "{0} account", label)
 		}));
 		section.style.display = 'none';
-		const identity = append(section, $('.sessions-account-titlebar-panel-provider-identity'));
-		const icon = append(identity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
-		icon.classList.add(...ThemeIcon.asClassNameArray(provider === 'claude' ? Codicon.claude : Codicon.googleGemini));
 		this.commandService.executeCommand<IKinguAiAccountStatus>(KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, provider).then(status => {
 			if (panelStore.isDisposed || !status) {
 				return;
 			}
 			section.style.display = '';
-			if (status.signedIn) {
-				section.classList.remove('signed-out');
-				append(identity, $('.sessions-account-titlebar-panel-provider-name')).textContent = status.email
-					?? (provider === 'claude' ? localize('kinguClaudeSystemLogin', "Claude (your Claude Code login)") : label);
-				if (!status.signInLabel) {
-					return;
-				}
+			const icon = provider === 'claude' ? Codicon.claude : Codicon.googleGemini;
+			if (!status.signedIn) {
+				this.renderKinguAccountIdentity(section, panelStore, icon, undefined, [], new Action(`kingu.ai.signIn.${provider}.panel`, localize('kinguSignInTo', "Sign in to {0}", label), undefined, true,
+					() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, provider)));
+				return;
 			}
-			const actions = append(identity, $('.sessions-account-titlebar-panel-provider-sign-in-actions'));
-			const actionBar = panelStore.add(new ActionBar(actions));
-			panelStore.add(actionBar.onWillRun(() => {
-				this.hoverService.hideHover(true);
-				this.clickPanelDisposable.clear();
-			}));
-			actionBar.push(panelStore.add(new Action(`kingu.ai.signIn.${provider}.panel`, status.signInLabel ?? localize('kinguSignInTo', "Sign in to {0}", label), undefined, true,
-				() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, provider))), { icon: false, label: true });
+			section.classList.remove('signed-out');
+			const actions = provider === 'claude' ? [
+				new Action('kingu.claude.manageModels', localize('manageClaudeModels', "Manage Claude Models"), ThemeIcon.asClassName(Codicon.claude), true,
+					() => this.commandService.executeCommand(MANAGE_CHAT_COMMAND_ID, '@provider:"Anthropic"')),
+				new Action('kingu.claude.openAgentCustomizations', localize('openClaudeAgentCustomizations', "Agent Customizations for Claude"), ThemeIcon.asClassName(Codicon.settingsGear), true,
+					() => this.commandService.executeCommand(AICustomizationManagementCommands.OpenEditor, { sessionType: SessionType.AgentHostClaude, section: AICustomizationManagementSection.Agents })),
+				new Action('kingu.claude.switchAccount', localize('switchClaudeAccount', "Sign In with Another Claude Account"), ThemeIcon.asClassName(Codicon.arrowSwap), true,
+					() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, provider)),
+			] : [
+				new Action('kingu.gemini.manageModels', localize('manageGeminiModels', "Manage Gemini Models"), ThemeIcon.asClassName(Codicon.googleGemini), true,
+					() => this.commandService.executeCommand(MANAGE_CHAT_COMMAND_ID, '@provider:"Google"')),
+				new Action('kingu.gemini.signIn', localize('manageGeminiSignIn', "Manage Gemini Sign-In"), ThemeIcon.asClassName(Codicon.key), true,
+					() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, provider)),
+			];
+			this.renderKinguAccountIdentity(section, panelStore, icon, status.email ?? label, actions);
+			this.renderKinguAccountUsage(section, status.plan ?? localize('kinguSubscription', "{0} subscription", label), status.usage);
 		}, () => { /* no ADE in this window */ });
 	}
 
 	/**
 	 * Kingu: every other agent this machine runs over ACP (OpenCode, Qwen Code,
-	 * ...), with the way to sign it in: its CLI's own sign-in, run in a
-	 * terminal, as the ADE signs its terminal agents in.
+	 * ...), laid out like the accounts above, with the way to sign it in: its
+	 * CLI's own sign-in, run in a terminal, as the ADE signs its terminal
+	 * agents in.
 	 */
 	private appendKinguAgentAccounts(container: HTMLElement, panelStore: DisposableStore): void {
 		this.commandService.executeCommand<IKinguAiAgentAccount[]>(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID).then(agents => {
@@ -822,24 +832,71 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			}
 			for (const agent of agents ?? []) {
 				const section = append(container, $('section.sessions-account-titlebar-panel-provider-account', { 'aria-label': localize('kinguAiAccountSectionLabel', "{0} account", agent.displayName) }));
-				section.classList.toggle('signed-out', !agent.signedIn);
-				const identity = append(section, $('.sessions-account-titlebar-panel-provider-identity'));
-				const icon = append(identity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
-				icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.terminal));
-				append(identity, $('.sessions-account-titlebar-panel-provider-name')).textContent = agent.signedIn
-					? localize('kinguAgentModels', "{0} ({1} models)", agent.displayName, agent.modelCount)
-					: localize('kinguAgentSignedOut', "{0} (not signed in)", agent.displayName);
-				const actions = append(identity, $('.sessions-account-titlebar-panel-provider-sign-in-actions'));
-				const actionBar = panelStore.add(new ActionBar(actions));
-				panelStore.add(actionBar.onWillRun(() => {
-					this.hoverService.hideHover(true);
-					this.clickPanelDisposable.clear();
-				}));
-				actionBar.push(panelStore.add(new Action(`kingu.ai.signInInTerminal.${agent.id}.panel`,
-					agent.signedIn ? localize('kinguAgentManageSignIn', "Manage Sign-In") : localize('kinguSignInTo', "Sign in to {0}", agent.displayName), undefined, true,
-					() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, agent.id))), { icon: false, label: true });
+				const signIn = () => this.commandService.executeCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, agent.id);
+				if (!agent.signedIn) {
+					section.classList.add('signed-out');
+					this.renderKinguAccountIdentity(section, panelStore, Codicon.terminal, agent.displayName, [], new Action(`kingu.ai.signInInTerminal.${agent.id}.panel`, localize('kinguSignInTo', "Sign in to {0}", agent.displayName), undefined, true, signIn));
+					continue;
+				}
+				this.renderKinguAccountIdentity(section, panelStore, Codicon.terminal, agent.displayName, [
+					new Action(`kingu.${agent.id}.manageModels`, localize('manageAgentModels', "Manage {0} Models", agent.displayName), ThemeIcon.asClassName(Codicon.symbolClass), true,
+						() => this.commandService.executeCommand(MANAGE_CHAT_COMMAND_ID, `@provider:"${agent.displayName}"`)),
+					new Action(`kingu.${agent.id}.signIn`, localize('manageAgentSignIn', "Manage {0} Sign-In", agent.displayName), ThemeIcon.asClassName(Codicon.key), true, signIn),
+				]);
+				this.renderKinguAccountUsage(section, localize('kinguAgentModelCount', "{0} models", agent.modelCount), agent.usage);
 			}
 		}, () => { /* no agent accounts in this window */ });
+	}
+
+	/**
+	 * One account's identity row, as the ChatGPT account draws its own: the
+	 * mark, who it is, its actions as icons — or, signed out, a labelled
+	 * sign-in in their place.
+	 */
+	private renderKinguAccountIdentity(section: HTMLElement, panelStore: DisposableStore, icon: ThemeIcon, name: string | undefined, actions: readonly Action[], signIn?: Action): void {
+		const identity = append(section, $('.sessions-account-titlebar-panel-provider-identity'));
+		append(identity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' })).classList.add(...ThemeIcon.asClassNameArray(icon));
+		if (name) {
+			append(identity, $('.sessions-account-titlebar-panel-provider-name')).textContent = name;
+		}
+		const actionBar = panelStore.add(new ActionBar(append(identity, $(signIn ? '.sessions-account-titlebar-panel-provider-sign-in-actions' : '.sessions-account-titlebar-panel-provider-actions'))));
+		panelStore.add(actionBar.onWillRun(() => {
+			this.hoverService.hideHover(true);
+			this.clickPanelDisposable.clear();
+		}));
+		for (const action of actions) {
+			actionBar.push(panelStore.add(action), { icon: true, label: false });
+		}
+		if (signIn) {
+			actionBar.push(panelStore.add(signIn), { icon: false, label: true });
+		}
+	}
+
+	/**
+	 * The plan and what it has used, drawn as the ChatGPT account's usage: a
+	 * limit's share with when it resets, or today's tokens for an account with
+	 * no limit the ADE can read.
+	 */
+	private renderKinguAccountUsage(section: HTMLElement, plan: string, usage: IKinguAiUsage | undefined): void {
+		const block = append(section, $('.sessions-account-titlebar-panel-provider-usage'));
+		const planRow = append(block, $('.sessions-account-titlebar-panel-provider-metric-row.primary'));
+		append(planRow, $('span.sessions-account-titlebar-panel-provider-plan', undefined, plan));
+		if (usage?.usedPercent !== undefined) {
+			const used = safeIntl.NumberFormat(language, { maximumFractionDigits: 0 }).value.format(usage.usedPercent);
+			append(planRow, $('span.sessions-account-titlebar-panel-provider-usage-value', { 'aria-label': localize('kinguLimitUsedPercentage', "{0}% used", used) }, localize('kinguLimitUsedPercentageValue', "{0}%", used)));
+			const detailRow = append(block, $('.sessions-account-titlebar-panel-provider-metric-row.secondary'));
+			const window = usage.windowMinutes !== undefined && usage.windowMinutes >= 7 * 24 * 60 - 60 ? localize('kinguWeeklyLimit', "Weekly limit") : localize('kinguSessionLimit', "Session limit");
+			if (usage.resetsAt) {
+				append(detailRow, $('span.sessions-account-titlebar-panel-provider-reset', undefined, localize('kinguLimitReset', "{0} resets {1}", window, fromNow(usage.resetsAt, false, true))));
+			} else {
+				detailRow.classList.add('without-reset');
+			}
+			append(detailRow, $('span.sessions-account-titlebar-panel-provider-usage-label', undefined, localize('kinguLimitUsedLabel', "Limit used")));
+		} else if (usage?.tokensToday !== undefined) {
+			append(planRow, $('span.sessions-account-titlebar-panel-provider-usage-value', undefined, formatTokenCount(usage.tokensToday)));
+			const detailRow = append(block, $('.sessions-account-titlebar-panel-provider-metric-row.secondary.without-reset'));
+			append(detailRow, $('span.sessions-account-titlebar-panel-provider-usage-label', undefined, localize('kinguTokensToday', "Tokens today")));
+		}
 	}
 
 	private appendCopilotUsage(accountSection: HTMLElement, panelStore: DisposableStore): void {

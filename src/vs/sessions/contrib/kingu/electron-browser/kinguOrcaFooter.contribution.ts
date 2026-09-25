@@ -138,9 +138,14 @@ interface IKinguGeminiMeter {
  * counts today's tokens instead of a percentage.
  */
 function renderGeminiMeterSegment(meter: IKinguGeminiMeter): HTMLElement {
+	return renderTokenMeterSegment('gemini', meter.usage.inputTokens + meter.usage.outputTokens);
+}
+
+/** A provider's segment that counts today's tokens, for a provider with no limit the ADE reads. */
+function renderTokenMeterSegment(slot: string, tokens: number): HTMLElement {
 	const segment = $('span.kingu-orca-segment');
-	segment.appendChild(providerIcon('gemini'));
-	append(segment, $('span.kingu-orca-tabular')).textContent = localize('kingu.footer.gemini.tokensToday', "{0} today", formatTokens(meter.usage.inputTokens + meter.usage.outputTokens));
+	segment.appendChild(providerIcon(slot));
+	append(segment, $('span.kingu-orca-tabular')).textContent = localize('kingu.footer.gemini.tokensToday', "{0} today", formatTokens(tokens));
 	return segment;
 }
 
@@ -239,6 +244,8 @@ class KinguOrcaFooterContribution extends Disposable {
 
 	private _rateLimits: OrcaRateLimitState | undefined;
 	private _geminiMeter: IKinguGeminiMeter | undefined;
+	/** OpenCode's tokens today, while it has no OpenCode Go quota the ADE reads. */
+	private _openCodeTokensToday: number | undefined;
 	private _refreshing = false;
 	private _awakeStatus: IOrcaAwakeStatus = { mode: 'off', active: false };
 	private _memory: IOrcaMemorySnapshot | undefined;
@@ -364,6 +371,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._register(this._interval(() => void this._readSsh(), SSH_INTERVAL_MS));
 		this._register(this._interval(() => void this._readPorts(false), PORTS_INTERVAL_MS));
 		this._register(this._interval(() => void this._readGeminiMeter(), GEMINI_USAGE_INTERVAL_MS));
+		this._register(this._interval(() => void this._readOpenCodeMeter(), GEMINI_USAGE_INTERVAL_MS));
 
 		this._hideForeignEntries();
 		this._renderAwake();
@@ -382,6 +390,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		await Promise.all([
 			this._read('rateLimits:get', state => this._renderUsage(state as OrcaRateLimitState)),
 			this._readGeminiMeter(),
+			this._readOpenCodeMeter(),
 			this._readUsageUiState(),
 			this._read('agentAwake:getStatus', status => {
 				this._awakeStatus = status as IOrcaAwakeStatus;
@@ -433,6 +442,9 @@ class KinguOrcaFooterContribution extends Disposable {
 				if (slot === 'gemini' && this._geminiMeter) {
 					segments.push(renderGeminiMeterSegment(this._geminiMeter));
 					labels.push(geminiMeterLabel(this._geminiMeter));
+				} else if (slot === 'opencodeGo' && this._openCodeTokensToday !== undefined) {
+					segments.push(renderTokenMeterSegment('opencodeGo', this._openCodeTokensToday));
+					labels.push(localize('kingu.footer.opencode.aria', "OpenCode: {0} tokens today", formatTokens(this._openCodeTokensToday)));
 				}
 				continue;
 			}
@@ -479,6 +491,33 @@ class KinguOrcaFooterContribution extends Disposable {
 	 * Gemini's own meter, for when it is signed in with an API key: the ADE
 	 * shows Gemini only for a Google login, whose quota it can read.
 	 */
+	/**
+	 * OpenCode's tokens today, from the ADE's scan of OpenCode's own database
+	 * (`openCodeUsage:*`, the ADE's Usage source), for when OpenCode has no
+	 * OpenCode Go quota for the ADE to read. Shown once OpenCode has data.
+	 */
+	private async _readOpenCodeMeter(): Promise<void> {
+		try {
+			const scan = await this._orca.invoke<{ readonly enabled: boolean; readonly hasAnyOpenCodeData: boolean } | undefined>('openCodeUsage:getScanState');
+			if (!scan?.enabled) {
+				await this._orca.invoke('openCodeUsage:setEnabled', { enabled: true });
+			} else {
+				await this._orca.invoke('openCodeUsage:refresh');
+			}
+			const daily = await this._orca.invoke<readonly { readonly day: string; readonly totalTokens: number }[] | undefined>('openCodeUsage:getDaily', { scope: 'all', range: '7d' });
+			const now = new Date();
+			const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+			const hasData = scan?.hasAnyOpenCodeData || !!daily?.length;
+			if (this._store.isDisposed) {
+				return;
+			}
+			this._openCodeTokensToday = hasData ? daily?.find(point => point.day === today)?.totalTokens ?? 0 : undefined;
+			this._renderUsage(this._rateLimits);
+		} catch (error) {
+			this._logService.trace('[kingu-footer] could not read OpenCode usage', error);
+		}
+	}
+
 	private async _readGeminiMeter(): Promise<void> {
 		try {
 			const channel = this._mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME);
@@ -531,7 +570,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		this._refreshing = true;
 		this._renderUsage(this._rateLimits);
 		try {
-			const [state] = await Promise.all([this._orca.invoke<OrcaRateLimitState>('rateLimits:refresh'), this._readGeminiMeter()]);
+			const [state] = await Promise.all([this._orca.invoke<OrcaRateLimitState>('rateLimits:refresh'), this._readGeminiMeter(), this._readOpenCodeMeter()]);
 			this._refreshing = false;
 			this._renderUsage(state ?? this._rateLimits);
 		} catch (error) {

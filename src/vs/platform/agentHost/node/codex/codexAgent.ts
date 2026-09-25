@@ -2664,6 +2664,13 @@ export class CodexAgent extends Disposable implements IAgent {
 		// non-blocking (codex does not wait on us), so the completed handler is async
 		// and resolves its session directly rather than via _dispatchByThread.
 		subscriptions.add(client.onNotification('guardianWarning', params => this._dispatchByThread(params.threadId, s => this._handleGuardianWarning(s, params))));
+		// Kingu: a failed request Codex retries on its own (a rate limit, an
+		// overloaded model) would otherwise read as a turn doing nothing.
+		subscriptions.add(client.onNotification('error', params => {
+			if (params.willRetry) {
+				this._dispatchByThread(params.threadId, s => this._handleRetryingError(s, params.error.message));
+			}
+		}));
 		subscriptions.add(client.onNotification('item/autoApprovalReview/completed', params => { void this._handleGuardianReviewCompleted(client, params); }));
 
 		// The notification's thread id scopes per-session MCP configurations.
@@ -3893,6 +3900,21 @@ export class CodexAgent extends Disposable implements IAgent {
 		} else {
 			this._fire(target.session.sessionUri, action);
 		}
+	}
+
+	private _handleRetryingError(session: ICodexSession, message: string): ChatAction[] {
+		const turnId = session.currentTurnId;
+		if (turnId === undefined) {
+			return [];
+		}
+		return [{
+			type: ActionType.ChatResponsePart,
+			turnId,
+			part: {
+				kind: ResponsePartKind.SystemNotification,
+				content: localize('codex.retrying', "Codex hit an error and is retrying: {0}", message),
+			},
+		}];
 	}
 
 	private _handleGuardianWarning(session: ICodexSession, params: GuardianWarningNotification): ChatAction[] {
