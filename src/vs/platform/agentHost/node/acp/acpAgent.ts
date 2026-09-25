@@ -100,7 +100,19 @@ interface IActiveTurn {
 	readonly markdown: Map<string, string>;
 	readonly tools: Map<string, IToolState>;
 	cancelled: boolean;
+	/** When the CLI last sent anything for this turn. */
+	lastActivity: number;
+	/** Whether the user has been told the CLI has gone quiet, since it last sent anything. */
+	stallNoticed: boolean;
+	/** The CLI's last stderr line about a retry, a rate limit or a quota. */
+	retryHint: string | undefined;
 }
+
+/** How long a turn may go without a word from the CLI before the user is told why it may be waiting. */
+const STALL_NOTICE_MS = 45_000;
+
+/** A stderr line that explains a wait: a retry, a rate limit, or a quota. */
+const RETRY_HINT = /\b(429|retry|retrying|rate.?limit|quota|resource.?exhausted|overloaded|503|capacity)\b/i;
 
 interface IAcpChat {
 	readonly chat: URI;
@@ -312,7 +324,9 @@ export class AcpAgent extends Disposable implements IAgent {
 			this._modelConfigId = configOption?.id;
 			const available = session.models?.availableModels ?? (configOption ? modelsOfConfigOption(configOption) : []);
 			const extra = (this._profile.extraModels ?? []).filter(model => !available.some(candidate => candidate.modelId === model.modelId));
-			const listed = [...available, ...extra];
+			// The CLI's own current model first: the picker takes the first model as the default.
+			const current = session.models?.currentModelId ?? configOption?.currentValue;
+			const listed = [...available, ...extra].sort((a, b) => Number(b.modelId === current) - Number(a.modelId === current));
 			const models = (listed.length ? listed : [{ modelId: defaultModelId(this.id), name: localize('acp.defaultModel', "{0} (configured model)", this._profile.displayName) }]).map(model => ({
 				provider: this.id,
 				id: this._fromAcpModelId(model.modelId),
@@ -362,6 +376,11 @@ export class AcpAgent extends Disposable implements IAgent {
 			}
 			return await client.request<IAcpNewSessionResult>('session/new', { cwd, mcpServers: [] });
 		}
+	}
+
+	private _offersOnlyConfiguredModel(): boolean {
+		const models = this._models.get();
+		return models.length === 1 && models[0].id === defaultModelId(this.id);
 	}
 
 	private _noteCapabilities(result: IAcpInitializeResult): void {
@@ -445,6 +464,11 @@ export class AcpAgent extends Disposable implements IAgent {
 		record.workingDirectory = options?.workingDirectories?.[0] ?? record.workingDirectory;
 		// A new chat has nothing saved: skip the read and start its record.
 		record.hydrated ??= Promise.resolve();
+		if (this._offersOnlyConfiguredModel()) {
+			// Signed out when the models were read; a new chat is the moment a sign-in
+			// made since then (in a terminal, with the CLI's own login) should show.
+			void this.refreshModels();
+		}
 		this._save(record);
 		return { resolvedWorkingDirectory: record.workingDirectory };
 	}
@@ -583,6 +607,13 @@ export class AcpAgent extends Disposable implements IAgent {
 				this._onUpdate(record, update);
 			}
 		});
+		client.onDidWriteStderr(chunk => {
+			const active = record.active;
+			const line = chunk.split(/\r?\n/).map(text => text.trim()).filter(text => RETRY_HINT.test(text)).pop();
+			if (active && line) {
+				active.retryHint = line.length > 300 ? `${line.slice(0, 300)}...` : line;
+			}
+		});
 		client.onDidExit(({ code }) => {
 			this._logService.info(`[${this._profile.displayName}] CLI for ${record.chat.toString()} exited (${code})`);
 			if (record.client === client) {
@@ -665,8 +696,9 @@ export class AcpAgent extends Disposable implements IAgent {
 			record.workingDirectory = requested;
 		}
 		const id = turnId ?? generateUuid();
-		const active: IActiveTurn = { turnId: id, prompt, startedAt: Date.now(), markdownPartId: undefined, reasoningPartId: undefined, partCounter: 0, markdown: new Map(), tools: new Map(), cancelled: false };
+		const active: IActiveTurn = { turnId: id, prompt, startedAt: Date.now(), markdownPartId: undefined, reasoningPartId: undefined, partCounter: 0, markdown: new Map(), tools: new Map(), cancelled: false, lastActivity: Date.now(), stallNoticed: false, retryHint: undefined };
 		record.active = active;
+		const watchdog = setInterval(() => this._checkStall(record, active), 5_000);
 		record.summary ??= prompt.slice(0, 80);
 		record.modifiedTime = Date.now();
 		try {
@@ -693,10 +725,29 @@ export class AcpAgent extends Disposable implements IAgent {
 			this._fire(record, { type: ActionType.ChatError, turnId: id, duration: Date.now() - active.startedAt, part: createErrorResponsePart({ errorType: signedOut ? 'authentication' : this.id, message }) });
 			this._finishTurn(record, active, TurnState.Error);
 		} finally {
+			clearInterval(watchdog);
 			if (record.active === active) {
 				record.active = undefined;
 			}
 		}
+	}
+
+	/**
+	 * A turn the CLI has gone quiet on: CLIs retry rate limits and quota
+	 * errors on their own, for minutes, with nothing on the protocol to say so.
+	 * The user is told once per silence, with the CLI's own words when it wrote
+	 * any, so a wait is not mistaken for work.
+	 */
+	private _checkStall(record: IAcpChat, active: IActiveTurn): void {
+		if (active.cancelled || active.stallNoticed || record.active !== active || Date.now() - active.lastActivity < STALL_NOTICE_MS) {
+			return;
+		}
+		active.stallNoticed = true;
+		const seconds = Math.round((Date.now() - active.lastActivity) / 1000);
+		const content = active.retryHint
+			? localize('acp.stalledRetrying', "{0} has sent nothing for {1} seconds. Its CLI reports: {2}. It may keep retrying for several minutes; stop the turn to give up.", this._profile.displayName, seconds, active.retryHint)
+			: localize('acp.stalled', "{0} has sent nothing for {1} seconds. Its CLI may be retrying after a rate limit or a used-up quota; stop the turn to give up, or keep waiting.", this._profile.displayName, seconds);
+		this._fire(record, { type: ActionType.ChatResponsePart, turnId: active.turnId, part: { kind: ResponsePartKind.SystemNotification, content } });
 	}
 
 	/** The prompt as ACP content: the text, then attached files as links the CLI reads itself. */
@@ -763,6 +814,8 @@ export class AcpAgent extends Disposable implements IAgent {
 		if (!active || active.cancelled) {
 			return;
 		}
+		active.lastActivity = Date.now();
+		active.stallNoticed = false;
 		switch (update.sessionUpdate) {
 			case 'agent_message_chunk': {
 				const content = (update as { content: { type: string; text?: string } }).content;

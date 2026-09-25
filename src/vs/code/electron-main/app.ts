@@ -1402,7 +1402,7 @@ export class CodeApplication extends Disposable {
 		// exactly as the ADE's do.
 		mainProcessElectronServer.registerChannel(KINGU_ORCA_CHANNEL_NAME, disposables.add(new KinguOrcaChannel()));
 		// Kingu: the AI accounts the ADE does not keep (Gemini's CLI login).
-		mainProcessElectronServer.registerChannel(KINGU_AI_CHANNEL_NAME, new KinguAiChannel(this.logService));
+		mainProcessElectronServer.registerChannel(KINGU_AI_CHANNEL_NAME, new KinguAiChannel());
 
 		// Policies (main & shared process)
 		const policyChannel = disposables.add(new PolicyChannel(accessor.get(IPolicyService)));

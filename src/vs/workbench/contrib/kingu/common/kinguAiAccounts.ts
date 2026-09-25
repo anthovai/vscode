@@ -20,6 +20,24 @@ export const KINGU_AI_SIGN_IN_COMMAND_ID = 'kingu.ai.signIn';
 /** `kingu.ai.accountStatus(provider)`: `IKinguAiAccountStatus`. */
 export const KINGU_AI_ACCOUNT_STATUS_COMMAND_ID = 'kingu.ai.accountStatus';
 
+/** `kingu.ai.agentAccounts()`: `IKinguAiAgentAccount[]`, one for each ACP agent this machine runs. */
+export const KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID = 'kingu.ai.agentAccounts';
+
+/**
+ * `kingu.ai.signInInTerminal(agentId)`: runs the agent CLI's own sign-in in a
+ * terminal, the way the ADE signs its terminal agents in.
+ */
+export const KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID = 'kingu.ai.signInInTerminal';
+
+/** An ACP agent this machine runs, as the account panel shows it. */
+export interface IKinguAiAgentAccount {
+	readonly id: string;
+	readonly displayName: string;
+	/** Whether the agent offers models of its own, rather than only its configured one (which it does while signed out). */
+	readonly signedIn: boolean;
+	readonly modelCount: number;
+}
+
 export type KinguAiProvider = 'claude' | 'codex' | 'gemini';
 
 export const KINGU_AI_PROVIDERS: readonly KinguAiProvider[] = ['claude', 'codex', 'gemini'];

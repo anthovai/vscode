@@ -8,70 +8,10 @@ import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../log/common/log.js';
 import { IAcpAgentProfile } from './acpAgent.js';
 import { resolveAcpCommand } from './acpClient.js';
-
-/**
- * An agent from the ADE's catalog, by the ADE's id and name, with the
- * commands the ADE detects it by.
- */
-interface IAcpCliCandidate {
-	readonly id: string;
-	readonly displayName: string;
-	readonly executables: readonly string[];
-	/** An executable that is itself the ACP server, run with no arguments. */
-	readonly dedicatedExecutable?: string;
-	/**
-	 * Environment variables the CLI reads under another name than the one the
-	 * user set, as `{ [name the CLI reads]: name the user set }`.
-	 */
-	readonly envAliases?: Readonly<Record<string, string>>;
-}
+import { ACP_AGENT_CATALOG, IAcpAgentCatalogEntry } from '../../common/acpAgentCatalog.js';
 
 /** The ways agent CLIs spell ACP mode, a subcommand or a flag, newest first. */
 const ACP_SPELLINGS: readonly (readonly string[])[] = [['acp'], ['--acp'], ['--experimental-acp']];
-
-/**
- * Kingu: every agent in the ADE's catalog (`TUI_AGENT_CONFIG` and
- * `TUI_AGENT_DISPLAY_NAMES` in the ADE's `src/shared`) apart from those with a
- * harness of their own here (Claude, Codex, Gemini, GitHub Copilot) and Claude
- * Agent Teams, which is Claude. Each is offered once its CLI is on PATH and its
- * own `--help` names an ACP mode; the rest stay terminal agents in the ADE.
- */
-const ACP_CLI_CANDIDATES: readonly IAcpCliCandidate[] = [
-	{ id: 'openclaude', displayName: 'OpenClaude', executables: ['openclaude'] },
-	{ id: 'devin', displayName: 'Devin', executables: ['devin'] },
-	{ id: 'ante', displayName: 'Ante', executables: ['ante'] },
-	{ id: 'trae', displayName: 'Trae', executables: ['traecli'] },
-	{ id: 'muse', displayName: 'Muse', executables: ['muse'] },
-	{ id: 'autohand', displayName: 'Autohand Code', executables: ['autohand'] },
-	// OpenCode lists Google's models on `GEMINI_API_KEY` but calls them with `GOOGLE_GENERATIVE_AI_API_KEY`.
-	{ id: 'opencode', displayName: 'OpenCode', executables: ['opencode'], envAliases: { GOOGLE_GENERATIVE_AI_API_KEY: 'GEMINI_API_KEY' } },
-	{ id: 'opencode2', displayName: 'OpenCode 2', executables: ['opencode2'], envAliases: { GOOGLE_GENERATIVE_AI_API_KEY: 'GEMINI_API_KEY' } },
-	{ id: 'mimo-code', displayName: 'MiMo Code', executables: ['mimo'] },
-	{ id: 'pi', displayName: 'Pi', executables: ['pi'] },
-	{ id: 'omp', displayName: 'OMP', executables: ['omp'] },
-	{ id: 'prime-agent', displayName: 'Prime Agent', executables: ['prime-agent'] },
-	{ id: 'antigravity', displayName: 'Antigravity', executables: ['agy'] },
-	{ id: 'aider', displayName: 'Aider', executables: ['aider'] },
-	{ id: 'goose', displayName: 'Goose', executables: ['goose'] },
-	{ id: 'amp', displayName: 'Amp', executables: ['amp'] },
-	{ id: 'kilo', displayName: 'Kilocode', executables: ['kilo'] },
-	{ id: 'kiro', displayName: 'Kiro', executables: ['kiro-cli'] },
-	{ id: 'crush', displayName: 'Charm', executables: ['crush'] },
-	{ id: 'aug', displayName: 'Auggie', executables: ['auggie'] },
-	{ id: 'cline', displayName: 'Cline', executables: ['cline'] },
-	{ id: 'codebuff', displayName: 'Codebuff', executables: ['codebuff'] },
-	{ id: 'command-code', displayName: 'Command Code', executables: ['command-code'] },
-	{ id: 'continue', displayName: 'Continue', executables: ['cn'] },
-	{ id: 'cursor', displayName: 'Cursor', executables: ['cursor-agent'] },
-	{ id: 'droid', displayName: 'Droid', executables: ['droid'] },
-	{ id: 'kimi', displayName: 'Kimi', executables: ['kimi', 'kimi-code'] },
-	{ id: 'mistral-vibe', displayName: 'Mistral Vibe', executables: ['vibe', 'mistral-vibe'], dedicatedExecutable: 'vibe-acp' },
-	{ id: 'qwen-code', displayName: 'Qwen Code', executables: ['qwen'] },
-	{ id: 'rovo', displayName: 'Rovo Dev', executables: ['rovo'] },
-	{ id: 'hermes', displayName: 'Hermes', executables: ['hermes'] },
-	{ id: 'openclaw', displayName: 'OpenClaw', executables: ['openclaw'] },
-	{ id: 'grok', displayName: 'Grok', executables: ['grok'] },
-];
 
 const HELP_TIMEOUT_MS = 10_000;
 
@@ -113,7 +53,7 @@ function helpOffers(help: string, args: readonly string[]): boolean {
 		: new RegExp(`^\\s*(\\S+\\s+)?${escaped}(\\s|$)`, 'm').test(help);
 }
 
-function profileFor(candidate: IAcpCliCandidate, executable: string, args: readonly string[]): IAcpAgentProfile {
+function profileFor(candidate: IAcpAgentCatalogEntry, executable: string, args: readonly string[]): IAcpAgentProfile {
 	return {
 		id: candidate.id,
 		displayName: candidate.displayName,
@@ -142,7 +82,7 @@ function profileFor(candidate: IAcpCliCandidate, executable: string, args: reado
 }
 
 /** The candidate's ACP launch on this machine: a dedicated ACP executable, or a detected CLI with the ACP spelling its `--help` offers. */
-async function detectCandidate(candidate: IAcpCliCandidate, logService: ILogService): Promise<IAcpAgentProfile | undefined> {
+async function detectCandidate(candidate: IAcpAgentCatalogEntry, logService: ILogService): Promise<IAcpAgentProfile | undefined> {
 	if (candidate.dedicatedExecutable && await resolveAcpCommand(candidate.dedicatedExecutable, [])) {
 		logService.info(`[ACP] ${candidate.displayName} found: ${candidate.dedicatedExecutable}`);
 		return profileFor(candidate, candidate.dedicatedExecutable, []);
@@ -168,6 +108,6 @@ async function detectCandidate(candidate: IAcpCliCandidate, logService: ILogServ
  * the host starts; an agent installed later appears after a restart.
  */
 export async function detectAcpAgentProfiles(logService: ILogService): Promise<IAcpAgentProfile[]> {
-	const found = await Promise.all(ACP_CLI_CANDIDATES.map(candidate => detectCandidate(candidate, logService)));
+	const found = await Promise.all(ACP_AGENT_CATALOG.map(candidate => detectCandidate(candidate, logService)));
 	return found.filter((profile): profile is IAcpAgentProfile => !!profile);
 }

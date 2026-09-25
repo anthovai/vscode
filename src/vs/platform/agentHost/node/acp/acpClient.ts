@@ -152,6 +152,10 @@ export class AcpClient extends Disposable {
 	private readonly _onDidUpdateSession = this._register(new Emitter<{ sessionId: string; update: AcpSessionUpdate }>());
 	readonly onDidUpdateSession: Event<{ sessionId: string; update: AcpSessionUpdate }> = this._onDidUpdateSession.event;
 
+	/** What the agent writes to stderr, as it arrives: CLIs report retries and quota errors there. */
+	private readonly _onDidWriteStderr = this._register(new Emitter<string>());
+	readonly onDidWriteStderr: Event<string> = this._onDidWriteStderr.event;
+
 	private readonly _onDidExit = this._register(new Emitter<{ code: number | null; stderr: string }>());
 	readonly onDidExit: Event<{ code: number | null; stderr: string }> = this._onDidExit.event;
 
@@ -170,6 +174,7 @@ export class AcpClient extends Disposable {
 		this._child.stderr.setEncoding('utf8');
 		this._child.stderr.on('data', (chunk: string) => {
 			this._stderr = `${this._stderr}${chunk}`.slice(-8000);
+			this._onDidWriteStderr.fire(chunk);
 		});
 		this._child.on('error', error => this._onExit(null, error.message));
 		this._child.on('close', code => this._onExit(code, undefined));

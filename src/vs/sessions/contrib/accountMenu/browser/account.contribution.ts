@@ -44,7 +44,7 @@ import { ACCOUNTS_AVATAR_SETTING, IAuthenticationService } from '../../../../wor
 import { URI } from '../../../../base/common/uri.js';
 import { IChatDashboardService } from '../../../browser/chatDashboardService.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { IKinguAiAccountStatus, KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, KINGU_AI_SIGN_IN_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
+import { IKinguAiAccountStatus, IKinguAiAgentAccount, KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, KINGU_AI_SIGN_IN_COMMAND_ID, KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
 import { createCodexAccountMenuActions, hasSignedInCodexChatGPTAccount, ICodexAccountService, shouldShowCodexAccount, type ICodexAccountViewInfo } from '../../../../workbench/services/agentHost/browser/codexAccountService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
@@ -721,6 +721,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		}
 
 		this.appendKinguAiAccount(identities, panelStore, 'gemini');
+		this.appendKinguAgentAccounts(append(identities, $('.sessions-account-titlebar-panel-kingu-agents')), panelStore);
 		if (copilotSection) {
 			identities.appendChild(copilotSection);
 		}
@@ -807,6 +808,38 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			actionBar.push(panelStore.add(new Action(`kingu.ai.signIn.${provider}.panel`, status.signInLabel ?? localize('kinguSignInTo', "Sign in to {0}", label), undefined, true,
 				() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, provider))), { icon: false, label: true });
 		}, () => { /* no ADE in this window */ });
+	}
+
+	/**
+	 * Kingu: every other agent this machine runs over ACP (OpenCode, Qwen Code,
+	 * ...), with the way to sign it in: its CLI's own sign-in, run in a
+	 * terminal, as the ADE signs its terminal agents in.
+	 */
+	private appendKinguAgentAccounts(container: HTMLElement, panelStore: DisposableStore): void {
+		this.commandService.executeCommand<IKinguAiAgentAccount[]>(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID).then(agents => {
+			if (panelStore.isDisposed) {
+				return;
+			}
+			for (const agent of agents ?? []) {
+				const section = append(container, $('section.sessions-account-titlebar-panel-provider-account', { 'aria-label': localize('kinguAiAccountSectionLabel', "{0} account", agent.displayName) }));
+				section.classList.toggle('signed-out', !agent.signedIn);
+				const identity = append(section, $('.sessions-account-titlebar-panel-provider-identity'));
+				const icon = append(identity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
+				icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.terminal));
+				append(identity, $('.sessions-account-titlebar-panel-provider-name')).textContent = agent.signedIn
+					? localize('kinguAgentModels', "{0} ({1} models)", agent.displayName, agent.modelCount)
+					: localize('kinguAgentSignedOut', "{0} (not signed in)", agent.displayName);
+				const actions = append(identity, $('.sessions-account-titlebar-panel-provider-sign-in-actions'));
+				const actionBar = panelStore.add(new ActionBar(actions));
+				panelStore.add(actionBar.onWillRun(() => {
+					this.hoverService.hideHover(true);
+					this.clickPanelDisposable.clear();
+				}));
+				actionBar.push(panelStore.add(new Action(`kingu.ai.signInInTerminal.${agent.id}.panel`,
+					agent.signedIn ? localize('kinguAgentManageSignIn', "Manage Sign-In") : localize('kinguSignInTo', "Sign in to {0}", agent.displayName), undefined, true,
+					() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, agent.id))), { icon: false, label: true });
+			}
+		}, () => { /* no agent accounts in this window */ });
 	}
 
 	private appendCopilotUsage(accountSection: HTMLElement, panelStore: DisposableStore): void {

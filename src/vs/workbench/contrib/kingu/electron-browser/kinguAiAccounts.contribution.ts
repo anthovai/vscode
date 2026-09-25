@@ -16,14 +16,19 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService, ProgressLocation } from '../../../../platform/progress/common/progress.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
+import { ACP_AGENT_CATALOG, acpAgentCatalogEntry, acpAgentLoginCommand } from '../../../../platform/agentHost/common/acpAgentCatalog.js';
 import { IAgentSdkSetupService } from '../../../services/agentHost/browser/agentSdkSetupService.js';
+import { ITerminalService } from '../../terminal/browser/terminal.js';
 import { agentSdkSetupSessionType } from '../../chat/browser/agentSessions/agentHost/agentHostSdkSetupNotification.js';
 import { hasAnyModelTargetingSessionType } from '../../chat/browser/agentSessions/sessionTypeAvailability.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import {
 	IKinguAiAccountStatus,
+	IKinguAiAgentAccount,
 	isKinguAiProvider,
 	KINGU_AI_ACCOUNT_STATUS_COMMAND_ID,
+	KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID,
+	KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID,
 	KINGU_AI_PROVIDERS,
 	KINGU_AI_SIGN_IN_COMMAND_ID,
 	kinguAiAgentId,
@@ -64,7 +69,6 @@ async function readStatus(mainProcessService: IMainProcessService, languageModel
 		return {
 			signedIn: gemini.signedIn,
 			email: gemini.email ?? (gemini.signedIn && gemini.method === 'gemini-api-key' ? localize('kingu.ai.geminiApiKey', "Gemini (API key)") : undefined),
-			signInLabel: gemini.signedIn && gemini.method !== 'oauth-personal' ? localize('kingu.ai.geminiGoogle', "Sign in with Google") : undefined,
 		};
 	}
 	const status = statusOf(await invokeOrca<IAccountsState>(mainProcessService, `${provider}Accounts:list`));
@@ -143,17 +147,10 @@ CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_COMMAND_ID, async (accessor: S
 	const label = kinguAiProviderLabel(provider);
 	try {
 		if (provider === 'gemini') {
-			await progressService.withProgress({
-				location: ProgressLocation.Notification,
-				title: localize('kingu.ai.signingInGoogle', "Signing in to Gemini with Google. Finish in the browser window that opened."),
-			}, () => mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME).call('geminiSignIn'));
-			// A Google login has a quota the ADE can read, but only once it may use the
-			// Gemini CLI's credentials; signing in here is that consent.
-			await invokeOrca(mainProcessService, 'settings:set', { geminiCliOAuthEnabled: true }).catch(() => undefined);
-			void invokeOrca(mainProcessService, 'rateLimits:refresh').catch(() => undefined);
-			setupService.requestReload(kinguAiAgentId(provider));
-			await KinguAiAccountsContribution.refresh();
-			notificationService.info(localize('kingu.ai.signedIn', "Signed in to {0}.", label));
+			// Google no longer lets the Gemini CLI's own client sign individuals in with
+			// Google (it points them at Antigravity), so the CLI's sign-in screen is
+			// the way in: an API key, a Workspace login, or Vertex AI.
+			await runInTerminal(accessor.get(ITerminalService), localize('kingu.ai.signInTerminal', "Sign in to {0}", label), 'gemini');
 			return true;
 		}
 		const before = await invokeOrca<IAccountsState>(mainProcessService, `${provider}Accounts:list`).catch(() => undefined);
@@ -185,6 +182,38 @@ CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_COMMAND_ID, async (accessor: S
 			notificationService.error(localize('kingu.ai.signInFailed', "Could not sign in to {0}: {1}", label, message));
 		}
 		return false;
+	}
+});
+
+/** Opens a terminal named `name` and runs `command` in it, for a sign-in the user completes there. */
+async function runInTerminal(terminalService: ITerminalService, name: string, command: string): Promise<void> {
+	const instance = await terminalService.createTerminal({ config: { name } });
+	terminalService.setActiveInstance(instance);
+	await terminalService.revealTerminal(instance);
+	await instance.sendText(command, true);
+}
+
+/**
+ * The ACP agents this machine runs, from the models they offer: each offers a
+ * single configured model while its CLI is signed out.
+ */
+CommandsRegistry.registerCommand(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, (accessor: ServicesAccessor): IKinguAiAgentAccount[] => {
+	const languageModelsService = accessor.get(ILanguageModelsService);
+	const models = languageModelsService.getLanguageModelIds().map(id => languageModelsService.lookupLanguageModel(id));
+	return ACP_AGENT_CATALOG.flatMap(entry => {
+		const own = models.filter(model => model?.targetChatSessionType === agentSdkSetupSessionType(entry.id));
+		if (!own.length) {
+			return [];
+		}
+		const signedIn = !(own.length === 1 && own[0]?.id === `${entry.id}-default`);
+		return [{ id: entry.id, displayName: entry.displayName, signedIn, modelCount: signedIn ? own.length : 0 }];
+	});
+});
+
+CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, async (accessor: ServicesAccessor, agentId: unknown): Promise<void> => {
+	const entry = typeof agentId === 'string' ? acpAgentCatalogEntry(agentId) : undefined;
+	if (entry) {
+		await runInTerminal(accessor.get(ITerminalService), localize('kingu.ai.signInTerminal', "Sign in to {0}", entry.displayName), acpAgentLoginCommand(entry));
 	}
 });
 
