@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import './media/agenttitlebarstatuswidget.css';
-import { $, addDisposableListener, EventType, getWindow, isHTMLElement, reset } from '../../../../../../base/browser/dom.js';
+import { $, addDisposableListener, append, EventType, getWindow, isHTMLElement, reset } from '../../../../../../base/browser/dom.js';
 import { renderIcon } from '../../../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { Disposable, DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { Codicon } from '../../../../../../base/common/codicons.js';
@@ -20,22 +20,23 @@ import { UNIFIED_QUICK_ACCESS_ACTION_ID } from './unifiedQuickAccessActions.js';
 import { IAgentSessionsService } from '../agentSessionsService.js';
 import { AgentSessionStatus, IAgentSession, isSessionInProgressStatus } from '../agentSessionsModel.js';
 import { BaseActionViewItem, IBaseActionViewItemOptions } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { IAction, Separator, SubmenuAction, toAction } from '../../../../../../base/common/actions.js';
+import { IAction, Separator, SubmenuAction } from '../../../../../../base/common/actions.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../../../platform/workspace/common/workspace.js';
 import { IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { renderAsPlaintext } from '../../../../../../base/browser/markdownRenderer.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { IMenuService, MenuId, MenuItemAction, SubmenuItemAction } from '../../../../../../platform/actions/common/actions.js';
+import { IMenuService, MenuId, SubmenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { InEditorZenModeContext } from '../../../../../common/contextkeys.js';
 import { HiddenItemStrategy, WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
-import { DropdownWithPrimaryActionViewItem } from '../../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { StandardMouseEvent } from '../../../../../../base/browser/mouseEvent.js';
+import { ThemeIcon } from '../../../../../../base/common/themables.js';
 import { createActionViewItem } from '../../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { FocusAgentSessionsAction } from '../agentSessionsActions.js';
 import { IWorkbenchContribution } from '../../../../../common/contributions.js';
-import { WORKBENCH_MENU_MOTION_CLASS, workbenchMenuCloseAnimation } from '../../../../../browser/actions/menuMotion.js';
 import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { mainWindow } from '../../../../../../base/browser/window.js';
@@ -174,6 +175,7 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 		@IChatEntitlementService private readonly chatEntitlementService: IChatEntitlementService,
 		@IChatWidgetService private readonly chatWidgetService: IChatWidgetService,
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
 		super(undefined, action, options);
 
@@ -864,37 +866,32 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 		const menuActions: IAction[] = Separator.join(...this._chatTitleBarMenu.getActions({ shouldForwardArgs: true }).map(([, actions]) => actions));
 
 		const primaryActionId = TOGGLE_CHAT_ACTION_ID;
-		const primaryActionTitle = localize('toggleChat', "Toggle Chat");
-		const primaryActionIcon = Codicon.chatSparkle;
 
-		// Create primary action
-		const primaryAction = this.instantiationService.createInstance(MenuItemAction, {
-			id: primaryActionId,
-			title: primaryActionTitle,
-			icon: primaryActionIcon,
-		}, undefined, undefined, undefined, undefined);
+		// Kingu: one icon, Arkai's mark, rather than a split button — the chat is
+		// Kingu's AI, and its menu moves to a right-click (or the down arrow) so
+		// nothing it offered is lost.
+		const sparkleButton = append(append(sparkleContainer, $('span.action-container')), $(`a.action-label${ThemeIcon.asCSSSelector(Codicon.copilot)}`, { role: 'button', 'aria-label': localize('kingu.toggleChat.aria', "Toggle Chat, right-click for more chat actions") }));
+		disposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), sparkleContainer, localize('kingu.toggleChat.hover', "Toggle Chat (Arkai) — right-click for more")));
+		const showSparkleMenu = (anchor: HTMLElement | StandardMouseEvent) => {
+			this.hoverService.hideHover(true);
+			this.contextMenuService.showContextMenu({
+				getAnchor: () => anchor,
+				getActions: () => menuActions,
+				domForShadowRoot: sparkleContainer,
+			});
+		};
+		disposables.add(addDisposableListener(sparkleButton, EventType.CLICK, e => {
+			e.preventDefault();
+			this.commandService.executeCommand(primaryActionId);
+		}));
+		disposables.add(addDisposableListener(sparkleContainer, EventType.CONTEXT_MENU, e => {
+			e.preventDefault();
+			e.stopPropagation();
+			showSparkleMenu(new StandardMouseEvent(getWindow(sparkleContainer), e));
+		}));
 
-		// Create dropdown action (empty label prevents default tooltip - we have our own hover)
-		const dropdownAction = toAction({
-			id: 'agentStatus.sparkle.dropdown',
-			label: localize('agentStatus.sparkle.dropdown', "More Actions"),
-			run() { }
-		});
-
-		// Create the dropdown with primary action button
-		const sparkleDropdown = this.instantiationService.createInstance(
-			DropdownWithPrimaryActionViewItem,
-			primaryAction,
-			dropdownAction,
-			menuActions,
-			'agent-status-sparkle-dropdown',
-			{ skipTelemetry: true, menuClassName: WORKBENCH_MENU_MOTION_CLASS, closeAnimation: workbenchMenuCloseAnimation }
-		);
-		sparkleDropdown.render(sparkleContainer);
-		disposables.add(sparkleDropdown);
-
-		// Capture-phase listener for ArrowLeft/ArrowRight/Home/End to prevent DropdownWithPrimaryActionViewItem
-		// from consuming these keys internally. This ensures the outer roving tabindex handles navigation.
+		// Capture-phase listener for ArrowLeft/ArrowRight/Home/End so no inner element
+		// consumes these keys. This ensures the outer roving tabindex handles navigation.
 		disposables.add(addDisposableListener(sparkleContainer, EventType.KEY_DOWN, (e) => {
 			if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
 				const idx = this._rovingElements.indexOf(sparkleContainer);
@@ -920,7 +917,7 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 				// Open dropdown menu with arrow keys
 				e.preventDefault();
 				e.stopPropagation();
-				sparkleDropdown.showDropdown();
+				showSparkleMenu(sparkleContainer);
 			}
 		}));
 
@@ -1059,7 +1056,9 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 			if (needsInputSection) { badge.appendChild(needsInputSection); this._rovingElements.push(needsInputSection); }
 			if (activeSection) { badge.appendChild(activeSection); this._rovingElements.push(activeSection); }
 			if (unreadSection) { badge.appendChild(unreadSection); this._rovingElements.push(unreadSection); }
-			badge.appendChild(sparkleContainer);
+			// Kingu: the chat icon stands on its own beside the search, not inside it.
+			sparkleContainer.classList.add('standalone');
+			this._container.appendChild(sparkleContainer);
 			this._rovingElements.push(sparkleContainer);
 		} else {
 			// Original: [sparkle (already appended), unread, active, needs-input]

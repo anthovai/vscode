@@ -401,6 +401,27 @@
 	border-radius: 0;
 }
 
+/* Kingu: the chat icon beside the search box, a plain title bar icon rather than part of the pill */
+.agent-status-badge-section.sparkle.standalone {
+	height: 22px;
+	border-radius: 5px;
+	background-color: transparent;
+}
+
+.agent-status-badge-section.sparkle.standalone .action-container {
+	padding: 0 4px;
+	border-radius: 5px;
+}
+
+.agent-status-badge-section.sparkle.standalone .action-container:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Kingu: the sparkle is one icon with no dropdown beside it, so on its own it is rounded all round */
+.agent-status-badge-section.sparkle:last-child .action-container {
+	border-radius: 5px;
+}
+
 /* When sparkle is the only section, dropdown needs rounded right corners */
 .agent-status-badge-section.sparkle:last-child .dropdown-action-container {
 	border-radius: 0 5px 5px 0;
