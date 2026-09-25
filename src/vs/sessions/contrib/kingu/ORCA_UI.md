@@ -87,7 +87,15 @@ titles*. This window gets the same states from the protocol, for free.
    which is most of it, grouped differently. *Now built as a second sidebar view
    — see below.*
 3. **Inline agent rows on the worktree card** (`WorktreeCardAgents`) — a
-   worktree's live agents as child rows under it.
+   worktree's live agents as child rows under it. *Already native here:* the
+   sessions list is a tree, and a session with more than one chat is a
+   collapsible parent with a `SessionChatItem` row per chat (its own status
+   dot, title, approval and worktree badge; `sessionsList.ts`,
+   `toSessionChildren`). What differs from the ADE is deliberate upstream
+   filtering in `getSessionListChats`: subagent (`ChatOriginKind.Tool`) and
+   side chats are not listed, where the ADE nests subagents under their
+   parent. Showing them would need a third tree level and touches the core
+   list, so it is left as a decision, not a gap.
 4. **The per-worktree workbench.** The structural difference above. Not a port.
 
 ## How the porting actually goes
