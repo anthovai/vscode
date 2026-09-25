@@ -181,8 +181,12 @@ method:
   Start workspace does not build a workspace itself. It closes Tasks and hands
   the prompt and the project folder to the Agents composer through
   `AgentsWindowWorkspaceHandoff`, the same path "Continue in Agents" uses. The
-  reader then picks the agent and the worktree and presses send, and a draft
-  they were already writing is kept rather than replaced. The ADE's name seed
+  reader then picks the agent and the worktree and presses send. The handoff
+  keeps a draft the reader was already writing. Here the reader asked for
+  this task, so the launcher opens the new-session page itself, puts the
+  prompt in over the old text, and offers "Restore Earlier Draft". The
+  launcher is a service, not part of the page: hiding a custom view disposes
+  it, and the handoff has to outlive that. The ADE's name seed
   and PR-head checkout are not ported: this composer names sessions itself and
   isolates by worktree.
 

@@ -55,7 +55,7 @@ import { KinguTasksGitHubList } from './kinguTasksGitHubList.js';
 import { KinguTasksGitLabList } from './kinguTasksGitLabList.js';
 import { KinguTasksJiraList } from './kinguTasksJiraList.js';
 import { KinguTasksLinearList } from './kinguTasksLinearList.js';
-import { KinguTasksWorkspaceLauncher } from './kinguTasksWorkspaceLauncher.js';
+import { IKinguTasksWorkspaceLauncher } from './kinguTasksWorkspaceLauncher.js';
 
 /** The two settings the source bar reads and writes. */
 interface ITaskSettings {
@@ -119,7 +119,6 @@ class KinguTasksView extends AbstractCustomView {
 	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList | KinguTasksGitHubList | KinguTasksGitLabList>());
 	/** An open task's detail page, drawn in place of the list, which stays behind it. */
 	private readonly _detail = this._register(new MutableDisposable<KinguTasksDetail>());
-	private readonly _launcher: KinguTasksWorkspaceLauncher;
 	private readonly _taskActions: IKinguTaskActions = {
 		openDetail: ref => this._openDetail(ref),
 		startWorkspace: ref => void this._launcher.start(ref),
@@ -148,9 +147,9 @@ class KinguTasksView extends AbstractCustomView {
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ICustomViewService private readonly _customViewService: ICustomViewService,
 		@ISessionsRecentWorkspacesService private readonly _recentWorkspacesService: ISessionsRecentWorkspacesService,
+		@IKinguTasksWorkspaceLauncher private readonly _launcher: IKinguTasksWorkspaceLauncher,
 	) {
 		super();
-		this._launcher = this._register(this._instantiationService.createInstance(KinguTasksWorkspaceLauncher));
 		this._register(this._orca.onPush('settings:changed')(([updates]) => {
 			if (updates && typeof updates === 'object') {
 				this._settings = { ...this._settings, ...updates };

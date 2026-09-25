@@ -66,6 +66,8 @@ export interface INewSessionComposer {
 	readonly onDidChangeWorkspaceSelection?: Event<void>;
 	readonly hasInput?: boolean;
 	readonly isInputReady?: boolean;
+	/** The text typed in the composer's input right now. */
+	getInputValue?(): string;
 	readonly onDidChangeInput?: Event<void>;
 	readonly canApplyWorkspaceDefault?: boolean;
 	animatePrompt(text: string, durationMs: number, placeholder: string, token: CancellationToken): Promise<boolean>;
