@@ -560,6 +560,15 @@ let engine: Promise<BrowserWindow | undefined> | undefined;
  * account service is part of it; gives up after a bound rather than hold the
  * caller, which falls back to the default.
  */
+/**
+ * Where {@link getOrcaCodexHome} records the home it resolved, for the agent
+ * host's Codex agent to read on each launch: selecting another account (as a
+ * sign-in does) moves Codex to that account's own home while the host runs.
+ */
+export function getOrcaCodexHomeFile(): string {
+	return join(app.getPath('userData'), 'kingu-ade-codex-home');
+}
+
 export async function getOrcaCodexHome(): Promise<string | undefined> {
 	const orca = loadStartup();
 	if (!orca) {
@@ -570,7 +579,9 @@ export async function getOrcaCodexHome(): Promise<string | undefined> {
 		if (!ready) {
 			return undefined;
 		}
-		return (await orca.prepareCodexRuntimeHomeForLaunch()) ?? undefined;
+		const home = (await orca.prepareCodexRuntimeHomeForLaunch()) ?? undefined;
+		await fs.writeFile(getOrcaCodexHomeFile(), home ?? '', 'utf8').catch(error => console.warn('[kingu-orca] could not record the Codex home', error));
+		return home;
 	} catch (error) {
 		console.warn('[kingu-orca] could not resolve the Codex home of the ADE', error);
 		return undefined;

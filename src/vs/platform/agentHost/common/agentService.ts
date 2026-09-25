@@ -338,6 +338,13 @@ export const AgentHostCodexAgentSdkRootEnvVar = 'VSCODE_AGENT_HOST_CODEX_SDK_ROO
 /** Forwarded `$CODEX_HOME`. */
 export const AgentHostCodexAgentCodexHomeEnvVar = 'CODEX_HOME';
 
+/**
+ * Kingu: a file naming the Codex home of the account selected in the ADE. The
+ * selection changes while the host runs (a sign-in picks a new account's own
+ * home), so the Codex agent reads it on each app-server launch.
+ */
+export const KinguAdeCodexHomeFileEnvVar = 'KINGU_ADE_CODEX_HOME_FILE';
+
 /** Forwarded extra args for `codex app-server` (JSON-encoded string[]). */
 export const AgentHostCodexAgentBinaryArgsEnvVar = 'VSCODE_AGENT_HOST_CODEX_APP_SERVER_ARGS';
 

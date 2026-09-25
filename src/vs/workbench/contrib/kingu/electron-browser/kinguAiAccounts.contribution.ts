@@ -11,6 +11,7 @@ import { ContextKeyExpr, IContextKey, IContextKeyService } from '../../../../pla
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { KINGU_ORCA_CHANNEL_NAME } from '../../../../platform/kinguOrca/common/kinguOrca.js';
+import { IKinguGeminiStatus, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService, ProgressLocation } from '../../../../platform/progress/common/progress.js';
@@ -57,6 +58,14 @@ function statusOf(state: IAccountsState | undefined): IKinguAiAccountStatus {
  * models only when the Claude SDK found a working login.
  */
 async function readStatus(mainProcessService: IMainProcessService, languageModelsService: ILanguageModelsService, provider: KinguAiProvider): Promise<IKinguAiAccountStatus> {
+	if (provider === 'gemini') {
+		// Gemini's login is its CLI's own, read in the main process.
+		const gemini = await mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME).call<IKinguGeminiStatus>('geminiStatus');
+		return {
+			signedIn: gemini.signedIn,
+			email: gemini.email ?? (gemini.signedIn && gemini.method === 'gemini-api-key' ? localize('kingu.ai.geminiApiKey', "Gemini (API key)") : undefined),
+		};
+	}
 	const status = statusOf(await invokeOrca<IAccountsState>(mainProcessService, `${provider}Accounts:list`));
 	if (!status.signedIn && provider === 'claude' && hasAnyModelTargetingSessionType(languageModelsService, agentSdkSetupSessionType(kinguAiAgentId(provider)))) {
 		return { signedIn: true };
@@ -83,6 +92,7 @@ class KinguAiAccountsContribution extends Disposable {
 		this._keys = {
 			claude: KinguAiSignedInContext.claude.bindTo(contextKeyService),
 			codex: KinguAiSignedInContext.codex.bindTo(contextKeyService),
+			gemini: KinguAiSignedInContext.gemini.bindTo(contextKeyService),
 		};
 		KinguAiAccountsContribution._instance = this;
 		this._register({ dispose: () => { KinguAiAccountsContribution._instance = undefined; } });
@@ -131,6 +141,16 @@ CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_COMMAND_ID, async (accessor: S
 	const setupService = accessor.get(IAgentSdkSetupService);
 	const label = kinguAiProviderLabel(provider);
 	try {
+		if (provider === 'gemini') {
+			await progressService.withProgress({
+				location: ProgressLocation.Notification,
+				title: localize('kingu.ai.signingInGoogle', "Signing in to Gemini with Google. Finish in the browser window that opened."),
+			}, () => mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME).call('geminiSignIn'));
+			setupService.requestReload(kinguAiAgentId(provider));
+			await KinguAiAccountsContribution.refresh();
+			notificationService.info(localize('kingu.ai.signedIn', "Signed in to {0}.", label));
+			return true;
+		}
 		const before = await invokeOrca<IAccountsState>(mainProcessService, `${provider}Accounts:list`).catch(() => undefined);
 		const known = new Set(before?.accounts.map(account => account.id) ?? []);
 		const after = await progressService.withProgress({
@@ -143,6 +163,10 @@ CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_COMMAND_ID, async (accessor: S
 		const added = after?.accounts.find(account => !known.has(account.id)) ?? after?.accounts.find(account => account.id === after.activeAccountId);
 		if (added && after.activeAccountId !== added.id) {
 			await invokeOrca(mainProcessService, `${provider}Accounts:select`, { accountId: added.id });
+		}
+		if (provider === 'codex') {
+			// Each ChatGPT account has its own Codex home; point the agent at the new one.
+			await mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME).call('refreshCodexHome');
 		}
 		setupService.requestReload(kinguAiAgentId(provider));
 		await KinguAiAccountsContribution.refresh();
@@ -167,11 +191,13 @@ for (const provider of KINGU_AI_PROVIDERS) {
 				id: `${KINGU_AI_SIGN_IN_COMMAND_ID}.${provider}`,
 				title: provider === 'claude'
 					? localize2('kingu.ai.signInClaude', "Sign in to Claude...")
-					: localize2('kingu.ai.signInChatGPT', "Sign in to ChatGPT..."),
+					: provider === 'codex'
+						? localize2('kingu.ai.signInChatGPT', "Sign in to ChatGPT...")
+						: localize2('kingu.ai.signInGemini', "Sign in to Gemini..."),
 				menu: {
 					id: MenuId.AccountsContext,
 					group: '1_kingu_ai',
-					order: provider === 'claude' ? 1 : 2,
+					order: KINGU_AI_PROVIDERS.indexOf(provider) + 1,
 					when: ContextKeyExpr.not(KinguAiSignedInContext[provider].key),
 				},
 			});

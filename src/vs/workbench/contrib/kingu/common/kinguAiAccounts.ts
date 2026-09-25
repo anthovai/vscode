@@ -20,9 +20,9 @@ export const KINGU_AI_SIGN_IN_COMMAND_ID = 'kingu.ai.signIn';
 /** `kingu.ai.accountStatus(provider)`: `IKinguAiAccountStatus`. */
 export const KINGU_AI_ACCOUNT_STATUS_COMMAND_ID = 'kingu.ai.accountStatus';
 
-export type KinguAiProvider = 'claude' | 'codex';
+export type KinguAiProvider = 'claude' | 'codex' | 'gemini';
 
-export const KINGU_AI_PROVIDERS: readonly KinguAiProvider[] = ['claude', 'codex'];
+export const KINGU_AI_PROVIDERS: readonly KinguAiProvider[] = ['claude', 'codex', 'gemini'];
 
 export interface IKinguAiAccountStatus {
 	readonly signedIn: boolean;
@@ -33,11 +33,16 @@ export interface IKinguAiAccountStatus {
 export const KinguAiSignedInContext: Readonly<Record<KinguAiProvider, RawContextKey<boolean>>> = {
 	claude: new RawContextKey<boolean>('kinguAiClaudeSignedIn', false, localize('kinguAiClaudeSignedIn', "Whether a Claude account is in use")),
 	codex: new RawContextKey<boolean>('kinguAiCodexSignedIn', false, localize('kinguAiCodexSignedIn', "Whether a ChatGPT account is in use")),
+	gemini: new RawContextKey<boolean>('kinguAiGeminiSignedIn', false, localize('kinguAiGeminiSignedIn', "Whether Gemini is signed in")),
 };
 
 /** The account's name as the reader knows it: Claude, and ChatGPT for Codex. */
 export function kinguAiProviderLabel(provider: KinguAiProvider): string {
-	return provider === 'claude' ? localize('kingu.ai.claude', "Claude") : localize('kingu.ai.chatgpt', "ChatGPT");
+	switch (provider) {
+		case 'claude': return localize('kingu.ai.claude', "Claude");
+		case 'codex': return localize('kingu.ai.chatgpt', "ChatGPT");
+		case 'gemini': return localize('kingu.ai.gemini', "Gemini");
+	}
 }
 
 /** The agent host's agent that runs on each account. */
@@ -46,5 +51,5 @@ export function kinguAiAgentId(provider: KinguAiProvider): string {
 }
 
 export function isKinguAiProvider(value: unknown): value is KinguAiProvider {
-	return value === 'claude' || value === 'codex';
+	return value === 'claude' || value === 'codex' || value === 'gemini';
 }

@@ -25,6 +25,8 @@ import { registerContextMenuListener } from '../../base/parts/contextmenu/electr
 import { KinguHostChannel, KINGU_HOST_CHANNEL_NAME } from '../../platform/kinguHost/electron-main/kinguHostChannel.js';
 import { KinguRuntimeChannel, KINGU_RUNTIME_CHANNEL_NAME } from '../../platform/kinguRuntime/electron-main/kinguRuntimeChannel.js';
 import { KinguOrcaChannel, KINGU_ORCA_CHANNEL_NAME } from '../../platform/kinguOrca/electron-main/kinguOrcaChannel.js';
+import { KinguAiChannel } from '../../platform/kinguAi/electron-main/kinguAiChannel.js';
+import { KINGU_AI_CHANNEL_NAME } from '../../platform/kinguAi/common/kinguAi.js';
 import { KINGU_RUNTIME_ENTRY_SETTING, KINGU_RUNTIME_WEB_ROOT_SETTING, KINGU_SIBLING_RUNTIME_ENTRY, KINGU_SIBLING_WEB_ROOT } from '../../platform/kinguRuntime/common/kinguRuntime.js';
 import { KINGU_ALLOW_INPUT_SETTING } from '../../platform/kinguComputer/common/kinguComputerProtocol.js';
 import { getDelayedChannel, ProxyChannel, StaticRouter } from '../../base/parts/ipc/common/ipc.js';
@@ -1399,6 +1401,8 @@ export class CodeApplication extends Disposable {
 		// rather than reimplementing them, so its status bar and settings behave
 		// exactly as the ADE's do.
 		mainProcessElectronServer.registerChannel(KINGU_ORCA_CHANNEL_NAME, disposables.add(new KinguOrcaChannel()));
+		// Kingu: the AI accounts the ADE does not keep (Gemini's CLI login).
+		mainProcessElectronServer.registerChannel(KINGU_AI_CHANNEL_NAME, new KinguAiChannel(this.logService));
 
 		// Policies (main & shared process)
 		const policyChannel = disposables.add(new PolicyChannel(accessor.get(IPolicyService)));

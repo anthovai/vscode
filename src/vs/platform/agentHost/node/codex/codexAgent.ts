@@ -36,7 +36,7 @@ import { AgentSdkSetupChannel } from '../agentSdkSetupChannel.js';
 import { CODEX_ACCOUNT_META_KEY, CODEX_ACCOUNT_SIGN_IN_REQUEST_KEY, CODEX_ACCOUNT_SIGN_OUT_REQUEST_KEY, type ICodexAccountInfo } from '../../common/codexAccount.js';
 import { getReasoningEffortDescription, getReasoningEffortLabel, resolveDefaultReasoningEffort } from '../../common/reasoningEffort.js';
 import { AgentChatMigrationDeferred, type AgentChatMigrationResult, AgentSession, AgentSignal, AgentWorkingDirectoryChangedError, CODEX_AGENT_PROVIDER_ID, IActiveClient, IAgent, IAgentChatConfigCompletionsParams, IAgentChatContext, IAgentChatDataChange, IAgentChatHistoryChange, IAgentChatMetadata, type IAgentChatMetadataOptions, IAgentChats, IAgentCreateChatForkSource, IAgentCreateChatResult, IAgentCreateChatOptions, IAgentDescriptor, IAgentDiscoveredChat, IAgentMaterializeChatEvent, IAgentModelInfo, IAgentResolveChatConfigParams, IAgentSpawnChatEvent, IMcpNotification, resolveAgentChatContext, resolveAgentHostInstructions, type AgentProvider, type AuthenticateParams } from '../../common/agent.js';
-import { AgentHostCodexAgentBinaryArgsEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentSdkRootEnvVar } from '../../common/agentService.js';
+import { AgentHostCodexAgentBinaryArgsEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentSdkRootEnvVar, KinguAdeCodexHomeFileEnvVar } from '../../common/agentService.js';
 import { SessionConfigKey } from '../../common/sessionConfigKeys.js';
 import { AHP_AUTH_REQUIRED, ProtocolError } from '../../common/state/sessionProtocol.js';
 import { ActionType, isChatAction, type SessionAction, type ChatAction } from '../../common/state/sessionActions.js';
@@ -2540,7 +2540,7 @@ export class CodexAgent extends Disposable implements IAgent {
 			env.TMPDIR = sandboxTempDirectory;
 			env.TMP = sandboxTempDirectory;
 			env.TEMP = sandboxTempDirectory;
-			const userCodexHome = process.env[AgentHostCodexAgentCodexHomeEnvVar];
+			const userCodexHome = await readKinguAdeCodexHome() ?? process.env[AgentHostCodexAgentCodexHomeEnvVar];
 			if (userCodexHome) {
 				env.CODEX_HOME = userCodexHome;
 			}
@@ -8454,6 +8454,19 @@ export class CodexAgent extends Disposable implements IAgent {
 	override dispose(): void {
 		this._stopRuntime();
 		super.dispose();
+	}
+}
+
+/** Kingu: the Codex home of the account now selected in the ADE, as the main process last recorded it. */
+async function readKinguAdeCodexHome(): Promise<string | undefined> {
+	const file = process.env[KinguAdeCodexHomeFileEnvVar];
+	if (!file) {
+		return undefined;
+	}
+	try {
+		return (await fs.promises.readFile(file, 'utf8')).trim() || undefined;
+	} catch {
+		return undefined;
 	}
 }
 

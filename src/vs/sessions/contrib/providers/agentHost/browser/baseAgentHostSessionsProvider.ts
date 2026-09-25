@@ -3718,6 +3718,11 @@ export abstract class BaseAgentHostSessionsProvider extends Disposable implement
 			return Codicon.openai;
 		}
 
+		// Kingu: the Gemini agent (the user's Gemini CLI over ACP).
+		if (provider.includes('gemini')) {
+			return Codicon.googleGemini;
+		}
+
 		return undefined;
 	}
 

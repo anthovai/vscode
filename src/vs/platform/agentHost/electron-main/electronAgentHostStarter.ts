@@ -23,10 +23,10 @@ import { UtilityProcess } from '../../utilityProcess/electron-main/utilityProces
 import { AgentHostStartError, IAgentHostConnection, IAgentHostShutdownRequest, IAgentHostStarter, IAgentHostStartRequest, isFatalAgentHostStartError, toFatalAgentHostStartError } from '../common/agent.js';
 import { buildAgentHostTelemetryIdEnv, IAgentHostForwardedTelemetryIds } from '../common/agentHostTelemetryEnv.js';
 import { AgentHostLaunchKind, AgentHostLaunchKindEnvVar, telemetryLevelToAgentHostValue } from '../common/agentHostTelemetry.js';
-import { AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentBinaryArgsSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostCodexAgentSdkRootSettingId, AgentHostCodexAgentCodexHomeSettingId, AgentHostIpcChannels, AgentHostOTelCaptureContentSettingId, AgentHostOTelDbSpanExporterEnabledSettingId, AgentHostOTelEnabledSettingId, AgentHostOTelExporterTypeSettingId, AgentHostOTelOtlpEndpointSettingId, AgentHostOTelOtlpProtocolSettingId, AgentHostOTelOutfileSettingId, AgentHostOTelResourceAttributesSettingId, AgentHostOTelServiceNameSettingId, AgentHostOTelPolicyIpcChannel, AgentHostRestartIpcChannel, AgentHostWillRestartIpcChannel, buildAgentHostOTelEnv, buildAgentSdkEnv, IAgentHostManagementService, IAgentHostOTelSettings, sanitizeAgentHostOTelPolicySettings } from '../common/agentService.js';
+import { AgentHostClaudeAgentEnabledSettingId, AgentHostCodexAgentBinaryArgsSettingId, AgentHostCodexAgentEnabledSettingId, AgentHostCodexAgentSdkRootSettingId, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentCodexHomeSettingId, AgentHostIpcChannels, AgentHostOTelCaptureContentSettingId, AgentHostOTelDbSpanExporterEnabledSettingId, AgentHostOTelEnabledSettingId, AgentHostOTelExporterTypeSettingId, AgentHostOTelOtlpEndpointSettingId, AgentHostOTelOtlpProtocolSettingId, AgentHostOTelOutfileSettingId, AgentHostOTelResourceAttributesSettingId, AgentHostOTelServiceNameSettingId, AgentHostOTelPolicyIpcChannel, AgentHostRestartIpcChannel, AgentHostWillRestartIpcChannel, buildAgentHostOTelEnv, buildAgentSdkEnv, IAgentHostManagementService, IAgentHostOTelSettings, KinguAdeCodexHomeFileEnvVar, sanitizeAgentHostOTelPolicySettings } from '../common/agentService.js';
 import { deepClone } from '../../../base/common/objects.js';
 import '../common/agentHostStarter.config.contribution.js';
-import { getOrcaCodexHome } from '../../kinguOrca/electron-main/kinguOrcaHost.js';
+import { getOrcaCodexHome, getOrcaCodexHomeFile } from '../../kinguOrca/electron-main/kinguOrcaHost.js';
 
 export class ElectronAgentHostStarter extends Disposable implements IAgentHostStarter {
 
@@ -120,14 +120,19 @@ export class ElectronAgentHostStarter extends Disposable implements IAgentHostSt
 		// Forward the Claude/Codex SDK overrides + codex home/args from
 		// workbench settings to the agent host process. Parent env wins on
 		// collision — see `buildAgentSdkEnv` for the precedence rule.
+		const codexHomeSetting = this._configurationService.getValue<string>(AgentHostCodexAgentCodexHomeSettingId);
 		const sdkEnv = buildAgentSdkEnv({
 			codexSdkRoot: this._configurationService.getValue<string>(AgentHostCodexAgentSdkRootSettingId),
 			// Kingu: unset, Codex runs on the account selected in the ADE.
-			codexHome: this._configurationService.getValue<string>(AgentHostCodexAgentCodexHomeSettingId) || await getOrcaCodexHome(),
+			codexHome: codexHomeSetting || await getOrcaCodexHome(),
 			codexBinaryArgs: this._configurationService.getValue<readonly string[]>(AgentHostCodexAgentBinaryArgsSettingId),
 			claudeAgentEnabled: this._configurationService.getValue<boolean>(AgentHostClaudeAgentEnabledSettingId),
 			codexAgentEnabled: this._configurationService.getValue<boolean>(AgentHostCodexAgentEnabledSettingId),
 		}, process.env);
+		if (!codexHomeSetting && !process.env[AgentHostCodexAgentCodexHomeEnvVar]) {
+			// Kingu: the ADE's selection follows sign-ins without a host restart.
+			sdkEnv[KinguAdeCodexHomeFileEnvVar] = getOrcaCodexHomeFile();
+		}
 
 		// Translate `chat.agentHost.otel.*` settings into the env vars consumed by
 		// the agent host process. Any value already present on `process.env` wins

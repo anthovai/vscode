@@ -24,6 +24,7 @@ import { IAgentConfigurationService } from './agentConfigurationService.js';
 import { IAgentHostCompletions } from './agentHostCompletions.js';
 import { CopilotAgent } from './copilot/copilotAgent.js';
 import { ClaudeAgent } from './claude/claudeAgent.js';
+import { GeminiAgent } from './gemini/geminiAgent.js';
 import { ClaudeSdkPackage } from './claude/claudeAgentSdkService.js';
 import { CodexAgent, CodexSdkPackage } from './codex/codexAgent.js';
 import { createCodexProviderConfiguration } from './codex/codexProviderConfiguration.js';
@@ -169,6 +170,9 @@ async function startAgentHost(): Promise<void> {
 		if (isAgentEnabled(process.env[AgentHostClaudeAgentEnabledEnvVar], true) && (!environmentService.isBuilt || agentSdkDownloader.isAvailable(ClaudeSdkPackage))) {
 			providerService.registerProvider(instantiationService.createInstance(ClaudeAgent));
 		}
+		// Kingu: Gemini runs the user's own Gemini CLI over ACP; with no CLI
+		// installed it offers no models and stays unusable in the pickers.
+		providerService.registerProvider(instantiationService.createInstance(GeminiAgent));
 		// Codex registration is one-way (register-on-enable): the env-var toggle
 		// or the renderer-forwarded `codexAgentEnabled` root config enables it.
 		// Disabling requires an agent host restart.

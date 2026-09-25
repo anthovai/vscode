@@ -93,7 +93,8 @@ export function getAgentSessionProviderIcon(provider: AgentSessionTarget): Theme
 		case AgentSessionProviders.AgentHostCopilot:
 			return Codicon.copilot;
 		default:
-			return Codicon.extensions;
+			// Kingu: the Gemini agent host provider registers itself by id.
+			return provider === 'agent-host-gemini' ? Codicon.googleGemini : Codicon.extensions;
 	}
 }
 
