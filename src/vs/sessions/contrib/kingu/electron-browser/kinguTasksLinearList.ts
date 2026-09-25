@@ -13,6 +13,7 @@ import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguTaskActions } from '../common/kinguTasksDetail.js';
 import {
 	getLinearPriorityBars,
 	getLinearPriorityLabel,
@@ -25,6 +26,7 @@ import {
 } from '../common/kinguTasksLinear.js';
 import { lucideIcon } from './kinguOrcaFooterParts.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
+import { bindTaskRow } from './kinguTasksRow.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -34,11 +36,22 @@ function safeColor(color: string | undefined): string {
 	return color && /^#[0-9a-f]{3,8}$/i.test(color) ? color : 'var(--vscode-descriptionForeground)';
 }
 
+/** `LinearStateCell`, read only: a pill tinted by the state's colour. */
+export function renderLinearStatePill(state: IKinguLinearIssue['state'], compact: boolean): HTMLElement {
+	const pill = $('span.kingu-tasks-linear-state');
+	pill.classList.toggle('compact', compact);
+	pill.style.setProperty('--linear-state-color', safeColor(state.color));
+	append(pill, $('span.kingu-tasks-linear-state-marker'));
+	append(pill, $('span.truncate')).textContent = state.name;
+	return pill;
+}
+
 /**
  * The ADE's Linear issue list in its default shape: Issues mode, list view,
  * no grouping, ordered by priority (`task-page/linear/Filters.tsx`,
- * `IssueList.tsx`, `IssueTable.tsx`, `IssueBoard.tsx`), read only.
- * Projects, Views, the board, grouping and paging follow.
+ * `IssueList.tsx`, `IssueTable.tsx`, `IssueBoard.tsx`).
+ * A row opens the issue's detail page; Projects, Views, the board, grouping
+ * and paging follow.
  */
 export class KinguTasksLinearList extends Disposable {
 
@@ -61,6 +74,7 @@ export class KinguTasksLinearList extends Disposable {
 	constructor(
 		private readonly _workspaceId: string | undefined,
 		private readonly _credentialError: string | undefined,
+		private readonly _actions: IKinguTaskActions,
 		@IKinguOrcaService private readonly _orca: IKinguOrcaService,
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IOpenerService private readonly _openerService: IOpenerService,
@@ -221,7 +235,7 @@ export class KinguTasksLinearList extends Disposable {
 		append(titleLine, $('span.kingu-tasks-key-inline.lg-down')).textContent = issue.identifier;
 		append(titleLine, $('h3.kingu-tasks-title')).textContent = issue.title;
 		const compact = append(main, $('.kingu-tasks-compact-meta.lg-down'));
-		compact.appendChild(this._statePill(issue, true));
+		compact.appendChild(renderLinearStatePill(issue.state, true));
 		append(compact, $('span.kingu-tasks-meta.truncate')).textContent = issue.assignee?.displayName ?? unassigned;
 		append(compact, $('span.kingu-tasks-meta.truncate')).textContent = team;
 
@@ -234,7 +248,7 @@ export class KinguTasksLinearList extends Disposable {
 			append(labels, $('span.kingu-tasks-label-more.linear')).textContent = `+${issue.labels.length - shown.length}`;
 		}
 
-		append(row, $('.kingu-tasks-cell-status.lg-up')).appendChild(this._statePill(issue, false));
+		append(row, $('.kingu-tasks-cell-status.lg-up')).appendChild(renderLinearStatePill(issue.state, false));
 
 		const assignee = append(append(row, $('.kingu-tasks-cell-assignee-center.lg-up')), $('.kingu-tasks-avatar.initial'));
 		const assigneeName = issue.assignee?.displayName ?? unassigned;
@@ -261,16 +275,7 @@ export class KinguTasksLinearList extends Disposable {
 		open.appendChild(lucideIcon('external-link', 14));
 		this._rendered.add(this._hoverService.setupDelayedHover(open, { content: localize('kingu.tasks.linear.openInLinear', "Open in Linear"), position: { hoverPosition: HoverPosition.BELOW } }));
 		this._rendered.add(addDisposableListener(open, EventType.CLICK, () => openExternalIssue(this._openerService, issue.url)));
-	}
-
-	/** `LinearStateCell`, read only: a pill tinted by the state's colour. */
-	private _statePill(issue: IKinguLinearIssue, compact: boolean): HTMLElement {
-		const pill = $('span.kingu-tasks-linear-state');
-		pill.classList.toggle('compact', compact);
-		pill.style.setProperty('--linear-state-color', safeColor(issue.state.color));
-		append(pill, $('span.kingu-tasks-linear-state-marker'));
-		append(pill, $('span.truncate')).textContent = issue.state.name;
-		return pill;
+		bindTaskRow(row, actions, { provider: 'linear', issue }, this._actions, this._hoverService, this._rendered);
 	}
 
 	/** `LinearPriorityIcon`. */

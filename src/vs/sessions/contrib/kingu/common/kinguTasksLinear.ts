@@ -16,6 +16,8 @@ export const LINEAR_ITEM_LIMIT = 36;
 /** The part of the ADE's `LinearIssue` the list reads. */
 export interface IKinguLinearIssue {
 	readonly id: string;
+	/** The workspace the issue was read from, when several are connected. */
+	readonly workspaceId?: string;
 	readonly identifier: string;
 	readonly title: string;
 	readonly url: string;

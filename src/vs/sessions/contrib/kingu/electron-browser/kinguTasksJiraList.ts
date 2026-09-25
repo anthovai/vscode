@@ -13,6 +13,7 @@ import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguTaskActions } from '../common/kinguTasksDetail.js';
 import {
 	getJiraLoadError,
 	getJiraPresets,
@@ -31,6 +32,7 @@ import {
 	sortJiraIssues,
 } from '../common/kinguTasksJira.js';
 import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { bindTaskRow } from './kinguTasksRow.js';
 
 /** The ADE's `TASK_SEARCH_DEBOUNCE_MS`. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -45,8 +47,8 @@ export function openExternalIssue(openerService: IOpenerService, url: string): v
 
 /**
  * The ADE's Jira issue list: `task-page/jira/Filters.tsx` above
- * `task-page/jira/Content.tsx` and `task-page-jira-issue-list.tsx`, read only.
- * Opening an issue's detail page and starting a workspace from it follow.
+ * `task-page/jira/Content.tsx` and `task-page-jira-issue-list.tsx`.
+ * A row opens the issue's detail page.
  */
 export class KinguTasksJiraList extends Disposable {
 
@@ -76,6 +78,7 @@ export class KinguTasksJiraList extends Disposable {
 	constructor(
 		private readonly _siteId: string | undefined,
 		private readonly _credentialError: string | undefined,
+		private readonly _actions: IKinguTaskActions,
 		@IKinguOrcaService private readonly _orca: IKinguOrcaService,
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IOpenerService private readonly _openerService: IOpenerService,
@@ -371,6 +374,7 @@ export class KinguTasksJiraList extends Disposable {
 		open.appendChild(lucideIcon('external-link', 14));
 		this._rendered.add(this._hoverService.setupDelayedHover(open, { content: localize('kingu.tasks.jira.openInJira', "Open in Jira"), position: { hoverPosition: HoverPosition.BELOW } }));
 		this._rendered.add(addDisposableListener(open, EventType.CLICK, () => openExternalIssue(this._openerService, issue.url)));
+		bindTaskRow(row, actions, { provider: 'jira', issue }, this._actions, this._hoverService, this._rendered);
 	}
 
 	private _avatar(parent: HTMLElement, name: string | undefined, url: string | undefined): void {

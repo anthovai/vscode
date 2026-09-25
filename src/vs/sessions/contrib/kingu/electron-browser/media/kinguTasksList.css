@@ -892,3 +892,13 @@
 		display: none !important;
 	}
 }
+
+/* A row that opens its task's detail page, as the ADE's rows open its dialog. */
+.kingu-tasks-openable {
+	cursor: pointer;
+}
+
+.kingu-tasks-openable:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}

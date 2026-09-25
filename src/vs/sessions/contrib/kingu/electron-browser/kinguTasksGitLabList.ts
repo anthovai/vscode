@@ -14,6 +14,7 @@ import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguTaskActions } from '../common/kinguTasksDetail.js';
 import { IKinguRepo } from '../common/kinguTasksGitHub.js';
 import {
 	formatGitLabReference,
@@ -38,8 +39,9 @@ import {
 import { lucideIcon } from './kinguOrcaFooterParts.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 import { KinguTasksProjectPicker, renderRepoBadge } from './kinguTasksProjectPicker.js';
+import { bindTaskRow } from './kinguTasksRow.js';
 
-export interface IKinguGitLabListHost {
+export interface IKinguGitLabListHost extends IKinguTaskActions {
 	readonly repos: readonly IKinguRepo[];
 	hostLabel(repo: IKinguRepo): string;
 	/** The reader changed the picked projects; `undefined` is "All projects". */
@@ -51,7 +53,7 @@ export interface IKinguGitLabListHost {
  * `TodoList.tsx`): Issues, merge requests and My Todos across the picked
  * projects, one `gitlab:*` call per project, merged newest first. As in the
  * ADE there is no search or pager; a project that is not on GitLab simply
- * adds nothing. The item dialog and starting a workspace follow.
+ * adds nothing. An issue or merge request row opens its detail page.
  */
 export class KinguTasksGitLabList extends Disposable {
 
@@ -331,7 +333,10 @@ export class KinguTasksGitLabList extends Disposable {
 
 		append(append(row, $('.kingu-tasks-gh-cell-status')), $(`span.kingu-tasks-gh-status.${getGitLabStateTone(item.state)}`)).textContent = formatGitLabTypeState(item);
 		this._renderUpdated(row, item.updatedAt);
-		this._renderOpen(row, item.url);
+		const actions = this._renderOpen(row, item.url);
+		if (repo) {
+			bindTaskRow(row, actions, { provider: 'gitlab', repo, item }, this._host, this._hoverService, this._rendered);
+		}
 	}
 
 	private _renderTodo(parent: HTMLElement, todo: IKinguGitLabTodo): void {
@@ -365,7 +370,7 @@ export class KinguTasksGitLabList extends Disposable {
 		}
 	}
 
-	private _renderOpen(row: HTMLElement, url: string): void {
+	private _renderOpen(row: HTMLElement, url: string): HTMLElement {
 		const actions = append(row, $('.kingu-tasks-gh-cell-actions'));
 		const open = append(actions, $('button.kingu-tasks-row-action')) as HTMLButtonElement;
 		open.type = 'button';
@@ -374,5 +379,6 @@ export class KinguTasksGitLabList extends Disposable {
 		open.appendChild(lucideIcon('external-link', 14));
 		this._rendered.add(this._hoverService.setupDelayedHover(open, { content: label, position: { hoverPosition: HoverPosition.BELOW } }));
 		this._rendered.add(addDisposableListener(open, EventType.CLICK, () => openExternalIssue(this._openerService, url)));
+		return actions;
 	}
 }

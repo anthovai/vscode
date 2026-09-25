@@ -169,7 +169,28 @@ method:
   this port was not asked to touch, and it is the reason to keep the Agents view
   collapsed by default.
 
-The lesson all four times: **take the model, leave the React.** The React is
+- **Task detail and Start workspace.** The ADE has one item dialog or drawer
+  per provider (GitHub, GitLab, Jira, Linear), each with its own IPC and its
+  own comment shape. What ported is `common/kinguTasksDetail.ts`: the calls
+  each provider needs, one reader that turns every answer into the same
+  body / comments / facts, and the ADE's start prompt (`Complete <url>` for the
+  repo hosts, the link as context for Jira and Linear). The page draws that
+  one shape, in place of the list, which stays alive behind it so Back keeps
+  the query and page.
+
+  Start workspace does not build a workspace itself. It closes Tasks and hands
+  the prompt and the project folder to the Agents composer through
+  `AgentsWindowWorkspaceHandoff`, the same path "Continue in Agents" uses. The
+  reader then picks the agent and the worktree and presses send, and a draft
+  they were already writing is kept rather than replaced. The ADE's name seed
+  and PR-head checkout are not ported: this composer names sessions itself and
+  isolates by worktree.
+
+  The ADE refuses a detail read for a path it does not know as a project
+  ("Access denied: unknown repository path"). That is on purpose, so a row
+  can only open a task from a project the ADE already has.
+
+The lesson all five times: **take the model, leave the React.** The React is
 the cheapest part to rewrite and the least worth keeping — and on Activity, so
 is most of the logic under it.
 

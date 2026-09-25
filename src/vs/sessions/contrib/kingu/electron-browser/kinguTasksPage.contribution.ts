@@ -48,11 +48,14 @@ import {
 } from '../common/kinguTasks.js';
 import { getRepoBackedSummary, getRepoGitHubSlug, getRepoHostId, IKinguGitHubSlug, IKinguRepo, isTaskEligibleRepo, resolveRepoSelection } from '../common/kinguTasksGitHub.js';
 import { KINGU_PROVIDER_LOGOS, IKinguProviderLogo } from '../common/kinguProviderLogos.js';
+import { IKinguTaskActions, IKinguTaskRef } from '../common/kinguTasksDetail.js';
 import { lucideIcon, logoIcon } from './kinguOrcaFooterParts.js';
+import { KinguTasksDetail } from './kinguTasksDetail.js';
 import { KinguTasksGitHubList } from './kinguTasksGitHubList.js';
 import { KinguTasksGitLabList } from './kinguTasksGitLabList.js';
 import { KinguTasksJiraList } from './kinguTasksJiraList.js';
 import { KinguTasksLinearList } from './kinguTasksLinearList.js';
+import { KinguTasksWorkspaceLauncher } from './kinguTasksWorkspaceLauncher.js';
 
 /** The two settings the source bar reads and writes. */
 interface ITaskSettings {
@@ -114,6 +117,13 @@ class KinguTasksView extends AbstractCustomView {
 
 	private readonly _drawn = this._register(new DisposableStore());
 	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList | KinguTasksGitHubList | KinguTasksGitLabList>());
+	/** An open task's detail page, drawn in place of the list, which stays behind it. */
+	private readonly _detail = this._register(new MutableDisposable<KinguTasksDetail>());
+	private readonly _launcher: KinguTasksWorkspaceLauncher;
+	private readonly _taskActions: IKinguTaskActions = {
+		openDetail: ref => this._openDetail(ref),
+		startWorkspace: ref => void this._launcher.start(ref),
+	};
 	private _repos: readonly IKinguRepo[] = [];
 	private _repoSelection: readonly string[] = [];
 	private readonly _repoSources = new Map<string, IKinguGitHubSlug>();
@@ -140,6 +150,7 @@ class KinguTasksView extends AbstractCustomView {
 		@ISessionsRecentWorkspacesService private readonly _recentWorkspacesService: ISessionsRecentWorkspacesService,
 	) {
 		super();
+		this._launcher = this._register(this._instantiationService.createInstance(KinguTasksWorkspaceLauncher));
 		this._register(this._orca.onPush('settings:changed')(([updates]) => {
 			if (updates && typeof updates === 'object') {
 				this._settings = { ...this._settings, ...updates };
@@ -189,6 +200,7 @@ class KinguTasksView extends AbstractCustomView {
 		this._repoSelection = resolveRepoSelection(this._repos, this._settings.defaultRepoSelection);
 		this._loaded = true;
 		if (force) {
+			this._detail.clear();
 			this._list.clear();
 			this._listKey = undefined;
 		}
@@ -399,6 +411,7 @@ class KinguTasksView extends AbstractCustomView {
 		if (this._notice(provider)?.blocking) {
 			return;
 		}
+		this._detail.clear();
 		this._taskSource = provider;
 		this._draw();
 		this._orca.invoke('settings:set', { defaultTaskSource: provider }).catch(() => {
@@ -417,7 +430,23 @@ class KinguTasksView extends AbstractCustomView {
 		return site?.displayName ?? site?.siteUrl;
 	}
 
+	private _openDetail(ref: IKinguTaskRef): void {
+		this._detail.value = this._instantiationService.createInstance(KinguTasksDetail, ref, {
+			back: () => {
+				this._detail.clear();
+				this._draw();
+			},
+			startWorkspace: target => void this._launcher.start(target),
+		});
+		this._draw();
+		this._detail.value?.focus();
+	}
+
 	private _drawContent(content: HTMLElement, taskSource: KinguTaskProvider): void {
+		if (this._detail.value) {
+			content.appendChild(this._detail.value.element);
+			return;
+		}
 		if (!this._loaded) {
 			const loading = append(content, $('.kingu-tasks-loading'));
 			loading.appendChild(lucideIcon('loader-circle', 20, 'kingu-tasks-spin'));
@@ -451,6 +480,7 @@ class KinguTasksView extends AbstractCustomView {
 			if (this._listKey !== 'github' || !this._list.value) {
 				this._listKey = 'github';
 				this._list.value = this._instantiationService.createInstance(KinguTasksGitHubList, {
+					...this._taskActions,
 					repos: this._repos,
 					hostLabel: repo => this._hostLabel(repo),
 					setSelection: ids => this._setRepoSelection(ids),
@@ -469,6 +499,7 @@ class KinguTasksView extends AbstractCustomView {
 		if (this._listKey !== 'gitlab' || !this._list.value) {
 			this._listKey = 'gitlab';
 			this._list.value = this._instantiationService.createInstance(KinguTasksGitLabList, {
+				...this._taskActions,
 				repos: this._repos,
 				hostLabel: repo => this._hostLabel(repo),
 				setSelection: ids => this._setRepoSelection(ids),
@@ -497,8 +528,8 @@ class KinguTasksView extends AbstractCustomView {
 		if (this._listKey !== key || !this._list.value) {
 			this._listKey = key;
 			this._list.value = provider === 'jira'
-				? this._instantiationService.createInstance(KinguTasksJiraList, scope, status.credentialError)
-				: this._instantiationService.createInstance(KinguTasksLinearList, scope, status.credentialError);
+				? this._instantiationService.createInstance(KinguTasksJiraList, scope, status.credentialError, this._taskActions)
+				: this._instantiationService.createInstance(KinguTasksLinearList, scope, status.credentialError, this._taskActions);
 		}
 		content.appendChild(this._list.value.element);
 	}

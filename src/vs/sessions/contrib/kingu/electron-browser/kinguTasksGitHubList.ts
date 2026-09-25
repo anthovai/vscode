@@ -36,12 +36,14 @@ import {
 	stripRepoQualifiers,
 } from '../common/kinguTasksGitHub.js';
 import { applyFilterChange, parseTaskQuery } from '../common/kinguTasksGitHubQuery.js';
+import { IKinguTaskActions } from '../common/kinguTasksDetail.js';
 import { lucideIcon } from './kinguOrcaFooterParts.js';
 import { KinguTasksGitHubFilters } from './kinguTasksGitHubFilters.js';
 import { KinguTasksGitHubIssueDialog } from './kinguTasksGitHubIssueDialog.js';
 import { KinguTasksGitHubProjects } from './kinguTasksGitHubProjects.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 import { KinguTasksProjectPicker, renderRepoBadge } from './kinguTasksProjectPicker.js';
+import { bindTaskRow } from './kinguTasksRow.js';
 
 /** The ADE's `GITHUB_TASK_SEARCH_IDLE_MS`. */
 const SEARCH_IDLE_MS = 750;
@@ -51,7 +53,7 @@ interface IRepoPage {
 	readonly error?: string;
 }
 
-export interface IKinguGitHubListHost {
+export interface IKinguGitHubListHost extends IKinguTaskActions {
 	/** The projects the picker offers: the ADE's eligible repos. */
 	readonly repos: readonly IKinguRepo[];
 	/** Where a repo runs, as the summary names it. */
@@ -65,8 +67,8 @@ export interface IKinguGitHubListHost {
 /**
  * The ADE's GitHub source: `task-page/github/ModeControls.tsx` (Issues / PRs
  * and the project picker), `Filters.tsx`, `List.tsx`, `Rows.tsx` and
- * `task-page/PaginationBar.tsx`, read only. The Projects mode, the Filters
- * menu, creating an issue, the detail drawer and starting a workspace follow.
+ * `task-page/PaginationBar.tsx`. The Projects mode, the Filters
+ * menu and creating an issue are their own pieces; a row opens its detail page.
  */
 export class KinguTasksGitHubList extends Disposable {
 
@@ -527,6 +529,9 @@ export class KinguTasksGitHubList extends Disposable {
 		open.appendChild(lucideIcon('external-link', 14));
 		this._rendered.add(this._hoverService.setupDelayedHover(open, { content: openLabel, position: { hoverPosition: HoverPosition.BELOW } }));
 		this._rendered.add(addDisposableListener(open, EventType.CLICK, () => openExternalIssue(this._openerService, item.url)));
+		if (repo) {
+			bindTaskRow(row, actions, { provider: 'github', repo, item }, this._host, this._hoverService, this._rendered);
+		}
 	}
 
 	/** `PaginationBar`: shown only when there is more than one page. */
