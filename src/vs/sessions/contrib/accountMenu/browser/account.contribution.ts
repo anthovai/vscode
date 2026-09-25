@@ -44,6 +44,7 @@ import { ACCOUNTS_AVATAR_SETTING, IAuthenticationService } from '../../../../wor
 import { URI } from '../../../../base/common/uri.js';
 import { IChatDashboardService } from '../../../browser/chatDashboardService.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { IKinguAiAccountStatus, KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, KINGU_AI_SIGN_IN_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
 import { createCodexAccountMenuActions, hasSignedInCodexChatGPTAccount, ICodexAccountService, shouldShowCodexAccount, type ICodexAccountViewInfo } from '../../../../workbench/services/agentHost/browser/codexAccountService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
@@ -574,8 +575,11 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		const partitioned = this.partitionMenuActions(rawActions);
 
 		const identities = append(panel, $('.sessions-account-titlebar-panel-identities'));
+		// Kingu: the user's own AI accounts lead; Arkai, which needs GitHub, follows as optional.
+		this.appendKinguClaudeAccount(identities, panelStore);
+		let copilotSection: HTMLElement | undefined;
 		if (this.accountName || this.isAccountLoading) {
-			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
+			const copilotAccount = copilotSection = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
 				'aria-label': localize('copilotAccountSectionLabel', "Arkai account")
 			}));
 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
@@ -622,7 +626,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			}
 			this.appendCopilotUsage(copilotAccount, panelStore);
 		} else if (partitioned.signIn) {
-			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
+			const copilotAccount = copilotSection = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
 				'aria-label': localize('copilotAccountSectionLabel', "Arkai account")
 			}));
 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
@@ -635,6 +639,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 				this.clickPanelDisposable.clear();
 			}));
 			signInActionBar.push(partitioned.signIn, { icon: false, label: true });
+			append(copilotIdentity, $('span.sessions-account-titlebar-panel-optional', undefined, localize('kinguArkaiOptional', "Optional")));
 		}
 
 		if (hasSignedInCodexChatGPTAccount(codexAccount, codexAccountVisible)) {
@@ -715,6 +720,10 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			}
 		}
 
+		if (copilotSection) {
+			identities.appendChild(copilotSection);
+		}
+
 		panelStore.add(this.instantiationService.createInstance(SessionsChatPetAchievementBadges, panel, () => {
 			this.hoverService.hideHover(true);
 			this.clickPanelDisposable.clear();
@@ -759,6 +768,40 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		}
 
 		return panel;
+	}
+
+	/**
+	 * Kingu: the Claude account the ADE has in use, or a sign-in through the
+	 * ADE's own Claude login. Filled in once the ADE answers; absent where there
+	 * is no ADE (the command is not registered there).
+	 */
+	private appendKinguClaudeAccount(identities: HTMLElement, panelStore: DisposableStore): void {
+		const section = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
+			'aria-label': localize('kinguClaudeAccountSectionLabel', "Claude account")
+		}));
+		section.style.display = 'none';
+		const identity = append(section, $('.sessions-account-titlebar-panel-provider-identity'));
+		const icon = append(identity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
+		icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.claude));
+		this.commandService.executeCommand<IKinguAiAccountStatus>(KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, 'claude').then(status => {
+			if (panelStore.isDisposed || !status) {
+				return;
+			}
+			section.style.display = '';
+			if (status.signedIn) {
+				section.classList.remove('signed-out');
+				append(identity, $('.sessions-account-titlebar-panel-provider-name')).textContent = status.email ?? localize('kinguClaudeSystemLogin', "Claude (your Claude Code login)");
+				return;
+			}
+			const actions = append(identity, $('.sessions-account-titlebar-panel-provider-sign-in-actions'));
+			const actionBar = panelStore.add(new ActionBar(actions));
+			panelStore.add(actionBar.onWillRun(() => {
+				this.hoverService.hideHover(true);
+				this.clickPanelDisposable.clear();
+			}));
+			actionBar.push(panelStore.add(new Action('kingu.ai.signIn.claude.panel', localize('kinguSignInClaude', "Sign in to Claude"), undefined, true,
+				() => this.commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, 'claude'))), { icon: false, label: true });
+		}, () => { /* no ADE in this window */ });
 	}
 
 	private appendCopilotUsage(accountSection: HTMLElement, panelStore: DisposableStore): void {

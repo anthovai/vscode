@@ -1,0 +1,50 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+import { localize } from '../../../../nls.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+
+/**
+ * Kingu asks for an AI account, never a GitHub one: the agents run on the
+ * user's own Claude or ChatGPT login, kept by the ADE's account service
+ * (`claudeAccounts:*`, `codexAccounts:*`) exactly as the ADE's settings keep
+ * them. Commands rather than a service so a window without the ADE (web) just
+ * finds them missing.
+ */
+
+/** `kingu.ai.signIn(provider)`: runs the provider's own login and uses the new account. */
+export const KINGU_AI_SIGN_IN_COMMAND_ID = 'kingu.ai.signIn';
+
+/** `kingu.ai.accountStatus(provider)`: `IKinguAiAccountStatus`. */
+export const KINGU_AI_ACCOUNT_STATUS_COMMAND_ID = 'kingu.ai.accountStatus';
+
+export type KinguAiProvider = 'claude' | 'codex';
+
+export const KINGU_AI_PROVIDERS: readonly KinguAiProvider[] = ['claude', 'codex'];
+
+export interface IKinguAiAccountStatus {
+	readonly signedIn: boolean;
+	readonly email?: string;
+}
+
+/** Whether each provider has an account in use, for menus. */
+export const KinguAiSignedInContext: Readonly<Record<KinguAiProvider, RawContextKey<boolean>>> = {
+	claude: new RawContextKey<boolean>('kinguAiClaudeSignedIn', false, localize('kinguAiClaudeSignedIn', "Whether a Claude account is in use")),
+	codex: new RawContextKey<boolean>('kinguAiCodexSignedIn', false, localize('kinguAiCodexSignedIn', "Whether a ChatGPT account is in use")),
+};
+
+/** The account's name as the reader knows it: Claude, and ChatGPT for Codex. */
+export function kinguAiProviderLabel(provider: KinguAiProvider): string {
+	return provider === 'claude' ? localize('kingu.ai.claude', "Claude") : localize('kingu.ai.chatgpt', "ChatGPT");
+}
+
+/** The agent host's agent that runs on each account. */
+export function kinguAiAgentId(provider: KinguAiProvider): string {
+	return provider;
+}
+
+export function isKinguAiProvider(value: unknown): value is KinguAiProvider {
+	return value === 'claude' || value === 'codex';
+}

@@ -210,6 +210,9 @@ import './contrib/keybindingsExport/electron-browser/keybindingsExport.contribut
 // System-wide (OS global) Keybindings
 import './contrib/keybindings/electron-browser/systemWideKeybindings.contribution.js';
 
+// Kingu: AI accounts (Claude, ChatGPT) signed in through the ADE, never GitHub
+import './contrib/kingu/electron-browser/kinguAiAccounts.contribution.js';
+
 //#endregion
 
 

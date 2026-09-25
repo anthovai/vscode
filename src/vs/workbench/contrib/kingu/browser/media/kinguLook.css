@@ -50,3 +50,15 @@ body .monaco-workbench.linux {
 	--vscode-cornerRadius-large: 10px;
 	--vscode-cornerRadius-xLarge: 14px;
 }
+
+/* The Arkai row in the Agents window's account panel is optional: it needs GitHub, the AI accounts do not. */
+.sessions-account-titlebar-panel-optional {
+	flex-shrink: 0;
+	padding: 1px 6px;
+	border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+	border-radius: 9999px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}

@@ -184,7 +184,8 @@ function getCopilotPresentation(
 				kind: 'default',
 				icon: Codicon.account,
 				label: localize('agentsSignInOptional', "Sign In"),
-				ariaLabel: localize('agentsSignInOptionalAria', "Sign in to GitHub to use more agents"),
+				// Kingu: agents run on the user's own AI account; GitHub is only Arkai's.
+				ariaLabel: localize('agentsSignInOptionalAria', "Sign in to an AI account to use more agents"),
 			};
 		}
 		return {

@@ -21,6 +21,7 @@ import { ChatEntitlement, IChatEntitlementService } from '../../../../../service
 import { hasAnyModelTargetingSessionType } from '../sessionTypeAvailability.js';
 import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotification, IChatInputNotificationAction, IChatInputNotificationService } from '../../widget/input/chatInputNotificationService.js';
 import { ILanguageModelsService } from '../../../common/languageModels.js';
+import { isKinguAiProvider, KINGU_AI_SIGN_IN_COMMAND_ID, kinguAiProviderLabel } from '../../../../kingu/common/kinguAiAccounts.js';
 
 // #region State
 
@@ -95,31 +96,35 @@ function setupMarkdown(value: string): MarkdownString {
 /**
  * The "no account" second line: one whole sentence per combination of routes,
  * never assembled from localized fragments, because clause order is not stable
- * across languages. The routes share one "or" list, ranked as the buttons rank
- * them and led by the unconditional GitHub clause: reaching models through our
- * Copilot proxy is workbench knowledge, not something an agent declares.
+ * across languages.
+ *
+ * Kingu: the routes are the user's own AI accounts, never GitHub. Claude and
+ * Codex sign in through the ADE's account service (`kinguAiAccounts`), named
+ * by the account the reader knows (Claude, ChatGPT); any other agent offers
+ * only the sign-in it declares.
  */
 function noAccountDescription(setup: IAgentSdkSetupInfo, displayName: string): IMarkdownString {
 	// Both nouns are the host's, and this string is trusted for two commands, so
 	// they are escaped rather than interpolated raw: `[]()` in a name would
 	// otherwise synthesize a link to either one.
 	const name = escapeMarkdownSyntaxTokens(displayName);
-	const provider = setup.signInProviderName && escapeMarkdownSyntaxTokens(setup.signInProviderName);
+	const accountName = isKinguAiProvider(setup.agent) ? kinguAiProviderLabel(setup.agent) : setup.signInProviderName;
+	const provider = accountName && escapeMarkdownSyntaxTokens(accountName);
 	// `command:` hrefs, so a link in the copy takes the same route a button would —
 	// funnel step and URL validation included. Both carry the agent id and nothing
 	// else: the docs command resolves the URL from the agent's own declaration.
 	const reload = createCommandUri(AGENT_SDK_SETUP_RELOAD_COMMAND_ID, setup.agent).toString();
 	const docs = setup.setupDocsUrl ? createCommandUri(AGENT_SDK_SETUP_OPEN_DOCS_COMMAND_ID, setup.agent).toString() : undefined;
 	if (provider && docs) {
-		return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription.all', "Sign in to GitHub to use Arkai models, sign in to {2} to use your {2} subscription, or [reload the configuration]({1}) if you have set up {0} elsewhere. For other ways to set up {0}, [learn more]({3}) on their docs.", name, reload, provider, docs));
+		return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription.kingu.all', "Sign in to {2} to use your {2} account, or [reload the configuration]({1}) if you have set up {0} elsewhere. For other ways to set up {0}, [learn more]({3}) on their docs.", name, reload, provider, docs));
 	}
 	if (provider) {
-		return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription.signIn', "Sign in to GitHub to use Arkai models, sign in to {2} to use your {2} subscription, or [reload the configuration]({1}) if you have set up {0} elsewhere.", name, reload, provider));
+		return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription.kingu.signIn', "Sign in to {2} to use your {2} account, or [reload the configuration]({1}) if you have set up {0} elsewhere.", name, reload, provider));
 	}
 	if (docs) {
-		return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription.docs', "Sign in to GitHub to use Arkai models or [reload the configuration]({1}) if you have set up {0} elsewhere. For other ways to set up {0}, [learn more]({2}) on their docs.", name, reload, docs));
+		return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription.kingu.docs', "[Reload the configuration]({1}) if you have set up {0} elsewhere. For other ways to set up {0}, [learn more]({2}) on their docs.", name, reload, docs));
 	}
-	return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription', "Sign in to GitHub to use Arkai models or [reload the configuration]({1}) if you have set up {0} elsewhere.", name, reload));
+	return setupMarkdown(localize('agentHost.sdkSetup.noAccountDescription.kingu', "[Reload the configuration]({1}) if you have set up {0} elsewhere.", name, reload));
 }
 
 /**
@@ -209,13 +214,13 @@ export function createAgentSdkSetupNotification(setup: IAgentSdkSetupInfo, displ
 			actions: [action(localize('agentHost.sdkSetup.downloadAction', "Download"), AGENT_SDK_SETUP_DOWNLOAD_COMMAND_ID)],
 		};
 	}
+	// Kingu: one button, the user's own AI account — never GitHub.
 	const actions: IChatInputNotificationAction[] = [];
-	if (setup.signInProviderName) {
+	if (isKinguAiProvider(setup.agent)) {
+		actions.push(action(localize('agentHost.sdkSetup.signInAction', "Sign in to {0}", kinguAiProviderLabel(setup.agent)), KINGU_AI_SIGN_IN_COMMAND_ID));
+	} else if (setup.signInProviderName) {
 		actions.push(action(localize('agentHost.sdkSetup.signInAction', "Sign in to {0}", setup.signInProviderName), AGENT_SDK_SETUP_SIGN_IN_COMMAND_ID));
 	}
-	// Last, because the widget styles the final action as the primary button and
-	// this is the route that works whatever the user has set up elsewhere.
-	actions.push(action(localize('agentHost.sdkSetup.gitHubSignInAction', "Sign in to GitHub"), AGENT_SDK_SETUP_GITHUB_SIGN_IN_COMMAND_ID));
 	return {
 		...base,
 		message: localize('agentHost.sdkSetup.noAccount', "Choose how you want to use {0}.", displayName),
