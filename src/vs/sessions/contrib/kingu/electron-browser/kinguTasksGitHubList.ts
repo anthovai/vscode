@@ -6,7 +6,7 @@
 import './media/kinguTasksList.css';
 import './media/kinguTasksGitHub.css';
 import './media/kinguTasksGitHubFilters.css';
-import { $, addDisposableListener, append, clearNode, EventType, getWindow } from '../../../../base/browser/dom.js';
+import { $, addDisposableListener, append, clearNode, EventType } from '../../../../base/browser/dom.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { fromNow } from '../../../../base/common/date.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
@@ -41,6 +41,7 @@ import { KinguTasksGitHubFilters } from './kinguTasksGitHubFilters.js';
 import { KinguTasksGitHubIssueDialog } from './kinguTasksGitHubIssueDialog.js';
 import { KinguTasksGitHubProjects } from './kinguTasksGitHubProjects.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
+import { KinguTasksProjectPicker, renderRepoBadge } from './kinguTasksProjectPicker.js';
 
 /** The ADE's `GITHUB_TASK_SEARCH_IDLE_MS`. */
 const SEARCH_IDLE_MS = 750;
@@ -73,9 +74,8 @@ export class KinguTasksGitHubList extends Disposable {
 
 	private readonly _rendered = this._register(new DisposableStore());
 	private readonly _chrome = this._register(new DisposableStore());
-	private readonly _popover = this._register(new MutableDisposable<DisposableStore>());
 	private readonly _modes: HTMLElement;
-	private readonly _picker: HTMLButtonElement;
+	private readonly _picker: KinguTasksProjectPicker;
 	private readonly _openRepo: HTMLButtonElement;
 	private readonly _presets: HTMLElement;
 	private readonly _search: HTMLInputElement;
@@ -123,12 +123,13 @@ export class KinguTasksGitHubList extends Disposable {
 		// `ModeControls`: Issues / PRs, the project picker and the open-in-GitHub link.
 		const controls = append(this.element, $('.kingu-tasks-gh-controls'));
 		this._modes = append(controls, $('.kingu-tasks-gh-modes'));
-		const pickerWrap = append(controls, $('.kingu-tasks-gh-picker-wrap'));
-		this._picker = append(pickerWrap, $('button.kingu-tasks-gh-picker')) as HTMLButtonElement;
-		this._picker.type = 'button';
-		this._picker.setAttribute('role', 'combobox');
-		this._picker.setAttribute('aria-haspopup', 'listbox');
-		this._register(addDisposableListener(this._picker, EventType.CLICK, () => this._togglePicker(pickerWrap)));
+		this._picker = this._register(new KinguTasksProjectPicker({
+			repos: this._host.repos,
+			hostLabel: repo => this._host.hostLabel(repo),
+			selected: () => this._selected,
+			apply: (repos, all) => this._applySelection(repos, all),
+		}));
+		controls.appendChild(this._picker.element);
 		this._openRepo = append(controls, $('button.kingu-tasks-gh-open-repo')) as HTMLButtonElement;
 		this._openRepo.type = 'button';
 		this._openRepo.appendChild(lucideIcon('external-link', 14));
@@ -274,22 +275,7 @@ export class KinguTasksGitHubList extends Disposable {
 		this._filtersCard.style.display = this._mode === 'project' ? 'none' : '';
 		this._card.style.display = this._mode === 'project' ? 'none' : '';
 
-		clearNode(this._picker);
-		const label = append(this._picker, $('span.kingu-tasks-gh-picker-label'));
-		if (this._selected.length === 0) {
-			append(label, $('span.muted')).textContent = localize('kingu.tasks.github.noProjects', "No projects");
-		} else if (this._selected.length === this._host.repos.length && this._host.repos.length > 1) {
-			label.textContent = localize('kingu.tasks.github.allProjects', "All projects");
-		} else {
-			this._repoBadge(label, this._selected[0]);
-			if (this._selected[1]) {
-				append(label, $('span.muted')).textContent = `, ${this._selected[1].displayName}`;
-			}
-			if (this._selected.length > 2) {
-				append(label, $('span')).textContent = `+${this._selected.length - 2}`;
-			}
-		}
-		this._picker.appendChild(lucideIcon('chevrons-up-down', 14, 'kingu-tasks-gh-picker-chevron'));
+		this._picker.render();
 
 		const repoUrl = this._repoUrl();
 		const github = this._selected.length === 1 ? this._sources ?? getRepoGitHubSlug(this._selected[0]) : undefined;
@@ -339,92 +325,6 @@ export class KinguTasksGitHubList extends Disposable {
 		]) {
 			append(this._header, $('span')).textContent = column;
 		}
-	}
-
-	private _repoBadge(parent: HTMLElement, repo: IKinguRepo): void {
-		const badge = append(parent, $('span.kingu-tasks-gh-repo-badge'));
-		const dot = append(badge, $('span.kingu-tasks-gh-repo-dot'));
-		if (repo.badgeColor && /^#[0-9a-f]{3,8}$/i.test(repo.badgeColor)) {
-			dot.style.backgroundColor = repo.badgeColor;
-		}
-		append(badge, $('span.truncate')).textContent = repo.displayName;
-	}
-
-	/** The project combobox's popover: search, "All projects" and a check row per project. */
-	private _togglePicker(anchor: HTMLElement): void {
-		if (this._popover.value) {
-			this._popover.clear();
-			return;
-		}
-		const store = new DisposableStore();
-		this._popover.value = store;
-		const popover = append(anchor, $('.kingu-tasks-gh-popover'));
-		store.add({ dispose: () => popover.remove() });
-		this._picker.setAttribute('aria-expanded', 'true');
-		store.add({ dispose: () => this._picker.setAttribute('aria-expanded', 'false') });
-
-		const search = append(popover, $('input.kingu-tasks-gh-popover-search')) as HTMLInputElement;
-		search.type = 'text';
-		search.placeholder = localize('kingu.tasks.github.searchProjects', "Search projects...");
-		search.setAttribute('aria-label', search.placeholder);
-		const list = append(popover, $('.kingu-tasks-gh-popover-list'));
-		list.setAttribute('role', 'listbox');
-
-		const draw = () => {
-			clearNode(list);
-			const query = search.value.trim().toLowerCase();
-			const all = append(list, $('.kingu-tasks-gh-popover-all'));
-			const allButton = append(all, $('button.kingu-tasks-gh-popover-row')) as HTMLButtonElement;
-			allButton.type = 'button';
-			const allSelected = this._selected.length === this._host.repos.length;
-			allButton.appendChild(lucideIcon('check', 12, allSelected ? 'kingu-tasks-gh-check on' : 'kingu-tasks-gh-check'));
-			append(allButton, $('span')).textContent = localize('kingu.tasks.github.allProjects', "All projects");
-			store.add(addDisposableListener(allButton, EventType.CLICK, () => {
-				// Clicking All while everything is picked narrows to the first project, as the ADE does.
-				this._applySelection(allSelected ? this._host.repos.slice(0, 1) : [...this._host.repos], !allSelected);
-				draw();
-			}));
-			const matches = this._host.repos.filter(repo => !query || repo.displayName.toLowerCase().includes(query) || repo.path.toLowerCase().includes(query));
-			if (matches.length === 0) {
-				append(list, $('.kingu-tasks-gh-popover-empty')).textContent = localize('kingu.tasks.github.noProjectMatch', "No projects match your search.");
-			}
-			for (const repo of matches) {
-				const checked = this._selected.includes(repo);
-				const row = append(list, $('button.kingu-tasks-gh-popover-row.project')) as HTMLButtonElement;
-				row.type = 'button';
-				row.setAttribute('role', 'option');
-				row.setAttribute('aria-selected', String(checked));
-				row.appendChild(lucideIcon('check', 12, checked ? 'kingu-tasks-gh-check on' : 'kingu-tasks-gh-check'));
-				const text = append(row, $('span.kingu-tasks-gh-popover-text'));
-				this._repoBadge(text, repo);
-				const hostLabel = this._host.hostLabel(repo);
-				append(text, $('span.kingu-tasks-gh-popover-path')).textContent = hostLabel ? `${hostLabel} · ${repo.path}` : repo.path;
-				store.add(addDisposableListener(row, EventType.CLICK, () => {
-					const next = checked ? this._selected.filter(candidate => candidate !== repo) : [...this._selected, repo];
-					// Unticking the last project is a no-op: the page always has a source.
-					if (next.length > 0) {
-						this._applySelection(this._host.repos.filter(candidate => next.includes(candidate)), false);
-						draw();
-					}
-				}));
-			}
-		};
-		draw();
-		store.add(addDisposableListener(search, EventType.INPUT, draw));
-		const targetWindow = getWindow(anchor);
-		store.add(addDisposableListener(targetWindow.document, EventType.MOUSE_DOWN, (event: MouseEvent) => {
-			if (!anchor.contains(event.target as Node)) {
-				this._popover.clear();
-			}
-		}, true));
-		store.add(addDisposableListener(popover, EventType.KEY_DOWN, (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				event.stopPropagation();
-				this._popover.clear();
-				this._picker.focus();
-			}
-		}));
-		search.focus();
 	}
 
 	private _applySelection(repos: readonly IKinguRepo[], all: boolean): void {
@@ -575,7 +475,7 @@ export class KinguTasksGitHubList extends Disposable {
 		append(titleLine, $('h3.kingu-tasks-title')).textContent = item.title;
 		if (repo && this._selected.length > 1) {
 			const badge = append(titleLine, $('span.kingu-tasks-gh-title-repo'));
-			this._repoBadge(badge, repo);
+			renderRepoBadge(badge, repo);
 		}
 		const context = append(titleCell, $('.kingu-tasks-gh-context'));
 		append(context, $('span')).textContent = item.author || localize('kingu.tasks.github.unknownAuthor', "unknown author");

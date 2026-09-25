@@ -1,0 +1,13 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * The GitLab list shares the GitHub list's surface; it has one column fewer
+ * (the ADE's `ItemList`: ID, Title, Type / State, Updated, actions).
+ */
+.kingu-tasks-gitlab .kingu-tasks-gh-grid {
+	grid-template-columns: 72px minmax(320px, 1fr) 140px 92px 60px;
+	min-width: 720px;
+}

@@ -50,6 +50,7 @@ import { getRepoBackedSummary, getRepoGitHubSlug, getRepoHostId, IKinguGitHubSlu
 import { KINGU_PROVIDER_LOGOS, IKinguProviderLogo } from '../common/kinguProviderLogos.js';
 import { lucideIcon, logoIcon } from './kinguOrcaFooterParts.js';
 import { KinguTasksGitHubList } from './kinguTasksGitHubList.js';
+import { KinguTasksGitLabList } from './kinguTasksGitLabList.js';
 import { KinguTasksJiraList } from './kinguTasksJiraList.js';
 import { KinguTasksLinearList } from './kinguTasksLinearList.js';
 
@@ -112,7 +113,7 @@ class KinguTasksView extends AbstractCustomView {
 	override readonly showHeader = false;
 
 	private readonly _drawn = this._register(new DisposableStore());
-	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList | KinguTasksGitHubList>());
+	private readonly _list = this._register(new MutableDisposable<KinguTasksJiraList | KinguTasksLinearList | KinguTasksGitHubList | KinguTasksGitLabList>());
 	private _repos: readonly IKinguRepo[] = [];
 	private _repoSelection: readonly string[] = [];
 	private readonly _repoSources = new Map<string, IKinguGitHubSlug>();
@@ -125,6 +126,7 @@ class KinguTasksView extends AbstractCustomView {
 	private _linear: IKinguLinearStatus | undefined;
 	private _jira: IKinguJiraStatus | undefined;
 	private _loaded = false;
+	private _refreshing = false;
 	/** Set once the reader picks a source, so a late settings push does not move them off it. */
 	private _taskSource: KinguTaskProvider | undefined;
 
@@ -161,11 +163,16 @@ class KinguTasksView extends AbstractCustomView {
 		void this._load();
 	}
 
-	private async _load(): Promise<void> {
+	/**
+	 * Reads every source's state. `force` re-runs the ADE's preflight rather than
+	 * taking its cached answer, for a CLI installed or signed in since (`glab`,
+	 * `gh auth refresh`), and fetches the open list again.
+	 */
+	private async _load(force = false): Promise<void> {
 		// Each answer stands alone: a provider that fails to report costs its own state, not the page.
 		const [settings, preflight, linear, jira, repos] = await Promise.allSettled([
 			this._orca.invoke<ITaskSettings>('settings:get'),
-			this._orca.invoke<IKinguPreflightStatus>('preflight:check'),
+			this._orca.invoke<IKinguPreflightStatus>('preflight:check', force ? { force: true } : undefined),
 			this._orca.invoke<IKinguLinearStatus>('linear:status'),
 			this._orca.invoke<IKinguJiraStatus>('jira:status'),
 			this._orca.invoke<IKinguRepo[]>('repos:list'),
@@ -181,6 +188,10 @@ class KinguTasksView extends AbstractCustomView {
 		this._jira = jira.status === 'fulfilled' ? jira.value : undefined;
 		this._repoSelection = resolveRepoSelection(this._repos, this._settings.defaultRepoSelection);
 		this._loaded = true;
+		if (force) {
+			this._list.clear();
+			this._listKey = undefined;
+		}
 		this._draw();
 	}
 
@@ -220,6 +231,20 @@ class KinguTasksView extends AbstractCustomView {
 			}
 		}
 		return added;
+	}
+
+	private async _refresh(): Promise<void> {
+		if (this._refreshing) {
+			return;
+		}
+		this._refreshing = true;
+		this._redrawBar();
+		try {
+			await this._load(true);
+		} finally {
+			this._refreshing = false;
+			this._redrawBar();
+		}
 	}
 
 	private _visibleProviders(): KinguTaskProvider[] {
@@ -332,6 +357,14 @@ class KinguTasksView extends AbstractCustomView {
 		append(chip, $('span')).textContent = summary.label;
 		this._drawn.add(this._hoverService.setupDelayedHover(chip, { content: summary.title, position: { hoverPosition: HoverPosition.BELOW } }));
 
+		const refresh = append(sources, $('button.kingu-tasks-close.kingu-tasks-refresh')) as HTMLButtonElement;
+		refresh.type = 'button';
+		refresh.setAttribute('aria-label', localize('kingu.tasks.refreshSources', "Check task sources again"));
+		refresh.appendChild(lucideIcon('refresh-cw', 14, this._refreshing ? 'kingu-tasks-spin' : undefined));
+		refresh.disabled = this._refreshing;
+		this._drawn.add(this._hoverService.setupDelayedHover(refresh, { content: localize('kingu.tasks.refreshSourcesHint', "Check task sources again (installed CLIs, sign-ins, projects)"), position: { hoverPosition: HoverPosition.BELOW } }));
+		this._drawn.add(addDisposableListener(refresh, EventType.CLICK, () => void this._refresh()));
+
 		const sites = this._jira?.sites ?? [];
 		if (taskSource === 'jira' && this._jira?.connected && sites.length > 1) {
 			this._drawJiraSitePicker(append(bar, $('.kingu-tasks-source-controls')), sites);
@@ -433,11 +466,15 @@ class KinguTasksView extends AbstractCustomView {
 			content.appendChild(this._list.value.element);
 			return;
 		}
-		this._list.clear();
-		// The ADE's `getRepoBackedTaskEmptyState` before a project is picked.
-		this._emptyCard(content, provider,
-			localize('kingu.tasks.noProjectSources', "No project sources selected"),
-			localize('kingu.tasks.noProjectSourcesDescription', "Select at least one project source so Kingu knows which host/account to fetch tasks from."));
+		if (this._listKey !== 'gitlab' || !this._list.value) {
+			this._listKey = 'gitlab';
+			this._list.value = this._instantiationService.createInstance(KinguTasksGitLabList, {
+				repos: this._repos,
+				hostLabel: repo => this._hostLabel(repo),
+				setSelection: ids => this._setRepoSelection(ids),
+			}, this._repoSelection);
+		}
+		content.appendChild(this._list.value.element);
 	}
 
 	private _drawAccountBacked(content: HTMLElement, provider: 'linear' | 'jira', status: IKinguLinearStatus | IKinguJiraStatus | undefined, connectTitle: string, connectDescription: string): void {
