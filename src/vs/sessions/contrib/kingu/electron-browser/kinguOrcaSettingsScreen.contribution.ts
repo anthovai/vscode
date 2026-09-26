@@ -14,7 +14,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -24,10 +24,12 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { Menus } from '../../../browser/menus.js';
+import { KINGU_SHOW_ARTIFACTS_COMMAND_ID } from '../common/kinguArtifacts.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
 import { orcaKeyForSettingId, orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
 import { IKinguOpenSettingsTarget, KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
 import { IOrcaSettingsPane, IOrcaSettingsRow, IOrcaSettingsSection, ORCA_SETTINGS_NAV, ORCA_SETTINGS_PANES } from '../common/kinguOrcaSettingsScreen.js';
+import { KINGU_CONNECT_CLOUD_COMMAND_ID, KINGU_SHOW_SKILLS_COMMAND_ID } from '../common/kinguSkillSharing.js';
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 import { KinguAiAccountsSection } from './kinguAiAccountsSection.js';
 import { OrcaAccountsPane } from './kinguOrcaSettingsAccounts.js';
@@ -123,6 +125,14 @@ class OrcaSettingsValues extends Disposable {
 		}
 	}
 }
+
+/** What the ADE's button rows do here, by the section they sit in (one button each). */
+const BUTTON_COMMANDS: Readonly<Record<string, { readonly command: string; readonly label: string }>> = {
+	'artifacts-1': { command: KINGU_CONNECT_CLOUD_COMMAND_ID, label: localize('kingu.settings.connect', "Connect") },
+	'artifacts-2': { command: KINGU_SHOW_ARTIFACTS_COMMAND_ID, label: localize('kingu.settings.openPage', "Open") },
+	'share-skills-2': { command: KINGU_CONNECT_CLOUD_COMMAND_ID, label: localize('kingu.settings.connect', "Connect") },
+	'share-skills-3': { command: KINGU_SHOW_SKILLS_COMMAND_ID, label: localize('kingu.settings.openPage', "Open") },
+};
 
 /** An option's value as the ADE stores it, typed after the value it replaces. */
 function parseOptionValue(raw: string, current: unknown): unknown {
@@ -458,7 +468,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 				this._aiAccounts.renderSectionStatus(block, subsection.title);
 			}
 			for (const row of rows) {
-				this._renderRow(block, row, store);
+				this._renderRow(block, row, store, subsection.id);
 			}
 		}
 		// Kingu: agents the ADE's pane has no section for (Qwen Code and other ACP agents).
@@ -514,8 +524,17 @@ class KinguOrcaSettingsScreen extends Disposable {
 		return { element, body };
 	}
 
-	private _renderRow(parent: HTMLElement, row: IOrcaSettingsRow, store: DisposableStore): void {
+	private _renderRow(parent: HTMLElement, row: IOrcaSettingsRow, store: DisposableStore, sectionId?: string): void {
 		if (row.keys.length === 0 && this._accounts.renderMiniMaxCredential(parent, row.label)) {
+			return;
+		}
+		const action = row.control === 'button' && sectionId ? BUTTON_COMMANDS[sectionId] : undefined;
+		if (action && CommandsRegistry.getCommand(action.command)) {
+			const { control } = this._row(parent, row);
+			const button = append(control, $('button.kingu-orca-button.outline.sm')) as HTMLButtonElement;
+			button.type = 'button';
+			button.textContent = action.label;
+			button.addEventListener('click', () => void this._commandService.executeCommand(action.command));
 			return;
 		}
 		const key = row.keys[0];

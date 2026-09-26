@@ -11,20 +11,13 @@ import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-rou
 import { downloadSkillPackageGrant } from './skill-package-download'
 import { startSkillPhaseOperation } from './skill-operation-observability'
 import { retrySkillTransferRpc, throwIfSkillTransferCancelled } from './skill-transfer-rpc-retry'
+import { kinguSkillDownloadOrigins } from '../kingu-host-build'
 
 const REMOTE_TRANSFER_TIMEOUT_MS = 5 * 60_000
 const REMOTE_TRANSFER_CLEANUP_TIMEOUT_MS = 15_000
 
 function allowedOrigins(allowConfiguredOrigins: boolean): string[] {
-  const origins = ['https://storage.googleapis.com']
-  if (allowConfiguredOrigins && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-    origins.push(
-      ...process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean)
-    )
-  }
-  return [...new Set(origins)]
+  return kinguSkillDownloadOrigins(allowConfiguredOrigins)
 }
 
 function retryableRemoteTransferError(error: unknown): boolean {

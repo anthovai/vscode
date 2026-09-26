@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { isPackagedKinguHostBuild } from '../kingu-host-build'
+import { isPackagedKinguHostBuild, kinguSkillDownloadOrigins } from '../kingu-host-build'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
 import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
@@ -87,18 +87,11 @@ export class RuntimeSkillInstallCommands {
       })
     }
     await this.host.skillTransactionRecovery
-    const origins = ['https://storage.googleapis.com']
-    if (!isPackagedKinguHostBuild() && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-      origins.push(
-        ...process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-          .map((value) => value.trim())
-          .filter(Boolean)
-      )
-    }
+    const origins = kinguSkillDownloadOrigins(!isPackagedKinguHostBuild())
     return executeSkillInstallRequest(request, {
       authority: this.authority(),
       stateDirectory: this.userDataPath(),
-      allowedDownloadOrigins: [...new Set(origins)],
+      allowedDownloadOrigins: origins,
       requireHttps: isPackagedKinguHostBuild(),
       resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
       detectProviders: detectInstalledAgentsWithShellPathHydration,
@@ -169,18 +162,11 @@ export class RuntimeSkillInstallCommands {
         })
       }
       await this.host.skillTransactionRecovery
-      const origins = ['https://storage.googleapis.com']
-      if (!isPackagedKinguHostBuild() && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-        origins.push(
-          ...process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-            .map((value) => value.trim())
-            .filter(Boolean)
-        )
-      }
+      const origins = kinguSkillDownloadOrigins(!isPackagedKinguHostBuild())
       return await executeSkillBundleInstallRequest(request, {
         authority: this.authority(),
         stateDirectory: this.userDataPath(),
-        allowedDownloadOrigins: [...new Set(origins)],
+        allowedDownloadOrigins: origins,
         requireHttps: isPackagedKinguHostBuild(),
         resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
         detectProviders: detectInstalledAgentsWithShellPathHydration,

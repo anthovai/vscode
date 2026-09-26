@@ -20,6 +20,7 @@ import {
   type SkillSshRelayClient
 } from './skill-ssh-relay-client'
 import { retrySkillTransferRpc, throwIfSkillTransferCancelled } from './skill-transfer-rpc-retry'
+import { kinguSkillDownloadOrigins } from '../kingu-host-build'
 
 type SkillSshTransferInput = {
   userDataPath: string
@@ -30,15 +31,7 @@ type SkillSshTransferInput = {
 }
 
 function allowedOrigins(requireHttps: boolean): string[] {
-  const origins = ['https://storage.googleapis.com']
-  if (!requireHttps && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-    origins.push(
-      ...process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean)
-    )
-  }
-  return [...new Set(origins)]
+  return kinguSkillDownloadOrigins(!requireHttps)
 }
 
 async function transferSkillPackageToSshHostUnobserved(

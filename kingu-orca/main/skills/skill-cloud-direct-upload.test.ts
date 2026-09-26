@@ -149,6 +149,26 @@ describe('uploadSkillPackageToSignedPolicy', () => {
     ).rejects.toThrow('skill-cloud-upload-policy-expiry-invalid')
   })
 
+  it('allows loopback HTTP only when the caller permits it, never another host', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kingu-skill-cloud-upload-'))
+    roots.push(root)
+    const archivePath = join(root, 'package.tar.gz')
+    await writeFile(archivePath, 'bytes')
+    const fetcher = vi.fn(async () => new Response(null, { status: 204 }))
+    const upload = (url: string, allowLoopbackHttp: boolean) =>
+      uploadSkillPackageToSignedPolicy({
+        policy: { url, fields: {}, expiresAt: new Date(Date.now() + 60_000).toISOString() },
+        archivePath,
+        expectedBytes: 5,
+        allowLoopbackHttp,
+        fetcher
+      })
+    await expect(upload('http://127.0.0.1:8787/v1/skill-uploads/u1', false)).rejects.toThrow('skill-cloud-upload-url-invalid')
+    await expect(upload('http://storage.test/upload', true)).rejects.toThrow('skill-cloud-upload-url-invalid')
+    await expect(upload('http://127.0.0.1:8787/v1/skill-uploads/u1', true)).resolves.toBeUndefined()
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
   it('bounds a stalled signed upload even without a caller-owned signal', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kingu-skill-cloud-upload-'))
     roots.push(root)

@@ -49,9 +49,15 @@ export async function uploadSkillPackageToSignedPolicy(input: {
   onProgress?: (bytesSent: number) => void
   fetcher?: typeof fetch
   timeoutMs?: number
+  // Why: a self-hosted cloud run on this machine serves its upload URL over plain loopback HTTP in development.
+  allowLoopbackHttp?: boolean
 }): Promise<void> {
   const policyUrl = new URL(input.policy.url)
-  if (policyUrl.protocol !== 'https:' || policyUrl.username || policyUrl.password) {
+  const loopbackHttp =
+    input.allowLoopbackHttp === true &&
+    policyUrl.protocol === 'http:' &&
+    ['127.0.0.1', 'localhost', '[::1]'].includes(policyUrl.hostname)
+  if ((policyUrl.protocol !== 'https:' && !loopbackHttp) || policyUrl.username || policyUrl.password) {
     throw new Error('skill-cloud-upload-url-invalid')
   }
   const archive = await stat(input.archivePath)

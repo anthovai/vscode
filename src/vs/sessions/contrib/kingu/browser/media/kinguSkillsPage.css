@@ -275,3 +275,181 @@
 	color: var(--vscode-editorWarning-foreground);
 	opacity: 1;
 }
+
+/* Sharing: a selection bar under the list, then one panel per step (review,
+   published link, a looked-up link) in the width the detail pane reads at. */
+.kingu-skills-header .kingu-skills-kinds {
+	margin-left: 8px;
+}
+
+.kingu-skills-search.invalid {
+	border-color: var(--vscode-inputValidation-errorBorder);
+}
+
+textarea.kingu-skills-search {
+	resize: vertical;
+}
+
+.kingu-skills-share-grow {
+	flex: 1 1 auto;
+}
+
+.kingu-skills-share-bar {
+	position: sticky;
+	bottom: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin-top: 16px;
+	padding: 10px 12px;
+	background: var(--vscode-editorWidget-background);
+	border: 1px solid var(--vscode-widget-border, transparent);
+	border-radius: 6px;
+}
+
+.kingu-skills-share-count {
+	font-weight: 600;
+}
+
+.kingu-skills-share-field {
+	display: flex;
+	flex: 1 1 260px;
+	align-items: center;
+	gap: 8px;
+}
+
+.kingu-skills-share-field.stacked {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+}
+
+.kingu-skills-share-primary {
+	color: var(--vscode-button-foreground);
+	background: var(--vscode-button-background);
+	border-color: var(--vscode-button-background);
+}
+
+.kingu-skills-share-primary:hover:not(:disabled) {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.kingu-skills-share-bar button:disabled,
+.kingu-skills-share-actions button:disabled,
+.kingu-skills-filters button:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.kingu-skills-share-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	max-width: 720px;
+}
+
+.kingu-skills-share-panel p {
+	margin: 0;
+}
+
+.kingu-skills-share-muted {
+	opacity: 0.75;
+}
+
+.kingu-skills-share-warning ul,
+.kingu-skills-share-list {
+	margin: 4px 0 0;
+	padding-left: 18px;
+}
+
+.kingu-skills-share-warning li {
+	font-family: var(--monaco-monospace-font);
+	font-size: 12px;
+}
+
+.kingu-skills-share-link {
+	padding: 6px 10px;
+	font-size: 12px;
+	background: var(--vscode-textCodeBlock-background);
+	border-radius: 5px;
+	user-select: all;
+	word-break: break-all;
+}
+
+.kingu-skills-share-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.kingu-skills-share-actions .kingu-skills-refresh {
+	margin-left: 0;
+}
+
+.kingu-skills-share-panel > .kingu-skills-share-actions .kingu-skills-share-primary:last-child {
+	margin-left: auto;
+}
+
+.kingu-skills-share-links {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.kingu-skills-share-link-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 10px;
+	border: 1px solid var(--vscode-widget-border, transparent);
+	border-radius: 6px;
+}
+
+.kingu-skills-share-link-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.kingu-skills-share-link-text .kingu-skills-row-description {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-skills-share-checks {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.kingu-skills-share-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.kingu-skills-share-check:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.kingu-skills-share-mark {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	margin-right: 4px;
+	border: 1px solid var(--vscode-checkbox-border, var(--vscode-widget-border));
+	border-radius: 3px;
+	background: var(--vscode-checkbox-background);
+	color: var(--vscode-checkbox-foreground);
+}
+
+.kingu-skills-share-mark.disabled {
+	opacity: 0.35;
+}

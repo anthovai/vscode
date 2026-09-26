@@ -12,6 +12,7 @@ import type {
   SkillCloudVersion
 } from '../../shared/skill-cloud-contract'
 import { resolveArtifactCloudApiUrl } from '../artifacts/artifact-cloud-config'
+import { isPackagedKinguHostBuild } from '../kingu-host-build'
 import { runSkillCloudOperation } from './skill-cloud-auth'
 import { uploadSkillPackageToSignedPolicy } from './skill-cloud-direct-upload'
 import { skillCloudRequest } from './skill-cloud-request'
@@ -98,6 +99,7 @@ export class SkillCloudService {
           policy: upload.upload.policy,
           archivePath: request.archivePath,
           expectedBytes: request.compressedBytes,
+          allowLoopbackHttp: !isPackagedKinguHostBuild(),
           signal: request.signal,
           onProgress: (bytesSent) =>
             request.onProgress?.({

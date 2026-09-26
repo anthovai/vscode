@@ -15,6 +15,31 @@ export function isPackagedKinguHostBuild(): boolean {
   }
 }
 
+// Why: skill packages download from GCS signed URLs; a self-hosted cloud serves
+// its own grants from the API origin, and development may add loopback origins.
+export function kinguSkillDownloadOrigins(allowConfiguredOrigins: boolean): string[] {
+  const origins = ['https://storage.googleapis.com']
+  const api = process.env.KINGU_ARTIFACTS_API_URL?.trim()
+  if (api) {
+    try {
+      const url = new URL(api)
+      if (url.protocol === 'https:' && isTrustedKinguCloudHost(url.hostname)) {
+        origins.push(url.origin)
+      }
+    } catch {
+      // Not a URL; the artifact config reports it.
+    }
+  }
+  if (allowConfiguredOrigins && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+    origins.push(
+      ...process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    )
+  }
+  return [...new Set(origins)]
+}
+
 // Why: the cloud checks accept only the first-party domain; a self-hosted
 // cloud names its own host (Kingu fills this from KINGU_CLOUD_URL).
 export function isTrustedKinguCloudHost(hostname: string): boolean {

@@ -271,6 +271,7 @@ import './contrib/sessions/electron-browser/sessions.contribution.js';
 // Kingu: where work comes from, answered by the ADE running in the main process
 import './contrib/kingu/electron-browser/kinguTasksPage.contribution.js';
 import './contrib/kingu/electron-browser/kinguArtifactsPage.contribution.js';
+import './contrib/kingu/electron-browser/kinguSkillSharingService.js';
 // Kingu: the vault's desktop-only knowledge (shell environment, WSL distributions)
 import './contrib/kingu/electron-browser/kinguVaultEnvironment.contribution.js';
 import './contrib/kingu/electron-browser/kinguWorkbench.contribution.js';
