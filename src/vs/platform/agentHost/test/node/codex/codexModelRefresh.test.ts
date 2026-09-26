@@ -1396,14 +1396,14 @@ suite('CodexAgent model refresh', () => {
 		const second = agent['_refreshAccount'](client, false);
 		await firstStarted.p;
 		assert.strictEqual(requestIndex, 1);
-		await firstResponse.complete({ account: null, requiresOpenaiAuth: true });
+		await firstResponse.complete({ account: null, requiresOpenaiAuth: true, workspaceRouting: null });
 		await first;
 
 		await secondStarted.p;
 		assert.strictEqual(requestIndex, 2);
 		await secondResponse.complete({
 			account: { type: 'chatgpt', email: 'new@example.com', planType: 'pro' },
-			requiresOpenaiAuth: true,
+			requiresOpenaiAuth: true, workspaceRouting: null,
 		});
 		await second;
 
@@ -1470,20 +1470,20 @@ suite('CodexAgent model refresh', () => {
 		const first = agent['_refreshAccountRateLimits'](client, 'person@example.com');
 		const second = agent['_refreshAccountRateLimits'](client, 'person@example.com');
 		resolveSecond({
-			rateLimits: { limitId: null, limitName: null, primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: 200 }, secondary: null, credits: null, individualLimit: null, spendControlReached: null, planType: null, rateLimitReachedType: null },
+			rateLimits: { limitId: null, limitName: null, normalModelSlug: null, primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: 200 }, secondary: null, credits: null, individualLimit: null, spendControlReached: null, planType: null, rateLimitReachedType: null },
 			rateLimitsByLimitId: null,
 			rateLimitResetCredits: null,
 			accountId: null,
-			rateLimitUpsell: null,
+			rateLimitUpsell: null, ordinaryUsageAllowed: null,
 		});
 		await second;
 		const latestObservedAt = agent['_openAIAccountRateLimitUpdatedAt'];
 		resolveFirst({
-			rateLimits: { limitId: null, limitName: null, primary: { usedPercent: 90, windowDurationMins: 300, resetsAt: 100 }, secondary: null, credits: null, individualLimit: null, spendControlReached: null, planType: null, rateLimitReachedType: null },
+			rateLimits: { limitId: null, limitName: null, normalModelSlug: null, primary: { usedPercent: 90, windowDurationMins: 300, resetsAt: 100 }, secondary: null, credits: null, individualLimit: null, spendControlReached: null, planType: null, rateLimitReachedType: null },
 			rateLimitsByLimitId: null,
 			rateLimitResetCredits: null,
 			accountId: null,
-			rateLimitUpsell: null,
+			rateLimitUpsell: null, ordinaryUsageAllowed: null,
 		});
 		await first;
 

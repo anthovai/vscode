@@ -58,6 +58,20 @@ suite('codexElicitationMapper', () => {
 		});
 	});
 
+	test('buildElicitationRequest (openai/userVerification) shows the title and description', () => {
+		const verification: McpServerElicitationRequestParams = {
+			threadId: 't1', turnId: null, serverName: 'srv', mode: 'openai/userVerification', _meta: null,
+			title: 'Verify it is you', description: 'Confirm on your device.', challenge: 'c1',
+		};
+		assert.deepStrictEqual([
+			buildElicitationRequest('req-3', verification),
+			buildElicitationRequest('req-4', { ...verification, description: '' }),
+		], [
+			{ id: 'req-3', _meta: { purpose: ChatInputRequestPurpose.Elicitation }, message: 'Verify it is you\n\nConfirm on your device.' },
+			{ id: 'req-4', _meta: { purpose: ChatInputRequestPurpose.Elicitation }, message: 'Verify it is you' },
+		]);
+	});
+
 	test('elicitationResponseFromAnswers maps decline/cancel/accept', () => {
 		const accepted: Record<string, ChatInputAnswer> = {
 			name: { state: ChatInputAnswerState.Submitted, value: { kind: ChatInputAnswerValueKind.Text, value: 'Ada' } },

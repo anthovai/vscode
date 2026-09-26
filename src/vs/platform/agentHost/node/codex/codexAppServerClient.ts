@@ -75,7 +75,8 @@ export class JsonRpcError extends Error {
 // }`, so a discriminated-union pick works as a method-keyed lookup.
 
 type MethodOf<U> = U extends { method: infer M } ? M : never;
-type ParamsOf<U, M> = U extends { method: M; params: infer P } ? P : never;
+// `params?` so a method whose params are optional (`account/rateLimits/read` since Codex 0.157) is not `never`.
+type ParamsOf<U, M> = U extends { method: M; params?: infer P } ? P : never;
 
 export type ClientRequestMethod = MethodOf<ClientRequest>;
 export type ClientNotificationMethod = MethodOf<ClientNotification>;

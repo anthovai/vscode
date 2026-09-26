@@ -37,6 +37,11 @@ export function buildElicitationRequest(requestId: string, params: McpServerElic
 		}
 		return withChatInputRequestPurpose(request, ChatInputRequestPurpose.Elicitation);
 	}
+	if (params.mode === 'openai/userVerification') {
+		// A verification challenge (Codex 0.157) has a title and description rather than a message.
+		const message = params.description ? `${params.title}\n\n${params.description}` : params.title;
+		return withChatInputRequestPurpose({ id: requestId, message }, ChatInputRequestPurpose.Elicitation);
+	}
 	if (params.mode !== 'form') {
 		// `openai/form` carries an opaque, OpenAI-specific schema we cannot
 		// project into typed questions; surface the message only so the user
@@ -77,7 +82,7 @@ export function elicitationResponseFromAnswers(
 		return { action: 'cancel', content: null, _meta: null };
 	}
 	if (params.mode !== 'form') {
-		// `url` and `openai/form` acceptances carry no projected content.
+		// `url`, `openai/form` and `openai/userVerification` acceptances carry no projected content.
 		return { action: 'accept', content: null, _meta: null };
 	}
 	const content: { [key: string]: JsonValue } = {};

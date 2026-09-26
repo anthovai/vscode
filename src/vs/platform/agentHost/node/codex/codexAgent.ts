@@ -3366,7 +3366,7 @@ export class CodexAgent extends Disposable implements IAgent {
 	private async _refreshAccountRateLimits(client: ICodexAppServerClient, accountEmail = this._openAIAccountState.email): Promise<void> {
 		const request = ++this._openAIAccountRateLimitRequest;
 		try {
-			const response = await client.request<'account/rateLimits/read', GetAccountRateLimitsResponse>('account/rateLimits/read', undefined);
+			const response = await client.request<'account/rateLimits/read', GetAccountRateLimitsResponse>('account/rateLimits/read', {});
 			if (request !== this._openAIAccountRateLimitRequest || !this._isCurrentChatGPTAccountClient(client, accountEmail)) {
 				return;
 			}
@@ -6475,19 +6475,17 @@ export class CodexAgent extends Disposable implements IAgent {
 			const conn = targetSession
 				? (await this._ensureThreadConnection(targetSession)).connection
 				: await this._ensureConnection();
-			if (read.thread.historyMode === 'paginated') {
-				await conn.client.request<'thread/revert'>('thread/revert', {
-					threadId: read.thread.id,
-					beforeTurnId: turns[firstTurnToRemove].id,
-				});
-			} else {
-				await conn.client.request<'thread/rollback'>('thread/rollback', {
-					threadId: read.thread.id,
-					numTurns: turns.length - firstTurnToRemove,
-				});
+			// Codex 0.157 removed `thread/rollback`; only paginated threads can drop turns now.
+			if (read.thread.historyMode !== 'paginated') {
+				this._logService.warn(`[Codex:${read.thread.id}] truncateChat: a legacy-history thread cannot drop turns since Codex removed thread/rollback; skipping`);
+				return;
 			}
+			await conn.client.request<'thread/revert'>('thread/revert', {
+				threadId: read.thread.id,
+				beforeTurnId: turns[firstTurnToRemove].id,
+			});
 		} catch (err) {
-			this._logService.warn(`[Codex:${read.thread.id}] thread/${read.thread.historyMode === 'paginated' ? 'revert' : 'rollback'} failed: ${err instanceof Error ? err.message : String(err)}`);
+			this._logService.warn(`[Codex:${read.thread.id}] thread/revert failed: ${err instanceof Error ? err.message : String(err)}`);
 		}
 	}
 

@@ -73,7 +73,7 @@ function thread(id: string, updatedAt = 1, name = id): Thread {
 		reasoningEffort: null, createdAt: 1, updatedAt, recencyAt: null,
 		status: { type: 'notLoaded' }, path: URI.joinPath(codexHome, 'sessions/2026/09/22', `${id}.jsonl`).fsPath,
 		cwd: '/project', cliVersion: '0.153.0', source: 'appServer', canAcceptDirectInput: null,
-		threadSource: null, agentNickname: null, agentRole: null, gitInfo: null, name, turns: [],
+		threadSource: null, agentNickname: null, agentRole: null, gitInfo: null, name, turns: [], environments: null, originator: null, daybreakEnabled: null,
 	};
 }
 
