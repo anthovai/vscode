@@ -8,6 +8,7 @@ import './media/kinguArtifacts.css';
 import { $, addDisposableListener, append, clearNode, EventType } from '../../../../base/browser/dom.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { fromNow } from '../../../../base/common/date.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { constObservable, IObservable } from '../../../../base/common/observable.js';
 import { basename } from '../../../../base/common/resources.js';
@@ -53,6 +54,9 @@ interface IAuthStatus {
 	readonly setupMessage?: string;
 }
 
+/** Fires when this window publishes or updates an artifact, so an open page shows it. */
+const onDidPublishArtifact = new Emitter<void>();
+
 type PageState =
 	| { readonly kind: 'loading' }
 	| { readonly kind: 'ready' }
@@ -93,6 +97,7 @@ class KinguArtifactsView extends AbstractCustomView {
 		@ICustomViewService private readonly _customViewService: ICustomViewService,
 	) {
 		super();
+		this._register(onDidPublishArtifact.event(() => void this._load()));
 	}
 
 	render(container: HTMLElement): void {
@@ -382,6 +387,7 @@ registerAction2(class ShareKinguArtifactAction extends Action2 {
 		switch (outcome.kind) {
 			case 'ok': {
 				const url = outcome.value.item.shareUrl;
+				onDidPublishArtifact.fire();
 				await clipboardService.writeText(url);
 				notificationService.prompt(Severity.Info,
 					outcome.value.change === 'created'
