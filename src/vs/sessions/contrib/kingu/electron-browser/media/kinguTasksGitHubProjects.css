@@ -306,14 +306,14 @@
 }
 
 /* GitHub's single-select palette names. */
-.kingu-tasks-gh-projects-option[data-color='gray'] { --label-color: #8b949e; }
-.kingu-tasks-gh-projects-option[data-color='blue'] { --label-color: #388bfd; }
-.kingu-tasks-gh-projects-option[data-color='green'] { --label-color: #3fb950; }
-.kingu-tasks-gh-projects-option[data-color='yellow'] { --label-color: #d29922; }
-.kingu-tasks-gh-projects-option[data-color='orange'] { --label-color: #db6d28; }
-.kingu-tasks-gh-projects-option[data-color='red'] { --label-color: #f85149; }
-.kingu-tasks-gh-projects-option[data-color='pink'] { --label-color: #db61a2; }
-.kingu-tasks-gh-projects-option[data-color='purple'] { --label-color: #a371f7; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='gray'] { --label-color: #8b949e; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='blue'] { --label-color: #388bfd; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='green'] { --label-color: #3fb950; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='yellow'] { --label-color: #d29922; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='orange'] { --label-color: #db6d28; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='red'] { --label-color: #f85149; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='pink'] { --label-color: #db61a2; }
+:is(.kingu-tasks-gh-projects-option, .kingu-tasks-gh-projects-option-dot)[data-color='purple'] { --label-color: #a371f7; }
 
 .kingu-tasks-gh-projects-user {
 	display: inline-flex;
@@ -356,4 +356,68 @@
 	.kingu-tasks-gh-projects-skeleton-row {
 		animation: none;
 	}
+}
+
+/* Editable cells (the ADE's `ProjectCell` editors). */
+.kingu-tasks-gh-projects-cell.editable {
+	cursor: pointer;
+	border-radius: 4px;
+}
+
+.kingu-tasks-gh-projects-cell.editable:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.kingu-tasks-gh-projects-cell.editable:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.kingu-tasks-gh-projects-placeholder {
+	color: var(--vscode-descriptionForeground);
+	opacity: 0;
+}
+
+.kingu-tasks-gh-projects-cell.editable:hover .kingu-tasks-gh-projects-placeholder,
+.kingu-tasks-gh-projects-cell.editable:focus-visible .kingu-tasks-gh-projects-placeholder {
+	opacity: 1;
+}
+
+.kingu-tasks-gh-project-editor-input {
+	box-sizing: border-box;
+	width: 100%;
+	height: 24px;
+	padding: 0 6px;
+	border: 1px solid var(--vscode-focusBorder);
+	border-radius: 4px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	font: inherit;
+	font-size: 12px;
+	color-scheme: light dark;
+}
+
+/* The editor list lives in the context view, outside the page: no absolute placement. */
+.kingu-tasks-gh-popover.kingu-tasks-gh-project-editor {
+	position: static;
+	width: 240px;
+}
+
+.kingu-tasks-gh-project-editor-group {
+	padding: 6px 12px 2px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+.kingu-tasks-gh-project-editor-clear {
+	border-top: 1px solid var(--vscode-widget-border, transparent);
+	color: var(--vscode-descriptionForeground);
+}
+
+.kingu-tasks-gh-projects-option-dot {
+	flex-shrink: 0;
+	width: 8px;
+	height: 8px;
+	border-radius: 9999px;
+	background: var(--label-color, var(--vscode-descriptionForeground));
 }

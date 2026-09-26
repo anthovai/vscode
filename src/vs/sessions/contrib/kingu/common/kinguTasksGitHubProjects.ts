@@ -274,3 +274,91 @@ export function groupProjectRows(rows: readonly IKinguProjectRow[], field: IKing
 	}
 	return result;
 }
+
+/** The ADE's `GitHubProjectFieldMutationValue`: what a project field is set to. */
+export type KinguProjectFieldMutation =
+	| { readonly kind: 'single-select'; readonly optionId: string }
+	| { readonly kind: 'iteration'; readonly iterationId: string }
+	| { readonly kind: 'text'; readonly text: string }
+	| { readonly kind: 'number'; readonly number: number }
+	| { readonly kind: 'date'; readonly date: string };
+
+/** How a field's cell is edited, as the ADE's `ProjectCell` dispatches it; `undefined` is read only. */
+export function getProjectFieldEditor(field: IKinguProjectField, row: IKinguProjectRow): 'select' | 'text' | 'number' | 'date' | 'labels' | 'assignees' | undefined {
+	if (row.itemType === 'REDACTED') {
+		return undefined;
+	}
+	if (field.kind === 'single-select' || field.kind === 'iteration') {
+		return 'select';
+	}
+	switch (field.dataType) {
+		case 'TEXT': return 'text';
+		case 'NUMBER': return 'number';
+		case 'DATE': return 'date';
+		// A draft has no repository to take labels or assignees from.
+		case 'LABELS': return row.itemType === 'DRAFT_ISSUE' || !row.content.repository ? undefined : 'labels';
+		case 'ASSIGNEES': return row.itemType === 'DRAFT_ISSUE' || !row.content.repository ? undefined : 'assignees';
+		default: return undefined;
+	}
+}
+
+/**
+ * The ADE's `optimisticFieldValueFromMutation`: the value a cell shows while
+ * its change is on the way, named and coloured from the field's own options.
+ * `undefined` for a mutation the field cannot hold.
+ */
+export function optimisticProjectFieldValue(field: IKinguProjectField, mutation: KinguProjectFieldMutation): IKinguProjectFieldValue | undefined {
+	switch (mutation.kind) {
+		case 'single-select': {
+			const option = field.kind === 'single-select' ? field.options.find(candidate => candidate.id === mutation.optionId) : undefined;
+			return option ? { kind: 'single-select', fieldId: field.id, optionId: option.id, name: option.name, color: option.color } : undefined;
+		}
+		case 'iteration': {
+			const iteration = field.kind === 'iteration' ? field.iterations.find(candidate => candidate.id === mutation.iterationId) : undefined;
+			return iteration ? { kind: 'iteration', fieldId: field.id, iterationId: iteration.id, title: iteration.title, startDate: iteration.startDate, duration: iteration.duration } : undefined;
+		}
+		case 'text': return { kind: 'text', fieldId: field.id, text: mutation.text };
+		case 'number': return { kind: 'number', fieldId: field.id, number: mutation.number };
+		case 'date': return { kind: 'date', fieldId: field.id, date: mutation.date };
+	}
+}
+
+/** A row with one field set, or cleared when `value` is `undefined`. */
+export function withProjectFieldValue(row: IKinguProjectRow, fieldId: string, value: IKinguProjectFieldValue | undefined): IKinguProjectRow {
+	const fieldValuesByFieldId = { ...row.fieldValuesByFieldId };
+	if (value) {
+		fieldValuesByFieldId[fieldId] = value;
+	} else {
+		delete fieldValuesByFieldId[fieldId];
+	}
+	return { ...row, fieldValuesByFieldId };
+}
+
+/**
+ * The ADE's `commitText`/`commitNumber`/date commit: what typed input sets the
+ * field to. `null` clears it, `undefined` changes nothing (unchanged, or not a
+ * finite number).
+ */
+export function projectInputMutation(kind: 'text' | 'number' | 'date', input: string, current: IKinguProjectFieldValue | undefined): KinguProjectFieldMutation | null | undefined {
+	const trimmed = kind === 'text' ? input : input.trim();
+	if (trimmed === '') {
+		return current ? null : undefined;
+	}
+	switch (kind) {
+		case 'text': return current?.kind === 'text' && current.text === trimmed ? undefined : { kind: 'text', text: trimmed };
+		case 'number': {
+			const number = Number(trimmed);
+			if (!Number.isFinite(number)) {
+				return undefined;
+			}
+			return current?.kind === 'number' && current.number === number ? undefined : { kind: 'number', number };
+		}
+		case 'date': return current?.kind === 'date' && current.date === trimmed ? undefined : { kind: 'date', date: trimmed };
+	}
+}
+
+/** `owner/name` of a row's repository, for the label and assignee calls. */
+export function projectRowRepository(row: IKinguProjectRow): { readonly owner: string; readonly repo: string } | undefined {
+	const match = /^(?<owner>[^/\s]+)\/(?<repo>[^/\s]+)$/.exec(row.content.repository ?? '');
+	return match?.groups ? { owner: match.groups.owner, repo: match.groups.repo } : undefined;
+}

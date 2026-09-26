@@ -9,6 +9,7 @@ import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js'
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
@@ -33,6 +34,7 @@ import {
 	sortProjectRows,
 } from '../common/kinguTasksGitHubProjects.js';
 import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { KinguProjectCellEditors } from './kinguTasksGitHubProjectEditors.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 
 type Result<T> = ({ readonly ok: true } & T) | { readonly ok: false; readonly error?: { readonly type?: string; readonly message?: string } };
@@ -64,6 +66,8 @@ export class KinguTasksGitHubProjects extends Disposable {
 	private _query: string | undefined;
 	private _collapsed = new Set<string>();
 	private _request = 0;
+	private readonly _editors: KinguProjectCellEditors;
+	private _scroller: HTMLElement | undefined;
 
 	constructor(
 		private readonly _host: { selectedRepositories(): readonly string[] },
@@ -71,8 +75,15 @@ export class KinguTasksGitHubProjects extends Disposable {
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IOpenerService private readonly _openerService: IOpenerService,
 		@INotificationService private readonly _notificationService: INotificationService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
+		this._editors = this._register(instantiationService.createInstance(KinguProjectCellEditors, {
+			projectId: () => this._table?.project.id ?? '',
+			host: () => this._table?.project.host,
+			getRow: id => this._table?.rows.find(row => row.id === id),
+			replaceRow: row => this._replaceRow(row),
+		}));
 		const card = append(this.element, $('.kingu-tasks-gh-projects-card'));
 		this._toolbar = append(card, $('.kingu-tasks-gh-projects-toolbar'));
 		this._tabs = append(card, $('.kingu-tasks-gh-projects-tabs'));
@@ -313,6 +324,7 @@ export class KinguTasksGitHubProjects extends Disposable {
 		const template = columns.map(field => field.dataType === 'TITLE' ? 'minmax(280px, 2fr)' : field === TYPE_COLUMN ? '72px' : 'minmax(120px, 1fr)').join(' ');
 
 		const scroller = append(body, $('.kingu-tasks-gh-projects-scroller'));
+		this._scroller = scroller;
 		const header = append(scroller, $('.kingu-tasks-gh-projects-header'));
 		header.style.gridTemplateColumns = template;
 		for (const field of columns) {
@@ -350,7 +362,7 @@ export class KinguTasksGitHubProjects extends Disposable {
 				const element = append(scroller, $('.kingu-tasks-gh-projects-row'));
 				element.style.gridTemplateColumns = template;
 				for (const field of columns) {
-					this._renderCell(append(element, $('.kingu-tasks-gh-projects-cell')), row, field);
+					this._drawCell(append(element, $('.kingu-tasks-gh-projects-cell')), row, field);
 				}
 			}
 		}
@@ -386,7 +398,36 @@ export class KinguTasksGitHubProjects extends Disposable {
 		}
 	}
 
-	/** `ProjectCell`, read only. */
+	/**
+	 * A row changed by an edit: the table takes it, and the page is drawn again
+	 * where it was scrolled to.
+	 */
+	private _replaceRow(row: IKinguProjectRow): void {
+		const table = this._table;
+		if (!table) {
+			return;
+		}
+		this._table = { ...table, rows: table.rows.map(candidate => candidate.id === row.id ? row : candidate) };
+		const top = this._scroller?.scrollTop ?? 0;
+		const left = this._scroller?.scrollLeft ?? 0;
+		this._render();
+		if (this._scroller) {
+			this._scroller.scrollTop = top;
+			this._scroller.scrollLeft = left;
+		}
+	}
+
+	/** A cell and its editor. Dismissing an inline editor swaps in a freshly drawn cell. */
+	private _drawCell(cell: HTMLElement, row: IKinguProjectRow, field: IKinguProjectField): void {
+		this._renderCell(cell, row, field);
+		this._rendered.add(this._editors.attach(cell, row, field, () => {
+			const fresh = $('.kingu-tasks-gh-projects-cell');
+			cell.replaceWith(fresh);
+			this._drawCell(fresh, this._table?.rows.find(candidate => candidate.id === row.id) ?? row, field);
+		}));
+	}
+
+	/** `ProjectCell`: what a cell shows; `KinguProjectCellEditors` makes it editable. */
 	private _renderCell(cell: HTMLElement, row: IKinguProjectRow, field: IKinguProjectField): void {
 		if (field === TYPE_COLUMN) {
 			const icon = row.itemType === 'PULL_REQUEST' ? (row.content.isDraft ? 'git-pull-request-draft' : 'git-pull-request') : row.itemType === 'DRAFT_ISSUE' ? 'file-text' : row.itemType === 'REDACTED' ? 'lock' : 'circle-dot';
