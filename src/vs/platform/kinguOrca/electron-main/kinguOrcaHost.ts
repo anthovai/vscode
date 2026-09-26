@@ -491,12 +491,16 @@ function registerHostBridge(orca: IOrcaStartup): void {
 	}
 }
 
+/** Kingu's own cloud (`kingu-intelligence/cloud`, deployed behind Caddy). */
+const KINGU_DEFAULT_CLOUD_URL = 'https://kingu.anthovai.com';
+
 /**
  * Points the ADE's cloud features (Artifacts, Skills sharing, cloud sign-in)
  * at Kingu's own cloud. The ADE reads one variable per service, each
  * defaulting to a host that is not ours; `KINGU_CLOUD_URL` names the one
  * origin our API serves them all from (`kingu-intelligence/cloud/apps/api`).
- * Anything set explicitly is left alone.
+ * Anything set explicitly is left alone. Without `KINGU_CLOUD_URL` it is
+ * our deployed cloud, so nothing falls back to the ADE's hosted services.
  *
  * `isPackaged` is whether this is a built product, not Electron's guess.
  *
@@ -505,10 +509,7 @@ function registerHostBridge(orca: IOrcaStartup): void {
  * accepts as one dev user.
  */
 export function applyKinguCloudUrl(env: NodeJS.ProcessEnv, isPackaged: boolean): void {
-	const raw = env.KINGU_CLOUD_URL?.trim();
-	if (!raw) {
-		return;
-	}
+	const raw = env.KINGU_CLOUD_URL?.trim() || KINGU_DEFAULT_CLOUD_URL;
 	let origin: string;
 	let loopback: boolean;
 	try {

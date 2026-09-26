@@ -351,7 +351,7 @@ export class KinguSkillsSharingUi extends Disposable {
 	private async _resolve(): Promise<void> {
 		const shareId = parseSkillShareId(this._installLink);
 		if (!shareId) {
-			this._installError = localize('kingu.skills.install.invalid', "Paste a Kingu skill link, such as https://cloud.anthovai.com/skills/share/…");
+			this._installError = localize('kingu.skills.install.invalid', "Paste a Kingu skill link, such as https://kingu.anthovai.com/skills/share/…");
 			this._redraw();
 			return;
 		}

@@ -1,6 +1,6 @@
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
-// Why: cloud.anthovai.com is Kingu's own cloud, which serves the share page for its links.
-const PRODUCTION_HOSTS = new Set(['app.kingu.dev', 'share.onkingu.dev', 'cloud.anthovai.com'])
+// Why: kingu.anthovai.com is Kingu's own cloud, which serves the share page for its links.
+const PRODUCTION_HOSTS = new Set(['app.kingu.dev', 'share.onkingu.dev', 'kingu.anthovai.com'])
 
 export function parseSkillShareId(value: string): string | null {
   const trimmed = value.trim()

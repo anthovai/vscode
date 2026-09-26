@@ -163,7 +163,7 @@ export function isValidBundleName(value: string): boolean {
 }
 
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
-const SHARE_HOSTS = new Set(['app.kingu.dev', 'share.onkingu.dev', 'cloud.anthovai.com']);
+const SHARE_HOSTS = new Set(['app.kingu.dev', 'share.onkingu.dev', 'kingu.anthovai.com']);
 
 /** The ADE's `parseSkillShareId`: a bare id, a share page address, or a `kingu://` link. */
 export function parseSkillShareId(value: string): string | undefined {

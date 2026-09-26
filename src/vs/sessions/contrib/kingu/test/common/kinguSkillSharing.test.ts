@@ -25,12 +25,12 @@ suite('kinguSkillSharing', () => {
 	test('reads share links from our cloud, Kingu links and bare ids only', () => {
 		assert.deepStrictEqual([
 			parseSkillShareId('abc_DEF-123'),
-			parseSkillShareId('https://cloud.anthovai.com/skills/share/abc123/'),
+			parseSkillShareId('https://kingu.anthovai.com/skills/share/abc123/'),
 			parseSkillShareId('http://127.0.0.1:8787/skills/share/abc123'),
 			parseSkillShareId('kingu://skills/share/abc123'),
-			parseSkillShareId('http://cloud.anthovai.com/skills/share/abc123'),
+			parseSkillShareId('http://kingu.anthovai.com/skills/share/abc123'),
 			parseSkillShareId('https://example.com/skills/share/abc123'),
-			parseSkillShareId('https://cloud.anthovai.com/a/abc123'),
+			parseSkillShareId('https://kingu.anthovai.com/a/abc123'),
 		], ['abc_DEF-123', 'abc123', 'abc123', 'abc123', undefined, undefined, undefined]);
 	});
 
