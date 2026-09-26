@@ -1,0 +1,82 @@
+/*---------------------------------------------------------------------------------------------
+ *  Kingu Intelligence
+ *  Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/* The Artifacts page: the Tasks page's surface, with one table of shared pages. */
+.kingu-artifacts-heading {
+	margin: 0 4px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.kingu-artifacts-table {
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+	border: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 50%, transparent);
+	border-radius: 6px;
+}
+
+.kingu-artifacts-row {
+	display: grid;
+	grid-template-columns: minmax(240px, 1fr) 90px 80px 110px 110px 92px;
+	align-items: center;
+	gap: 12px;
+	min-height: 44px;
+	padding: 0 12px;
+	border-bottom: 1px solid color-mix(in srgb, var(--kingu-tasks-border) 40%, transparent);
+	font-size: 13px;
+}
+
+.kingu-artifacts-row:last-child {
+	border-bottom: 0;
+}
+
+.kingu-artifacts-row.header {
+	min-height: 32px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.kingu-artifacts-row:not(.header):hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.kingu-artifacts-row .muted {
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+.kingu-artifacts-title {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	font-weight: 500;
+}
+
+.kingu-artifacts-file {
+	overflow: hidden;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	font-weight: 400;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kingu-artifacts-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 4px;
+}
+
+.kingu-artifacts-more {
+	align-self: center;
+	margin-top: 12px;
+}
+
+.kingu-artifacts-sharing[aria-checked='true'] {
+	border-color: var(--vscode-focusBorder);
+}

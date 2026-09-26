@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { isPackagedKinguHostBuild } from '../kingu-host-build'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
@@ -124,7 +125,7 @@ export async function installSkillBundleCloudGrant(
         environmentId: input.environmentId,
         request,
         capabilities: status.result.capabilities ?? [],
-        requireHttps: app.isPackaged,
+        requireHttps: isPackagedKinguHostBuild(),
         signal,
         onProgress
       })
@@ -190,7 +191,7 @@ export async function installSkillCloudGrant(
         environmentId: input.environmentId,
         request,
         capabilities: status.result.capabilities ?? [],
-        requireHttps: app.isPackaged,
+        requireHttps: isPackagedKinguHostBuild(),
         signal
       })
     }

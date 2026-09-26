@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { isPackagedKinguHostBuild } from '../kingu-host-build'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
 import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
@@ -81,13 +82,13 @@ export class RuntimeSkillInstallCommands {
           destination: normalizeSshRelaySkillDestination(request.destination)
         },
         workspace: target.workspace,
-        requireHttps: this.host.isPackaged(),
+        requireHttps: isPackagedKinguHostBuild(),
         signal
       })
     }
     await this.host.skillTransactionRecovery
     const origins = ['https://storage.googleapis.com']
-    if (!this.host.isPackaged() && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+    if (!isPackagedKinguHostBuild() && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
       origins.push(
         ...process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
           .map((value) => value.trim())
@@ -98,7 +99,7 @@ export class RuntimeSkillInstallCommands {
       authority: this.authority(),
       stateDirectory: this.userDataPath(),
       allowedDownloadOrigins: [...new Set(origins)],
-      requireHttps: this.host.isPackaged(),
+      requireHttps: isPackagedKinguHostBuild(),
       resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
       detectProviders: detectInstalledAgentsWithShellPathHydration,
       resolveProviderRootOverrides: (destination) => this.roots(destination),
@@ -162,14 +163,14 @@ export class RuntimeSkillInstallCommands {
             destination: normalizeSshRelaySkillDestination(request.destination)
           },
           workspace: target.workspace,
-          requireHttps: this.host.isPackaged(),
+          requireHttps: isPackagedKinguHostBuild(),
           signal: controller.signal,
           onProgress: report
         })
       }
       await this.host.skillTransactionRecovery
       const origins = ['https://storage.googleapis.com']
-      if (!this.host.isPackaged() && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+      if (!isPackagedKinguHostBuild() && process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
         origins.push(
           ...process.env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
             .map((value) => value.trim())
@@ -180,7 +181,7 @@ export class RuntimeSkillInstallCommands {
         authority: this.authority(),
         stateDirectory: this.userDataPath(),
         allowedDownloadOrigins: [...new Set(origins)],
-        requireHttps: this.host.isPackaged(),
+        requireHttps: isPackagedKinguHostBuild(),
         resolveStagedUpload: (uploadId, identity) => this.requireUploads().take(uploadId, identity),
         detectProviders: detectInstalledAgentsWithShellPathHydration,
         resolveProviderRootOverrides: (destination) => this.roots(destination),

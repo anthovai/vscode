@@ -1,13 +1,9 @@
-import { app } from 'electron'
+import { isPackagedKinguHostBuild, isTrustedKinguCloudHost } from '../kingu-host-build'
 
 const PRODUCTION_ARTIFACTS_API_URL = 'https://share.onkingu.dev'
 
 function isPackaged(): boolean {
-  try {
-    return app?.isPackaged === true
-  } catch {
-    return false
-  }
+  return isPackagedKinguHostBuild()
 }
 
 export function resolveArtifactCloudApiUrl(
@@ -18,7 +14,7 @@ export function resolveArtifactCloudApiUrl(
   const candidate = override?.trim() || env.KINGU_ARTIFACTS_API_URL?.trim()
   const url = new URL(candidate || PRODUCTION_ARTIFACTS_API_URL)
   const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
-  const firstParty = url.hostname === 'onkingu.dev' || url.hostname.endsWith('.onkingu.dev')
+  const firstParty = isTrustedKinguCloudHost(url.hostname)
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback && !packaged)) {
     throw new Error('Artifact API URLs must use HTTPS; local development may use loopback HTTP.')
   }

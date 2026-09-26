@@ -214,7 +214,13 @@ export function prepareOrcaBoot(): void {
 	// so one answer fixes every resolver at once. The fork's own code never
 	// calls `app.getAppPath()`, so in this boot mode the property is the ADE's
 	// to define.
-	applyKinguCloudUrl(process.env, app.isPackaged);
+	// Electron reports `isPackaged` from the executable's name, so Kingu run from
+	// sources looks packaged to the ADE; its cloud checks read this instead.
+	const runningFromSources = !!process.env.VSCODE_DEV;
+	if (runningFromSources) {
+		process.env.KINGU_HOST_UNPACKAGED = '1';
+	}
+	applyKinguCloudUrl(process.env, !runningFromSources);
 	app.getAppPath = () => vendoredRoot();
 	try {
 		// The ADE asks for a window opener now and calls it later. By then the
@@ -492,6 +498,8 @@ function registerHostBridge(orca: IOrcaStartup): void {
  * origin our API serves them all from (`kingu-intelligence/cloud/apps/api`).
  * Anything set explicitly is left alone.
  *
+ * `isPackaged` is whether this is a built product, not Electron's guess.
+ *
  * Until the API has its own sign-in, a local cloud in a dev build uses the
  * ADE's dev sign-in (`KINGU_CLOUD_DEV_AUTH`), whose tokens the local API
  * accepts as one dev user.
@@ -515,6 +523,10 @@ export function applyKinguCloudUrl(env: NodeJS.ProcessEnv, isPackaged: boolean):
 	env.KINGU_CLOUD_API_URL ??= origin;
 	env.KINGU_CLOUD_CLIENT_ID ??= 'kingu-desktop';
 	env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS ??= origin;
+	if (!loopback) {
+		// The ADE's cloud checks accept only its first-party domain; ours is named here.
+		env.KINGU_CLOUD_TRUSTED_HOSTS ??= new URL(origin).hostname;
+	}
 	if (loopback && !isPackaged) {
 		env.KINGU_CLOUD_DEV_AUTH ??= '1';
 	}

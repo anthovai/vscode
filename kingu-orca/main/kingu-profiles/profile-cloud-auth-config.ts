@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { isPackagedKinguHostBuild } from '../kingu-host-build'
 import {
   cleanCloudServiceUrl as cleanUrl,
   cleanCloudServiceOrigin as cleanOrigin
@@ -28,11 +28,7 @@ const PRODUCTION_RELAY_DIRECTOR_URL = 'https://relay.onkingu.dev'
 // Why: packaged main bundles never define NODE_ENV, so packaged-ness is the
 // only reliable production signal for gating dev-only auth escape hatches.
 function isPackagedKinguBuild(): boolean {
-  try {
-    return app?.isPackaged === true
-  } catch {
-    return false
-  }
+  return isPackagedKinguHostBuild()
 }
 
 function endpoint(baseUrl: string, path: string): string {
