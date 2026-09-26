@@ -62,12 +62,12 @@ function formatTimestamp(timestamp: number): string {
 }
 
 /** A `Badge variant="outline"` as the pane uses it: `h-4 rounded px-1.5 text-[10px] font-medium`. */
-function badge(parent: HTMLElement, text: string, tone: 'normal' | 'destructive' = 'normal'): void {
+export function badge(parent: HTMLElement, text: string, tone: 'normal' | 'destructive' = 'normal'): void {
 	append(parent, $(`span.kingu-orca-account-badge.${tone}`)).textContent = text;
 }
 
 /** An `xs` button: `h-6 gap-1 rounded-md px-2 text-xs`, outline or ghost. */
-function smallButton(parent: HTMLElement, variant: 'outline' | 'ghost', icon: string | undefined, label: string, run: () => void, spinning = false): HTMLButtonElement {
+export function smallButton(parent: HTMLElement, variant: 'outline' | 'ghost', icon: string | undefined, label: string, run: () => void, spinning = false): HTMLButtonElement {
 	const button = append(parent, $(`button.kingu-orca-xs-button.${variant}`)) as HTMLButtonElement;
 	button.type = 'button';
 	if (icon) {

@@ -904,3 +904,20 @@ button.kingu-orca-account-card {
 }
 
 /* #endregion */
+
+/* Kingu: the Signed-in AI list, first on the accounts pane. */
+.kingu-ai-account-card {
+	justify-content: flex-start;
+}
+
+.kingu-ai-account-icon {
+	flex-shrink: 0;
+}
+
+.kingu-ai-account-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}

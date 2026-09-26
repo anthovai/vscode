@@ -46,7 +46,9 @@ import { IChatDashboardService } from '../../../browser/chatDashboardService.js'
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IKinguAiAccountStatus, IKinguAiAgentAccount, IKinguAiUsage, KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, KINGU_AI_SIGN_IN_COMMAND_ID, KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
 import { createCodexAccountMenuActions, hasSignedInCodexChatGPTAccount, ICodexAccountService, shouldShowCodexAccount, type ICodexAccountViewInfo } from '../../../../workbench/services/agentHost/browser/codexAccountService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
+import { loadKinguAiAccountRows, summarizeKinguAiAccounts } from '../../kingu/common/kinguAiAccountSummary.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../kingu/common/kinguOrcaSettingsCommands.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
 import { AICustomizationManagementCommands } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.js';
 import { AICustomizationManagementSection } from '../../../../workbench/contrib/chat/common/aiCustomizationWorkspaceService.js';
@@ -580,8 +582,11 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		const partitioned = this.partitionMenuActions(rawActions);
 
 		const identities = append(panel, $('.sessions-account-titlebar-panel-identities'));
-		// Kingu: the user's own AI accounts lead; Arkai, which needs GitHub, follows as optional.
-		this.appendKinguAiAccount(identities, panelStore, 'claude');
+		// Kingu: every AI account signs in on one Settings page; the panel keeps Arkai and a count of the rest.
+		const kinguAccountsInSettings = !!CommandsRegistry.getCommand(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID);
+		if (!kinguAccountsInSettings) {
+			this.appendKinguAiAccount(identities, panelStore, 'claude');
+		}
 		let copilotSection: HTMLElement | undefined;
 		if (this.accountName || this.isAccountLoading) {
 			const copilotAccount = copilotSection = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
@@ -647,7 +652,9 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			append(copilotIdentity, $('span.sessions-account-titlebar-panel-optional', undefined, localize('kinguArkaiOptional', "Optional")));
 		}
 
-		if (hasSignedInCodexChatGPTAccount(codexAccount, codexAccountVisible)) {
+		if (kinguAccountsInSettings) {
+			// ChatGPT is listed with the other AI accounts in Settings.
+		} else if (hasSignedInCodexChatGPTAccount(codexAccount, codexAccountVisible)) {
 			const accountSection = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
 				'aria-label': localize('chatGPTAccountSectionLabel', "ChatGPT account")
 			}));
@@ -725,10 +732,15 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			}
 		}
 
-		this.appendKinguAiAccount(identities, panelStore, 'gemini');
-		this.appendKinguAgentAccounts(append(identities, $('.sessions-account-titlebar-panel-kingu-agents')), panelStore);
+		if (!kinguAccountsInSettings) {
+			this.appendKinguAiAccount(identities, panelStore, 'gemini');
+			this.appendKinguAgentAccounts(append(identities, $('.sessions-account-titlebar-panel-kingu-agents')), panelStore);
+		}
 		if (copilotSection) {
 			identities.appendChild(copilotSection);
+		}
+		if (kinguAccountsInSettings) {
+			this.appendKinguAiAccountsSummary(identities, panelStore);
 		}
 
 		panelStore.add(this.instantiationService.createInstance(SessionsChatPetAchievementBadges, panel, () => {
@@ -825,6 +837,29 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 	 * CLI's own sign-in, run in a terminal, as the ADE signs its terminal
 	 * agents in.
 	 */
+	/**
+	 * Kingu: one row for every AI account — how many are signed in and how many
+	 * still ask to be — that opens Settings → AI Provider Accounts, where they
+	 * all sign in.
+	 */
+	private appendKinguAiAccountsSummary(identities: HTMLElement, panelStore: DisposableStore): void {
+		const section = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
+			'aria-label': localize('kinguAiAccountsSectionLabel', "AI accounts")
+		}));
+		const manage = panelStore.add(new Action('kingu.ai.manageAccounts.panel', localize('kinguManageAiAccounts', "Manage AI Accounts"), ThemeIcon.asClassName(Codicon.settingsGear), true,
+			() => this.commandService.executeCommand(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, { pane: 'accounts' })));
+		this.renderKinguAccountIdentity(section, panelStore, Codicon.sparkle, localize('kinguAiAccounts', "AI Accounts"), [manage]);
+		const summary = append(section, $('.sessions-account-titlebar-panel-kingu-summary'));
+		summary.textContent = localize('kinguAiAccountsChecking', "Checking...");
+		loadKinguAiAccountRows(this.commandService).then(rows => {
+			if (!panelStore.isDisposed) {
+				summary.textContent = summarizeKinguAiAccounts(rows);
+			}
+		}, () => {
+			summary.textContent = '';
+		});
+	}
+
 	private appendKinguAgentAccounts(container: HTMLElement, panelStore: DisposableStore): void {
 		this.commandService.executeCommand<IKinguAiAgentAccount[]>(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID).then(agents => {
 			if (panelStore.isDisposed) {

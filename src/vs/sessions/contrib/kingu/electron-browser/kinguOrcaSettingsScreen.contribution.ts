@@ -29,6 +29,7 @@ import { orcaKeyForSettingId, orcaSettingIdForKey } from '../common/kinguOrcaSet
 import { IKinguOpenSettingsTarget, KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
 import { IOrcaSettingsPane, IOrcaSettingsRow, IOrcaSettingsSection, ORCA_SETTINGS_NAV, ORCA_SETTINGS_PANES } from '../common/kinguOrcaSettingsScreen.js';
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
+import { KinguAiAccountsSection } from './kinguAiAccountsSection.js';
 import { OrcaAccountsPane } from './kinguOrcaSettingsAccounts.js';
 import './kinguOrcaService.js';
 
@@ -181,6 +182,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 
 	private readonly _values: OrcaSettingsValues;
 	private readonly _accounts: OrcaAccountsPane;
+	private readonly _aiAccounts: KinguAiAccountsSection;
 	private readonly _shown = this._register(new MutableDisposable<DisposableStore>());
 	private readonly _drawing = this._register(new MutableDisposable<DisposableStore>());
 	private _root: HTMLElement | undefined;
@@ -214,6 +216,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 			rateLimits: () => undefined,
 			openExternal: url => void this._openerService.open(URI.parse(url), { openExternal: true }),
 		});
+		this._aiAccounts = new KinguAiAccountsSection(this._commandService, () => this._redrawContent());
 		this._register(this._values.onDidChange(() => this._redrawContent()));
 		KinguOrcaSettingsScreen._instance = this;
 		this._register(toDisposable(() => {
@@ -413,6 +416,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 	private _renderPane(parent: HTMLElement, pane: IOrcaSettingsPane, store: DisposableStore): void {
 		if (pane.id === 'accounts' && !this._accounts.loaded) {
 			void this._accounts.load();
+			void this._aiAccounts.load();
 		}
 		const section = append(parent, $('section.kingu-orca-settings-pane'));
 		const header = append(section, $('.kingu-orca-settings-pane-header'));
@@ -426,6 +430,13 @@ class KinguOrcaSettingsScreen extends Disposable {
 		}
 		const card = append(section, $('.kingu-orca-settings-card'));
 		let first = true;
+		// Kingu: every AI's sign-in, first on the accounts pane; the ADE's own account management follows.
+		if (pane.id === 'accounts' && !this._query.trim()) {
+			const block = append(card, $('section.kingu-orca-settings-subsection'));
+			this._sectionElements.set('kingu-signed-in-ai', block);
+			this._aiAccounts.render(block);
+			first = false;
+		}
 		for (const subsection of pane.sections) {
 			const rows = subsection.rows.filter(row => !row.dynamic && rowMatches(this._query, pane, subsection, row) && this._isShown(row));
 			if (rows.length === 0 || (pane.id === 'accounts' && this._accounts.isHidden(subsection.title))) {

@@ -644,3 +644,10 @@
 .agent-sessions-workbench.monaco-reduce-motion .sessions-account-titlebar-widget-badge {
 	transition-duration: 0ms !important;
 }
+
+/* Kingu: the AI accounts row's count, under its name. */
+.sessions-account-titlebar-panel-kingu-summary {
+	padding-left: 28px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
