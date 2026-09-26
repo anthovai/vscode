@@ -214,6 +214,7 @@ export function prepareOrcaBoot(): void {
 	// so one answer fixes every resolver at once. The fork's own code never
 	// calls `app.getAppPath()`, so in this boot mode the property is the ADE's
 	// to define.
+	applyKinguCloudUrl(process.env, app.isPackaged);
 	app.getAppPath = () => vendoredRoot();
 	try {
 		// The ADE asks for a window opener now and calls it later. By then the
@@ -481,6 +482,41 @@ function registerHostBridge(orca: IOrcaStartup): void {
 		orca.overrideIpcHandler('kingu:openIde', () => startWorkbench());
 	} catch (error) {
 		console.error('[kingu-orca] could not register the host bridge', error);
+	}
+}
+
+/**
+ * Points the ADE's cloud features (Artifacts, Skills sharing, cloud sign-in)
+ * at Kingu's own cloud. The ADE reads one variable per service, each
+ * defaulting to a host that is not ours; `KINGU_CLOUD_URL` names the one
+ * origin our API serves them all from (`kingu-intelligence/cloud/apps/api`).
+ * Anything set explicitly is left alone.
+ *
+ * Until the API has its own sign-in, a local cloud in a dev build uses the
+ * ADE's dev sign-in (`KINGU_CLOUD_DEV_AUTH`), whose tokens the local API
+ * accepts as one dev user.
+ */
+export function applyKinguCloudUrl(env: NodeJS.ProcessEnv, isPackaged: boolean): void {
+	const raw = env.KINGU_CLOUD_URL?.trim();
+	if (!raw) {
+		return;
+	}
+	let origin: string;
+	let loopback: boolean;
+	try {
+		const url = new URL(raw);
+		origin = url.origin;
+		loopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname === '[::1]';
+	} catch {
+		console.warn(`[kingu-orca] KINGU_CLOUD_URL is not a URL: ${raw}`);
+		return;
+	}
+	env.KINGU_ARTIFACTS_API_URL ??= origin;
+	env.KINGU_CLOUD_API_URL ??= origin;
+	env.KINGU_CLOUD_CLIENT_ID ??= 'kingu-desktop';
+	env.KINGU_SKILL_PACKAGE_DOWNLOAD_ORIGINS ??= origin;
+	if (loopback && !isPackaged) {
+		env.KINGU_CLOUD_DEV_AUTH ??= '1';
 	}
 }
 
