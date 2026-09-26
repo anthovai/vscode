@@ -430,13 +430,6 @@ class KinguOrcaSettingsScreen extends Disposable {
 		}
 		const card = append(section, $('.kingu-orca-settings-card'));
 		let first = true;
-		// Kingu: every AI's sign-in, first on the accounts pane; the ADE's own account management follows.
-		if (pane.id === 'accounts' && !this._query.trim()) {
-			const block = append(card, $('section.kingu-orca-settings-subsection'));
-			this._sectionElements.set('kingu-signed-in-ai', block);
-			this._aiAccounts.render(block);
-			first = false;
-		}
 		for (const subsection of pane.sections) {
 			const rows = subsection.rows.filter(row => !row.dynamic && rowMatches(this._query, pane, subsection, row) && this._isShown(row));
 			if (rows.length === 0 || (pane.id === 'accounts' && this._accounts.isHidden(subsection.title))) {
@@ -460,8 +453,23 @@ class KinguOrcaSettingsScreen extends Disposable {
 					append(head, $('p')).textContent = subsection.description;
 				}
 			}
+			if (pane.id === 'accounts') {
+				// Kingu: the sign-in status of the AI this section configures (Gemini, OpenCode).
+				this._aiAccounts.renderSectionStatus(block, subsection.title);
+			}
 			for (const row of rows) {
 				this._renderRow(block, row, store);
+			}
+		}
+		// Kingu: agents the ADE's pane has no section for (Qwen Code and other ACP agents).
+		if (pane.id === 'accounts' && !this._query.trim()) {
+			const block = $('section.kingu-orca-settings-subsection');
+			if (this._aiAccounts.renderMoreAgents(block)) {
+				if (!first) {
+					append(card, $('.kingu-orca-settings-separator'));
+				}
+				card.appendChild(block);
+				this._sectionElements.set('kingu-more-agents', block);
 			}
 		}
 	}

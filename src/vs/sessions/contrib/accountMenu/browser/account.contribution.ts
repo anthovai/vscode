@@ -50,6 +50,8 @@ import { CommandsRegistry, ICommandService } from '../../../../platform/commands
 import { loadKinguAiAccountRows, summarizeKinguAiAccounts } from '../../kingu/common/kinguAiAccountSummary.js';
 import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../kingu/common/kinguOrcaSettingsCommands.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
+import { ILanguageModelsService } from '../../../../workbench/contrib/chat/common/languageModels.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { AICustomizationManagementCommands } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagement.js';
 import { AICustomizationManagementSection } from '../../../../workbench/contrib/chat/common/aiCustomizationWorkspaceService.js';
 import { SessionType } from '../../../../workbench/contrib/chat/common/chatSessionsService.js';
@@ -221,6 +223,7 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		@ICodexAccountService private readonly codexAccountService: ICodexAccountService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ICommandService private readonly commandService: ICommandService,
+		@ILanguageModelsService private readonly languageModelsService: ILanguageModelsService,
 	) {
 		super(undefined, action, options);
 		this.lastCodexAccount = this.codexAccountService.account;
@@ -851,13 +854,18 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 		this.renderKinguAccountIdentity(section, panelStore, Codicon.sparkle, localize('kinguAiAccounts', "AI Accounts"), [manage]);
 		const summary = append(section, $('.sessions-account-titlebar-panel-kingu-summary'));
 		summary.textContent = localize('kinguAiAccountsChecking', "Checking...");
-		loadKinguAiAccountRows(this.commandService).then(rows => {
+		const load = () => loadKinguAiAccountRows(this.commandService).then(rows => {
 			if (!panelStore.isDisposed) {
 				summary.textContent = summarizeKinguAiAccounts(rows);
 			}
 		}, () => {
 			summary.textContent = '';
 		});
+		void load();
+		// The agents are found from the models they publish, which keep arriving
+		// for a while after the window opens; count again as they do.
+		const reload = panelStore.add(new RunOnceScheduler(() => void load(), 500));
+		panelStore.add(this.languageModelsService.onDidChangeLanguageModels(() => reload.schedule()));
 	}
 
 	private appendKinguAgentAccounts(container: HTMLElement, panelStore: DisposableStore): void {

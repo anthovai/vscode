@@ -6,7 +6,7 @@
 import './media/kinguOrcaFooter.css';
 import { $, addDisposableListener, append, EventType } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
-import { timeout } from '../../../../base/common/async.js';
+import { disposableTimeout, timeout } from '../../../../base/common/async.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -123,6 +123,15 @@ function renderProviderSegment(slot: string, provider: IOrcaProviderRateLimits, 
 	return segment;
 }
 
+/**
+ * How long after the window opens an agent whose first usage read failed still
+ * shows as loading. At startup the CLIs answer slowly and the ADE's first read
+ * often fails although the next one succeeds, so "Error" there is noise.
+ */
+const STARTUP_USAGE_GRACE_MS = 3 * 60_000;
+/** When a failed first read is tried again, within that grace. */
+const STARTUP_USAGE_RETRY_MS = 20_000;
+
 /** How often Gemini's own meter is read again: its CLI writes a reply's tokens as it finishes. */
 const GEMINI_USAGE_INTERVAL_MS = 60_000;
 
@@ -232,6 +241,10 @@ class KinguOrcaFooterContribution extends Disposable {
 	static readonly ID = 'kingu.contrib.orcaFooter';
 
 	private readonly _usage = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly _startedAt = Date.now();
+	/** Agents whose usage has been read at least once in this window. */
+	private readonly _usageSeen = new Set<string>();
+	private readonly _startupRetry = this._register(new MutableDisposable());
 	private readonly _refresh = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _awake = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _update = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
@@ -448,14 +461,28 @@ class KinguOrcaFooterContribution extends Disposable {
 				}
 				continue;
 			}
-			anyFetching ||= provider.status === 'fetching';
 			const windows = providerFooterWindows(provider, now);
+			if (windows.length > 0) {
+				this._usageSeen.add(slot);
+			}
+			let shown = provider;
+			if (provider.status === 'error' && windows.length === 0 && !this._usageSeen.has(slot) && now - this._startedAt < STARTUP_USAGE_GRACE_MS) {
+				// Still starting up: show it loading and read again soon.
+				shown = { ...provider, status: 'fetching' };
+				if (!this._startupRetry.value) {
+					this._startupRetry.value = disposableTimeout(() => {
+						this._startupRetry.clear();
+						void this._refreshUsage();
+					}, STARTUP_USAGE_RETRY_MS);
+				}
+			}
+			anyFetching ||= shown.status === 'fetching';
 			for (const window of windows) {
 				if (window.resetsAt !== null) {
 					resets.push(window.resetsAt);
 				}
 			}
-			segments.push(renderProviderSegment(slot, provider, windows, this._usageMode, this._usageDisplay));
+			segments.push(renderProviderSegment(slot, shown, windows, this._usageMode, this._usageDisplay));
 			labels.push(localize('kingu.footer.usage.providerAria', "{0}: {1}", name, windows.map(window => formatFooterWindow(window, this._usageDisplay)).join(', ') || '—'));
 		}
 

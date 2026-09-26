@@ -13,6 +13,7 @@ import type { AgentSdkDownloadStatus, IAgentSdkSetupInfo } from '../../../../../
 import type { RootState } from '../../../../../../platform/agentHost/common/state/protocol/state.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { IDefaultAccountService } from '../../../../../../platform/defaultAccount/common/defaultAccount.js';
 import { ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IWorkbenchContribution } from '../../../../../common/contributions.js';
@@ -21,7 +22,7 @@ import { ChatEntitlement, IChatEntitlementService } from '../../../../../service
 import { hasAnyModelTargetingSessionType } from '../sessionTypeAvailability.js';
 import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotification, IChatInputNotificationAction, IChatInputNotificationService } from '../../widget/input/chatInputNotificationService.js';
 import { ILanguageModelsService } from '../../../common/languageModels.js';
-import { isKinguAiProvider, KINGU_AI_SIGN_IN_COMMAND_ID, kinguAiProviderLabel } from '../../../../kingu/common/kinguAiAccounts.js';
+import { isKinguAiProvider, KINGU_AI_SIGN_IN_COMMAND_ID, KinguAiSignedInContext, kinguAiProviderLabel } from '../../../../kingu/common/kinguAiAccounts.js';
 
 // #region State
 
@@ -158,6 +159,8 @@ export function getAgentDisplayNames(state: RootState | Error | undefined): Read
 	return names;
 }
 
+const KINGU_SIGNED_IN_KEYS = new Set(Object.values(KinguAiSignedInContext).map(key => key.key));
+
 const AGENT_SDK_SETUP_NOTIFICATION_ID_PREFIX = 'agentHost.sdkSetup.';
 
 export function agentSdkSetupNotificationId(agent: string): string {
@@ -287,6 +290,7 @@ export class AgentHostSdkSetupNotificationContribution extends Disposable implem
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IChatEntitlementService private readonly _chatEntitlementService: IChatEntitlementService,
 		@IAgentHostService private readonly _agentHostService: IAgentHostService,
+		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 	) {
 		super();
 		this._register(Event.any(
@@ -295,6 +299,7 @@ export class AgentHostSdkSetupNotificationContribution extends Disposable implem
 			this._defaultAccountService.onDidChangeDefaultAccount,
 			this._languageModelsService.onDidChangeLanguageModels,
 			Event.filter(this._configurationService.onDidChangeConfiguration, event => event.affectsConfiguration(AgentHostAllowSignedOutWhenUsableSettingId)),
+			Event.filter(this._contextKeyService.onDidChangeContext, event => event.affectsSome(KINGU_SIGNED_IN_KEYS)),
 		)(() => this._update()));
 		// The host restarts (and a remote reconnects) behind a fresh root state, so
 		// re-bind rather than holding one subscription for the window's lifetime.
@@ -324,7 +329,11 @@ export class AgentHostSdkSetupNotificationContribution extends Disposable implem
 			if (!displayName) {
 				continue;
 			}
-			const hasModels = hasAnyModelTargetingSessionType(this._languageModelsService, agentSdkSetupSessionType(setup.agent));
+			// Kingu: an AI account already in use has not lost its models, they are
+			// still loading (the agent starts well after the window); asking to sign
+			// in again then is wrong, so it counts as having them.
+			const hasModels = hasAnyModelTargetingSessionType(this._languageModelsService, agentSdkSetupSessionType(setup.agent))
+				|| (isKinguAiProvider(setup.agent) && this._contextKeyService.getContextKeyValue<boolean>(KinguAiSignedInContext[setup.agent].key) === true);
 			const state = getAgentSdkSetupState({
 				allowSignedOutWhenUsable,
 				signedIn,

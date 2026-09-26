@@ -62,7 +62,7 @@ function formatTimestamp(timestamp: number): string {
 }
 
 /** A `Badge variant="outline"` as the pane uses it: `h-4 rounded px-1.5 text-[10px] font-medium`. */
-export function badge(parent: HTMLElement, text: string, tone: 'normal' | 'destructive' = 'normal'): void {
+function badge(parent: HTMLElement, text: string, tone: 'normal' | 'destructive' = 'normal'): void {
 	append(parent, $(`span.kingu-orca-account-badge.${tone}`)).textContent = text;
 }
 
