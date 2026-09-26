@@ -79,7 +79,7 @@ export function isAgentsBoot(argv: readonly string[] = process.argv): boolean {
 
 interface IOrcaStartup {
 	setMainWindowOpener(opener: () => BrowserWindow): void;
-	runMainProcessPreflight(options: { focusExistingWindow: () => void; requestDesktopActivation: (argv?: readonly string[]) => void }): boolean;
+	runMainProcessPreflight(options: { focusExistingWindow: () => void; requestDesktopActivation: (argv?: readonly string[]) => void; hostOwnsSingleInstance?: boolean }): boolean;
 	registerMainProcessIpcHandlers(): void;
 	overrideIpcHandler(channel: string, handler: (...args: unknown[]) => unknown): void;
 	attachMainWindowCoreServices(window: { webContents: WebContents }, deps: {
@@ -222,6 +222,9 @@ export function prepareOrcaBoot(): void {
 		orca.runMainProcessPreflight({
 			focusExistingWindow: () => hostWindow?.focus(),
 			requestDesktopActivation: () => hostWindow?.show(),
+			// The fork's own lock (its main IPC handle) already hands a second launch to this
+			// window; the ADE taking Electron's lock too would make that launch exit first.
+			hostOwnsSingleInstance: true,
 		});
 		orca.registerMainProcessIpcHandlers();
 	} catch (error) {

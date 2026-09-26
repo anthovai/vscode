@@ -93,6 +93,13 @@ import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-
 export type MainProcessPreflightOptions = {
   focusExistingWindow: () => void
   requestDesktopActivation: (argv?: readonly string[]) => void
+  /**
+   * The host application already guards this userData profile and hands a second
+   * launch to its first window (Kingu, which embeds this main process in its own).
+   * Taking Electron's lock here as well would make that second launch exit before
+   * the host sees it, so the gate below is skipped.
+   */
+  hostOwnsSingleInstance?: boolean
 }
 
 /** Performs all module-scope work that must happen before Electron's ready event. */
@@ -214,12 +221,15 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     // Why: diagnostic escape hatch for macOS builds where Electron reports a false lock loss before any app logs exist.
     logSingleInstanceLockBypass()
   }
-  const hasLock = skip || bypass || acquireSingleInstanceLock(app, options.requestDesktopActivation)
+  const hostOwned = options.hostOwnsSingleInstance === true
+  const hasLock =
+    hostOwned || skip || bypass || acquireSingleInstanceLock(app, options.requestDesktopActivation)
   if (state.startupDiagnosticsEnabled) {
     logStartupDiagnostic('single-instance-lock-result', {
       acquired: hasLock,
       bypassed: bypass,
-      skippedForDev: skip
+      skippedForDev: skip,
+      ownedByHost: hostOwned
     })
   }
   if (!hasLock) {
