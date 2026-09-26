@@ -13,18 +13,27 @@ import { ACP_AGENT_CATALOG, IAcpAgentCatalogEntry } from '../../common/acpAgentC
 /** The ways agent CLIs spell ACP mode, a subcommand or a flag, newest first. */
 const ACP_SPELLINGS: readonly (readonly string[])[] = [['acp'], ['--acp'], ['--experimental-acp']];
 
-const HELP_TIMEOUT_MS = 10_000;
+/**
+ * How long `<cli> --help` gets. A Node CLI such as OpenCode takes seconds even
+ * idle and far longer on a loaded machine; cut short, its help loses the line
+ * naming ACP and the agent silently drops out of the picker.
+ */
+const HELP_TIMEOUT_MS = 30_000;
 
-/** What `<cli> --help` prints, both streams, or `undefined` when it cannot run. */
-async function readHelp(executable: string): Promise<string | undefined> {
+/** What `<cli> --help` prints, both streams, or `undefined` when it cannot run; `timedOut` when it was cut short. */
+async function readHelpOnce(executable: string): Promise<{ output: string; timedOut: boolean } | undefined> {
 	const command = await resolveAcpCommand(executable, ['--help']);
 	if (!command) {
 		return undefined;
 	}
-	return new Promise<string | undefined>(resolve => {
+	return new Promise<{ output: string; timedOut: boolean } | undefined>(resolve => {
 		let output = '';
+		let timedOut = false;
 		const child = spawn(command.command, [...command.args], { env: command.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-		const timer = setTimeout(() => child.kill(), HELP_TIMEOUT_MS);
+		const timer = setTimeout(() => {
+			timedOut = true;
+			child.kill();
+		}, HELP_TIMEOUT_MS);
 		const append = (chunk: Buffer) => {
 			output = `${output}${chunk.toString('utf8')}`.slice(0, 64_000);
 		};
@@ -36,9 +45,19 @@ async function readHelp(executable: string): Promise<string | undefined> {
 		});
 		child.on('close', () => {
 			clearTimeout(timer);
-			resolve(output);
+			resolve({ output, timedOut });
 		});
 	});
+}
+
+/** `--help`, asked a second time when the first was cut short. */
+async function readHelp(executable: string, logService: ILogService): Promise<{ output: string; timedOut: boolean } | undefined> {
+	const first = await readHelpOnce(executable);
+	if (!first?.timedOut) {
+		return first;
+	}
+	logService.info(`[ACP] ${executable} --help did not finish in ${HELP_TIMEOUT_MS / 1000}s; asking once more`);
+	return await readHelpOnce(executable) ?? first;
 }
 
 /** Whether `help` offers ACP mode spelled as `args`: a `--flag`, or a subcommand listed on a line of its own. */
@@ -88,13 +107,15 @@ async function detectCandidate(candidate: IAcpAgentCatalogEntry, logService: ILo
 		return profileFor(candidate, candidate.dedicatedExecutable, []);
 	}
 	for (const executable of candidate.executables) {
-		const help = await readHelp(executable);
+		const help = await readHelp(executable, logService);
 		if (help === undefined) {
 			continue;
 		}
-		const args = ACP_SPELLINGS.find(spelling => helpOffers(help, spelling));
+		const args = ACP_SPELLINGS.find(spelling => helpOffers(help.output, spelling));
 		if (!args) {
-			logService.info(`[ACP] ${candidate.displayName} is installed but its --help names no ACP mode; left to the terminal`);
+			logService.info(help.timedOut
+				? `[ACP] ${candidate.displayName} is installed but its --help did not finish, twice; left to the terminal until the next start`
+				: `[ACP] ${candidate.displayName} is installed but its --help names no ACP mode; left to the terminal`);
 			return undefined;
 		}
 		logService.info(`[ACP] ${candidate.displayName} found: ${executable} ${args.join(' ')}`);

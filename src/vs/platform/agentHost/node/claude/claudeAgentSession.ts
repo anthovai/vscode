@@ -67,6 +67,13 @@ import { AGENT_MERGE_GITHUB_TOOL_RESTRICTION, getAgentMergeGitHubToolRestriction
 export type { IRematerializer } from './claudeSdkPipeline.js';
 
 /**
+ * How long the Claude subprocess gets to initialize. The SDK's default is 60
+ * seconds, which a user's plugins, hooks and language servers can pass on a
+ * loaded machine, failing the first turn with a timeout.
+ */
+const CLAUDE_INITIALIZE_TIMEOUT_MS = 3 * 60 * 1000;
+
+/**
  * Inputs to {@link ClaudeAgentSession.materialize}. Carries the
  * agent-supplied dependencies that the session itself does not own
  * (proxy auth, the `canUseTool` closure that bridges back to the
@@ -656,7 +663,7 @@ export class ClaudeAgentSession extends Disposable {
 
 		this._logService.info(`[Claude] session ${this.sessionId}: enableFileCheckpointing=${options.enableFileCheckpointing} isResume=${ctx.isResume}`);
 
-		const warm = await this._sdkService.startup({ options });
+		const warm = await this._sdkService.startup({ options, initializeTimeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS });
 
 		if (this.abortController.signal.aborted) {
 			await warm[Symbol.asyncDispose]();
