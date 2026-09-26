@@ -424,9 +424,10 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 
 		return new Promise<IMessagePassingProtocol>((resolve, reject) => {
 
+			const limitMs = this._startupLimitMs();
 			const handle = setTimeout(() => {
-				reject('The local extension host took longer than 60s to connect.');
-			}, 60 * 1000);
+				reject(`The local extension host took longer than ${limitMs / 1000}s to connect.`);
+			}, limitMs);
 
 			portPromise.then((port) => {
 				this._register(toDisposable(() => {
@@ -468,6 +469,16 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 		});
 	}
 
+	/**
+	 * How long the extension host gets to connect and to report ready. Running
+	 * from sources it loads thousands of unbundled files, which on a slow or
+	 * freshly rebuilt `out/` (scanned on first read) can pass a minute; a built
+	 * product keeps the 60 second limit.
+	 */
+	private _startupLimitMs(): number {
+		return this._environmentService.isBuilt ? 60 * 1000 : 3 * 60 * 1000;
+	}
+
 	private _performHandshake(protocol: IMessagePassingProtocol): Promise<void> {
 		// 1) wait for the incoming `ready` event and send the initialization data.
 		// 2) wait for the incoming `initialized` event.
@@ -475,9 +486,10 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 
 			let timeoutHandle: Timeout;
 			const installTimeoutCheck = () => {
+				const limitMs = this._startupLimitMs();
 				timeoutHandle = setTimeout(() => {
-					reject('The local extension host took longer than 60s to send its ready message.');
-				}, 60 * 1000);
+					reject(`The local extension host took longer than ${limitMs / 1000}s to send its ready message.`);
+				}, limitMs);
 			};
 			const uninstallTimeoutCheck = () => {
 				clearTimeout(timeoutHandle);
