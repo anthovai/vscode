@@ -58,7 +58,7 @@ import { IActiveSession, ISessionsManagementService } from '../../../../services
 import { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 import { ISessionComparison, ISessionComparisonService, SessionComparisonParticipantRole } from '../../../../services/sessions/common/sessionComparison.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { computeReorderSortChanges, groupByDate, groupByWorkspace, groupSessionsForList, ISessionSection, limitSessionsForList, SessionSectionRenderer, SESSIONS_LIST_SHOW_EMPTY_DEFAULT_GROUPS_SETTING, SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING, SessionsFlatList, SessionsList, SessionsListFocusedChatItemContext, sortSessions, SessionsGrouping, SessionsSorting } from '../../browser/views/sessionsList.js';
+import { computeReorderSortChanges, groupByDate, groupByWorkspace, groupSessionsForList, ISessionSection, limitSessionsForList, SessionSectionRenderer, SESSIONS_LIST_SHOW_EMPTY_DEFAULT_GROUPS_SETTING, SESSIONS_LIST_SHOW_SUBAGENTS_SETTING, SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING, SessionsFlatList, SessionsList, SessionsListFocusedChatItemContext, sortSessions, SessionsGrouping, SessionsSorting } from '../../browser/views/sessionsList.js';
 import { AgentSessionApprovalKind, AgentSessionApprovalModel, IAgentSessionApprovalInfo } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionApprovalModel.js';
 import { IChatService, IChatToolInvocation } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { ChatAgentLocation } from '../../../../../workbench/contrib/chat/common/constants.js';
@@ -3726,6 +3726,43 @@ suite('Sessions - SessionsList', () => {
 					{ title: 'Forked chat', last: true },
 				]
 			);
+		});
+
+		test('lists the subagents of each chat under it, and none when the setting is off', () => {
+			const main = createChat('Main chat');
+			const peer = createChat('Peer chat', ChatOriginKind.User);
+			const subagentOf = (title: string, parent: IChat): IChat => ({ ...createChat(title, ChatOriginKind.Tool), origin: { kind: ChatOriginKind.Tool, parentChat: parent.resource } });
+			const mainWorker = subagentOf('Main worker', main);
+			const peerWorker = subagentOf('Peer worker', peer);
+			const base = createTestSession('Session').session;
+			const session: ISession = {
+				...base,
+				chats: constObservable([main, peer, mainWorker, peerWorker]),
+				mainChat: constObservable(main),
+				capabilities: constObservable({ supportsMultipleChats: true }),
+			};
+			const rows = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('.session-chat-item')].map(item => ({
+				title: item.querySelector('.session-chat-title')?.textContent,
+				level: item.closest('.monaco-list-row')?.getAttribute('aria-level'),
+				subagent: item.classList.contains('subagent-chat'),
+				last: item.classList.contains('last-chat'),
+			}));
+
+			const shown = rows(renderSessionChats(session));
+			const hidden = rows(renderSessionChatsList(session, undefined, false, true, false, instantiationService => {
+				void (instantiationService.get(IConfigurationService) as TestConfigurationService).setUserConfiguration(SESSIONS_LIST_SHOW_SUBAGENTS_SETTING, false);
+			}).container);
+
+			assert.deepStrictEqual({ shown, hidden }, {
+				shown: [
+					{ title: 'Main worker', level: shown[0].level, subagent: true, last: false },
+					{ title: 'Peer chat', level: shown[0].level, subagent: false, last: true },
+					{ title: 'Peer worker', level: String(Number(shown[0].level) + 1), subagent: true, last: true },
+				],
+				hidden: [
+					{ title: 'Peer chat', level: shown[0].level, subagent: false, last: true },
+				],
+			});
 		});
 
 		test('updates nested chat rows when the session chat catalog changes', () => {

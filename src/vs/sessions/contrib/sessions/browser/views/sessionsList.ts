@@ -137,6 +137,8 @@ export const NEW_SESSION_FOR_WORKSPACE_ACTION_ID = 'sessionsView.sectionNewSessi
 /** Controls whether the empty default Chats group is shown in the sessions list. */
 export const SESSIONS_LIST_SHOW_EMPTY_DEFAULT_GROUPS_SETTING = 'sessions.list.showEmptyDefaultGroups';
 export const SESSIONS_LIST_SHOW_UNREAD_IN_COLLAPSED_SECTIONS_SETTING = 'sessions.list.showUnreadInCollapsedSections';
+/** Kingu: lists a chat's subagents under it, as the ADE lists a worktree's agents under its card. */
+export const SESSIONS_LIST_SHOW_SUBAGENTS_SETTING = 'sessions.list.showSubagents';
 
 export const IsSessionPinnedContext = new RawContextKey<boolean>('sessionItem.isPinned', false);
 export const SessionItemStatusContext = new RawContextKey<SessionStatus>('sessionItem.status', SessionStatus.Completed);
@@ -244,6 +246,19 @@ function getSessionListChats(session: ISession, reader?: IReader): readonly ICha
 		!isEqual(chat.resource, mainChat.resource) &&
 		chat.origin?.kind !== ChatOriginKind.Tool &&
 		chat.origin?.kind !== ChatOriginKind.SideChat &&
+		chat.interactivity.read(reader) !== ChatInteractivity.Hidden
+	);
+}
+
+/**
+ * The subagent chats a chat spawned, in spawn order. A subagent of the main
+ * chat is listed under the session row, since the session row stands for the
+ * main chat; one of a peer chat is listed under that chat's row.
+ */
+function getSessionListSubagents(session: ISession, parentChat: URI, reader?: IReader): readonly IChat[] {
+	return session.chats.read(reader).filter(chat =>
+		chat.origin?.kind === ChatOriginKind.Tool &&
+		!!chat.origin.parentChat && isEqual(chat.origin.parentChat, parentChat) &&
 		chat.interactivity.read(reader) !== ChatInteractivity.Hidden
 	);
 }
@@ -727,8 +742,15 @@ class SessionChatItemRenderer implements ITreeRenderer<SessionListItem, FuzzySco
 
 		template.elementDisposables.clear();
 		template.elementDisposables.add(toDisposable(() => template.container.classList.remove('renaming')));
-		const chats = getSessionListChats(element.session);
-		template.container.classList.toggle('last-chat', isEqual(chats.at(-1)?.resource, element.chat.resource));
+		// The connector stops at the last of this row's siblings: a subagent's fellow subagents, or
+		// the session's children (the main chat's subagents first, then its peer chats).
+		const parentChat = element.chat.origin?.kind === ChatOriginKind.Tool ? element.chat.origin.parentChat : undefined;
+		const mainChat = element.session.mainChat.get().resource;
+		const siblings = parentChat && !isEqual(parentChat, mainChat)
+			? getSessionListSubagents(element.session, parentChat)
+			: [...getSessionListSubagents(element.session, mainChat), ...getSessionListChats(element.session)];
+		template.container.classList.toggle('last-chat', isEqual(siblings.at(-1)?.resource, element.chat.resource));
+		template.container.classList.toggle('subagent-chat', !!parentChat);
 		let hadFolderRow = !this.compact() && !!getChatWorkspaceBadgeLabel(element.session.workspace.get(), element.chat.workspace.get());
 		template.elementDisposables.add(autorun(reader => {
 			template.title.set(getChatTitle(element.chat, reader), createMatches(node.filterData));
@@ -3622,7 +3644,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 			this.update();
 		}));
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
-			if (e.affectsConfiguration(SESSIONS_LIST_SHOW_EMPTY_DEFAULT_GROUPS_SETTING) || e.affectsConfiguration(ChatSessionArchiveActionWordingSettingId)) {
+			if (e.affectsConfiguration(SESSIONS_LIST_SHOW_EMPTY_DEFAULT_GROUPS_SETTING) || e.affectsConfiguration(SESSIONS_LIST_SHOW_SUBAGENTS_SETTING) || e.affectsConfiguration(ChatSessionArchiveActionWordingSettingId)) {
 				this.update();
 			}
 		}));
@@ -3885,7 +3907,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 				},
 				overrideStyles: this.options.overrideStyles,
 				renderIndentGuides: RenderIndentGuides.None,
-				twistieAdditionalCssClass: element => isSessionItem(element) && getSessionListChats(element).length > 0
+				twistieAdditionalCssClass: element => (isSessionItem(element) || isSessionChatItem(element)) && this.hasListChildren(element)
 					? 'session-chat-twistie'
 					: 'force-no-twistie',
 			}
@@ -4200,12 +4222,24 @@ export class SessionsList extends Disposable implements ISessionsList {
 		});
 	}
 
+	/** Whether a row has child rows: a session's peer chats and subagents, or a chat's subagents. */
+	private hasListChildren(element: ISession | ISessionChatItem): boolean {
+		const showSubagents = this.configurationService.getValue<boolean>(SESSIONS_LIST_SHOW_SUBAGENTS_SETTING) !== false;
+		if (isSessionChatItem(element)) {
+			return showSubagents && getSessionListSubagents(element.session, element.chat.resource).length > 0;
+		}
+		return getSessionListChats(element).length > 0
+			|| (showSubagents && getSessionListSubagents(element, element.mainChat.get().resource).length > 0);
+	}
+
 	refresh(): void {
 		this.sessions = this._sessionsManagementService.getSessions();
 		let initialized = false;
 		this.sessionChatsObserver.value = autorun(reader => {
 			for (const session of this.sessions) {
 				getSessionListChats(session, reader);
+				// Subagents come and go with their parents' turns; their interactivity is read the same way.
+				getSessionListSubagents(session, session.mainChat.read(reader).resource, reader);
 			}
 			if (initialized && this.visible) {
 				this.update();
@@ -4224,7 +4258,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 		const archiveOnboardingSession = this.archiveOnboardingSession.get();
 		const nextNestedSessionResources = new Set(
 			this.sessions
-				.filter(session => getSessionListChats(session).length > 0)
+				.filter(session => this.hasListChildren(session))
 				.map(session => session.resource.toString())
 		);
 
@@ -4398,9 +4432,33 @@ export class SessionsList extends Disposable implements ISessionsList {
 
 		const sessionGroupLimit = this.sessionGroupLimit.get();
 
+		const showSubagents = this.configurationService.getValue<boolean>(SESSIONS_LIST_SHOW_SUBAGENTS_SETTING) !== false;
+		const toChatChildren = (session: ISession, chat: IChat): IObjectTreeElement<SessionListItem>[] => {
+			const subagents = showSubagents ? getSessionListSubagents(session, chat.resource) : [];
+			return subagents.map(subagent => {
+				const grandchildren = toChatChildren(session, subagent);
+				return {
+					element: new SessionChatItem(session, subagent),
+					collapsible: grandchildren.length > 0,
+					collapsed: ObjectTreeElementCollapseState.PreserveOrExpanded,
+					children: grandchildren.length > 0 ? grandchildren : undefined,
+				};
+			});
+		};
 		const toSessionChildren = (sessions: readonly ISession[]): IObjectTreeElement<SessionListItem>[] =>
 			sessions.map(session => {
-				const chats = getSessionListChats(session);
+				const chats: IObjectTreeElement<SessionListItem>[] = [
+					...toChatChildren(session, session.mainChat.get()),
+					...getSessionListChats(session).map(chat => {
+						const subagents = toChatChildren(session, chat);
+						return {
+							element: new SessionChatItem(session, chat) as SessionListItem,
+							collapsible: subagents.length > 0,
+							collapsed: ObjectTreeElementCollapseState.PreserveOrExpanded,
+							children: subagents.length > 0 ? subagents : undefined,
+						};
+					}),
+				];
 				const resource = session.resource.toString();
 				const wasNested = this.nestedSessionResources.has(resource);
 				const persistedCollapsed = this.collapsedSessionResources.has(resource);
@@ -4414,9 +4472,7 @@ export class SessionsList extends Disposable implements ISessionsList {
 						: persistedCollapsed
 							? ObjectTreeElementCollapseState.Collapsed
 							: ObjectTreeElementCollapseState.Expanded,
-					children: chats.length > 0
-						? chats.map(chat => ({ element: new SessionChatItem(session, chat) }))
-						: undefined,
+					children: chats.length > 0 ? chats : undefined,
 				};
 			});
 
