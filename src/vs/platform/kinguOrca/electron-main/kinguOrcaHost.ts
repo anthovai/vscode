@@ -504,9 +504,10 @@ const KINGU_DEFAULT_CLOUD_URL = 'https://kingu.anthovai.com';
  *
  * `isPackaged` is whether this is a built product, not Electron's guess.
  *
- * Until the API has its own sign-in, a local cloud in a dev build uses the
- * ADE's dev sign-in (`KINGU_CLOUD_DEV_AUTH`), whose tokens the local API
- * accepts as one dev user.
+ * The API has its own sign-in (`desktop-auth.ts`: PKCE to a loopback
+ * redirect). A local cloud in a dev build skips it with the ADE's dev sign-in
+ * (`KINGU_CLOUD_DEV_AUTH`), whose tokens the local API accepts as one dev
+ * user; set `KINGU_CLOUD_DEV_AUTH=0` to try the real one locally.
  */
 export function applyKinguCloudUrl(env: NodeJS.ProcessEnv, isPackaged: boolean): void {
 	const raw = env.KINGU_CLOUD_URL?.trim() || KINGU_DEFAULT_CLOUD_URL;
