@@ -639,6 +639,19 @@
         "kingu-per-workspace-env": 5,
         "orchestration": 28
       }
+    },
+    {
+      "appVersion": "1.4.214",
+      "skills": {
+        "computer-use": 9,
+        "linear-tickets": 11,
+        "kingu-cli": 37,
+        "kingu-emulator": 8,
+        "kingu-emulator-android": 6,
+        "kingu-linear": 9,
+        "kingu-per-workspace-env": 6,
+        "orchestration": 29
+      }
     }
   ]
 }

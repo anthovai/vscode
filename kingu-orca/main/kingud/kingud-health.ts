@@ -17,6 +17,7 @@ import {
   getDaemonEndpointFacts,
   readDaemonPidRecord
 } from '../daemon/daemon-init'
+import type { KingudProfileStateAuthoritySelection } from './kingud-profile-state-telemetry'
 
 /**
  * How much a green self-test actually proves.
@@ -64,6 +65,8 @@ export type KingudHealth = {
   arch: string
   pid: number
   terminalDaemon: TerminalDaemonHealth
+  /** The low-cardinality profile-state authority selected during startup, when available. */
+  profileStateAuthority?: KingudProfileStateAuthoritySelection
 }
 
 /**
@@ -146,7 +149,10 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
   }
 }
 
-export async function collectKingudHealth(buildVersion: string): Promise<KingudHealth> {
+export async function collectKingudHealth(
+  buildVersion: string,
+  profileStateAuthority?: KingudProfileStateAuthoritySelection
+): Promise<KingudHealth> {
   return {
     buildHash: computeKingudBuildHash(),
     buildVersion,
@@ -155,6 +161,7 @@ export async function collectKingudHealth(buildVersion: string): Promise<KingudH
     platform: process.platform,
     arch: process.arch,
     pid: process.pid,
-    terminalDaemon: await collectTerminalDaemonHealth()
+    terminalDaemon: await collectTerminalDaemonHealth(),
+    ...(profileStateAuthority ? { profileStateAuthority } : {})
   }
 }

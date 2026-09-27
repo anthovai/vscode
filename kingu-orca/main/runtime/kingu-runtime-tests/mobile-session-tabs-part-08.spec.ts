@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import { KinguRuntimeService, electronMocks } from '../kingu-runtime-test-mocks.spec'
@@ -442,7 +443,9 @@ describe('KinguRuntimeService', () => {
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const closeTerminalTab = vi.fn(async () => {})
-    const runtime = new KinguRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    const runtime = new KinguRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
+    )
     runtime.setPtyController({
       write: () => true,
       kill,

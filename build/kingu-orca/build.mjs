@@ -215,6 +215,8 @@ const sidecars = await esbuild.build({
 		'wsl-transcript-fs-process-entry': path.join(vendored, 'main/native-chat/wsl-transcript-fs-process-entry.ts'),
 		'port-scan-command-worker-entry': path.join(vendored, 'main/ports/port-scan-command-worker-entry.ts'),
 		'usage-scan-worker-entry': path.join(vendored, 'main/usage/usage-scan-worker-entry.ts'),
+		'profile-state-backup-worker-entry': path.join(vendored, 'main/persistence/profile-state/profile-state-backup-worker-entry.ts'),
+		'profile-state-writer-worker-entry': path.join(vendored, 'main/persistence/profile-state/profile-state-writer-worker-entry.ts'),
 		'parcel-watcher-process-entry': path.join(vendored, 'main/ipc/parcel-watcher-process-entry.ts'),
 		'main-thread-hang-watchdog-entry': path.join(vendored, 'main/hang-watchdog/main-thread-hang-watchdog-entry.ts'),
 		'agent-hooks/managed-agent-hook-controls': path.join(vendored, 'main/agent-hooks/managed-agent-hook-controls.ts'),

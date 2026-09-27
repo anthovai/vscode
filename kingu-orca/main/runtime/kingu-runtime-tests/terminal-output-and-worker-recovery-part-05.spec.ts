@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   KinguRuntimeService,
@@ -74,7 +75,7 @@ describe('KinguRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new KinguRuntimeService(
-      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -187,12 +188,12 @@ describe('KinguRuntimeService', () => {
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
     const runtime = new KinguRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getFolderWorkspaces: () => [folderWorkspace],
         getProjectGroups: () => [projectGroup],
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -313,14 +314,14 @@ describe('KinguRuntimeService', () => {
     const folderWorkspace = makeFolderWorkspace({ folderPath, connectionId })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
     const runtime = new KinguRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getFolderWorkspaces: () => [folderWorkspace],
         getProjectGroups: () => [projectGroup],
         getWorkspaceSession,
         setWorkspaceSession,
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )

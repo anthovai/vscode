@@ -62,6 +62,7 @@ describe('addKinguWslInteropEnv', () => {
       KINGU_TERMINAL_HANDLE: 'term_wsl',
       KINGU_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Kingu',
       KINGU_CLI_COMMAND: 'kingu-ide',
+      KINGU_WSL_CLI_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Kingu\\wsl-managed-cli\\hash',
       KINGU_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Kingu\\resources\\bin\\kingu.exe',
       KINGU_OMP_FRESH_CONFIG: 'C:\\Kingu\\fresh-session.yml',
       KINGU_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\kingu-agent-status.ts',
@@ -87,6 +88,7 @@ describe('addKinguWslInteropEnv', () => {
     expect(env.WSLENV).toContain('KINGU_TERMINAL_HANDLE/u')
     expect(env.WSLENV).toContain('KINGU_USER_DATA_PATH/p')
     expect(env.WSLENV).toContain('KINGU_CLI_COMMAND/u')
+    expect(env.WSLENV).toContain('KINGU_WSL_CLI_DIR/p')
     expect(env.WSLENV).toContain('KINGU_CODEX_LAUNCH_PREFLIGHT/p')
     expect(env.WSLENV).toContain('KINGU_OMP_STATUS_EXTENSION/p')
     expect(env.WSLENV).toContain('KINGU_OMP_FRESH_CONFIG/p')

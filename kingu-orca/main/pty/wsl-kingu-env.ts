@@ -79,6 +79,8 @@ export function addKinguWslInteropEnv(env: Record<string, string>): void {
     // and it cannot derive the hash segment from KINGU_USER_DATA_PATH alone.
     'KINGU_SHELL_READY_ROOT/p',
     'KINGU_CLI_COMMAND/u',
+    // Why /p: the managed CLI launcher lives in the host's userData tree.
+    'KINGU_WSL_CLI_DIR/p',
     'KINGU_CODEX_LAUNCH_PREFLIGHT/p',
     'KINGU_PANE_KEY/u',
     'KINGU_TAB_ID/u',

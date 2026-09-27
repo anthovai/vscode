@@ -163,8 +163,12 @@ describe('uploadSkillPackageToSignedPolicy', () => {
         allowLoopbackHttp,
         fetcher
       })
-    await expect(upload('http://127.0.0.1:8787/v1/skill-uploads/u1', false)).rejects.toThrow('skill-cloud-upload-url-invalid')
-    await expect(upload('http://storage.test/upload', true)).rejects.toThrow('skill-cloud-upload-url-invalid')
+    await expect(upload('http://127.0.0.1:8787/v1/skill-uploads/u1', false)).rejects.toThrow(
+      'skill-cloud-upload-url-invalid'
+    )
+    await expect(upload('http://storage.test/upload', true)).rejects.toThrow(
+      'skill-cloud-upload-url-invalid'
+    )
     await expect(upload('http://127.0.0.1:8787/v1/skill-uploads/u1', true)).resolves.toBeUndefined()
     expect(fetcher).toHaveBeenCalledTimes(1)
   })

@@ -4,6 +4,7 @@ import {
   KINGUD_SNAPSHOT_EXCLUDED,
   KINGUD_SNAPSHOT_MEMBERS,
   captureKingudStateSnapshotCommand,
+  compareKingudStateSnapshotCommand,
   newestStateMtimeCommand,
   kingudSnapshotDirName,
   parseNewestStateMtimeSeconds,
@@ -93,6 +94,7 @@ describe('Windows hosts', () => {
   it.each([
     ['capture', () => captureKingudStateSnapshotCommand(windows, ROOT, SNAP)],
     ['restore', () => restoreKingudStateSnapshotCommand(windows, ROOT, SNAP)],
+    ['compare', () => compareKingudStateSnapshotCommand(windows, ROOT, SNAP)],
     ['mtime', () => newestStateMtimeCommand(windows, ROOT)]
   ])('refuses %s rather than emitting a POSIX command', (_label, build) => {
     expect(build).toThrow('kingud to a Windows host is not implemented')

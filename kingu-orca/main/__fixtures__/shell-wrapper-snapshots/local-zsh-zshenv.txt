@@ -60,6 +60,13 @@ __kingu_deferred_init() {
   else
     precmd_functions=(${precmd_functions:#__kingu_deferred_init})
   fi
+  if [ -n "${KINGU_WSL_CLI_DIR:-}" ]; then
+    if [ -x "$KINGU_WSL_CLI_DIR/${KINGU_CLI_COMMAND:-}" ]; then
+      export PATH="$KINGU_WSL_CLI_DIR${PATH:+:$PATH}"
+    else
+      printf 'Kingu CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$KINGU_WSL_CLI_DIR/${KINGU_CLI_COMMAND:-}" >&2
+    fi
+  fi
   if __kingu_has_feature overlay; then
     # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
     __kingu_restore_agent_teams_path() {

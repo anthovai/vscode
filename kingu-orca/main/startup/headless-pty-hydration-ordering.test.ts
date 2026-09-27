@@ -40,7 +40,7 @@ describe('headless PTY registry hydration ordering', () => {
 
   it('hydrates kingud after Store and daemon readiness but before RPC and publication', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/kingud/kingud-entry.ts'), 'utf8')
-    const store = source.indexOf('const store = new Store(')
+    const store = source.indexOf('createKingudProfileStateStartup(runtimeUserDataPath)')
     const daemon = source.indexOf('await startKingudDaemon()', store)
     const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', daemon)
     const rpc = source.indexOf('await rpc.start()', handlersAndHydration)
@@ -57,7 +57,7 @@ describe('headless PTY registry hydration ordering', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/kingud/kingud-entry.ts'), 'utf8')
     const cleanup = source.indexOf('registerCleanup(async () => {')
     const hookStop = source.indexOf('agentHookServer.stop()', cleanup)
-    const store = source.indexOf('const store = new Store(')
+    const store = source.indexOf('createKingudProfileStateStartup(runtimeUserDataPath)')
     const hookStart = source.indexOf('await agentHookServer.start(', store)
     const daemon = source.indexOf('await startKingudDaemon()', hookStart)
     const hookEnv = source.indexOf('buildAgentHookPtyEnv:', daemon)

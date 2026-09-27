@@ -85,7 +85,8 @@ export function planModelDiscovery(
       binary: command.binary,
       args: [...command.prefixArgs, ...modelDiscovery.args],
       stdinPayload: modelDiscovery.stdinPayload ?? null,
-      label: spec.label
+      label: spec.label,
+      ...(command.env ? { env: command.env } : {})
     }
   }
 }

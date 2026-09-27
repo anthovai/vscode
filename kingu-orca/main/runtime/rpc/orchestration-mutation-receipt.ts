@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { isTerminalPromptMutation } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { KinguRuntimeService } from '../kingu-runtime'
+import type { KinguSessionId } from '../../../shared/kingu-session-address'
 
 export const EFFECT_FREE_WORKER_DONE_CHECKPOINT = JSON.stringify({
   pending: { effectFree: 'worker_done' }
@@ -13,12 +14,21 @@ export type MutationReplayNudge =
   | { kind: 'messages'; targets: { to: string; type: string }[] }
   | { kind: 'federation'; runId?: string }
 
-export function replayStableCallerParams(runtime: KinguRuntimeService, params: unknown): unknown {
+const CALLER_KINGU_SESSION_ID_KEY = '__kinguCallerKinguSessionId'
+
+export function replayStableCallerParams(
+  runtime: KinguRuntimeService,
+  params: unknown,
+  callerKinguSessionId?: KinguSessionId
+): unknown {
   if (!params || typeof params !== 'object' || Array.isArray(params)) {
     return params
   }
   const source = params as Record<string, unknown>
-  const result = { ...source }
+  // Absent for terminal callers, so their payload hashes are unchanged.
+  const result: Record<string, unknown> = callerKinguSessionId
+    ? { ...source, [CALLER_KINGU_SESSION_ID_KEY]: callerKinguSessionId }
+    : { ...source }
   delete result.waitSubmitMs
   for (const property of ['from', 'callerTerminalHandle', 'terminal'] as const) {
     const handle = source[property]

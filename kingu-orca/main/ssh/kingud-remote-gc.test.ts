@@ -35,7 +35,7 @@ const mockExec = vi.mocked(execCommand)
  */
 function scriptHost(options: {
   listing: string[]
-  liveness?: Record<string, 'LIVE' | 'DEAD' | 'UNKNOWN'>
+  liveness?: Record<string, 'LIVE' | 'DEAD' | 'UNKNOWN' | Error>
   removed: string[]
 }): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
@@ -50,7 +50,11 @@ function scriptHost(options: {
     }
     if (command.includes('.kingud-pid')) {
       const dir = Object.keys(options.liveness ?? {}).find((name) => command.includes(name))
-      return dir ? (options.liveness?.[dir] ?? 'DEAD') : 'DEAD'
+      const result = dir ? (options.liveness?.[dir] ?? 'DEAD') : 'DEAD'
+      if (result instanceof Error) {
+        throw result
+      }
+      return result
     }
     if (command.startsWith('mv ')) {
       const match = command.match(/'([^']*)'/)
@@ -150,6 +154,51 @@ describe('kingud GC', () => {
       currentDirAbsPath: '/home/u/.kingu-remote/kingud-0.3.0+cc0',
       record: emptyKingudActivationRecord()
     })
+    expect(removed).toEqual(['kingud-0.0.9+dead'])
+  })
+
+  it('stops before later versions when liveness probe termination is unconfirmed', async () => {
+    const removed: string[] = []
+    const error = Object.assign(new Error('Liveness probe termination is unconfirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+    scriptHost({
+      listing: ['kingud-0.1.0+bb0', 'kingud-0.0.9+dead'],
+      liveness: { 'kingud-0.1.0+bb0': error },
+      removed
+    })
+
+    await expect(
+      gcOldKingudVersions({
+        conn,
+        host,
+        remoteHome: '/home/u',
+        currentDirAbsPath: '/home/u/.kingu-remote/kingud-0.3.0+cc0',
+        record: emptyKingudActivationRecord()
+      })
+    ).rejects.toBe(error)
+
+    expect(removed).toEqual([])
+    expect(mockExec).toHaveBeenCalledTimes(4)
+    expect(mockExec.mock.calls.at(-1)?.[1]).toContain('.kingud-pid')
+  })
+
+  it('keeps a version after an ordinary probe failure and checks later versions', async () => {
+    const removed: string[] = []
+    scriptHost({
+      listing: ['kingud-0.1.0+bb0', 'kingud-0.0.9+dead'],
+      liveness: { 'kingud-0.1.0+bb0': new Error('Probe failed') },
+      removed
+    })
+
+    await gcOldKingudVersions({
+      conn,
+      host,
+      remoteHome: '/home/u',
+      currentDirAbsPath: '/home/u/.kingu-remote/kingud-0.3.0+cc0',
+      record: emptyKingudActivationRecord()
+    })
+
     expect(removed).toEqual(['kingud-0.0.9+dead'])
   })
 })

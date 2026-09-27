@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   KinguRuntimeService,
@@ -20,7 +21,9 @@ describe('KinguRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
-    const runtime = new KinguRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new KinguRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     let process = {
       id: 'reused-pty-id',
       incarnationId: 'inc-old',
@@ -66,7 +69,9 @@ describe('KinguRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
-    const runtime = new KinguRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new KinguRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -156,7 +161,9 @@ describe('KinguRuntimeService', () => {
         [`duplicate-b:${HEADLESS_SECOND_LEAF_ID}`]: 'inc-duplicate'
       }
     })
-    const runtime = new KinguRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new KinguRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

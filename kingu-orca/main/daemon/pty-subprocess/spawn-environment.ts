@@ -1,7 +1,9 @@
+import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
 import { delimiter } from 'node:path'
 import { dropInheritedKinguFishHistory } from '../../fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../../pty/build-mode-env'
+import { stripPiProcessOwnerEnv } from '../../pty/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/terminal-color-env'
@@ -27,7 +29,9 @@ const PANE_IDENTITY_ENV_KEYS = [
   'KINGU_PANE_KEY',
   'KINGU_TAB_ID',
   'KINGU_WORKTREE_ID',
-  'KINGU_AGENT_LAUNCH_TOKEN'
+  'KINGU_AGENT_LAUNCH_TOKEN',
+  // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
+  'KINGU_WSL_CLI_DIR'
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
@@ -54,6 +58,22 @@ function deleteRequestedDaemonEnvKeys(
     keys?.includes('KINGU_CODEX_HOME') === true &&
     env.KINGU_CODEX_HOME !== undefined &&
     env.CODEX_HOME === env.KINGU_CODEX_HOME
+  // A merged caller config can supersede the daemon's recorded overlay source.
+  if (
+    keys?.includes('KINGU_OPENCODE_CONFIG_DIR') &&
+    (env.OPENCODE_CONFIG_DIR === undefined ||
+      env.OPENCODE_CONFIG_DIR === env.KINGU_OPENCODE_CONFIG_DIR)
+  ) {
+    restoreOrStripOverlayEnv(
+      env,
+      {
+        primary: 'OPENCODE_CONFIG_DIR',
+        overlay: 'KINGU_OPENCODE_CONFIG_DIR',
+        source: 'KINGU_OPENCODE_SOURCE_CONFIG_DIR'
+      },
+      {}
+    )
+  }
   for (const key of keys ?? []) {
     delete env[key]
   }
@@ -125,6 +145,7 @@ function promoteAgentTeamsShimPath(
   env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
+/** A dev receiver without an endpoint file must not fall back to another runtime's file. */
 function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -138,6 +159,7 @@ function removeInheritedDevAgentHookEndpoint(
   }
 }
 
+/** A persistent daemon's inherited environment cannot supply ownership for a new pane. */
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
@@ -155,6 +177,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     env.TERM = opts.env.TERM
   }
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  stripPiProcessOwnerEnv(env)
   if (opts.env?.fish_history === undefined) {
     dropInheritedKinguFishHistory(env)
   }
@@ -172,6 +195,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   return env
 }
 
+/** Platform launch preparation must not undo the caller's explicit environment deletions. */
 export function rescrubDaemonPtyEnvironment(
   env: Record<string, string>,
   opts: PtySubprocessOptions
@@ -182,6 +206,7 @@ export function rescrubDaemonPtyEnvironment(
   }
 }
 
+/** Shell preparation can restore ambient state, so pane isolation is enforced again here. */
 export function finalizeDaemonPtyEnvironment(
   env: Record<string, string>,
   requestedEnv: Record<string, string> | undefined
@@ -194,4 +219,5 @@ export function finalizeDaemonPtyEnvironment(
   promoteAgentTeamsShimPath(env, requestedPath)
   stripLegacyTerminalShimEnv(env, process.platform)
   dropIncoherentCondaActivationEnv(env, process.platform)
+  stripPiProcessOwnerEnv(env)
 }

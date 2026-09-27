@@ -134,6 +134,24 @@ describe('collectKingudHealth', () => {
     expect(health.platform).toBe(process.platform)
     expect(health.terminalDaemon.state).toBe('live')
   })
+
+  it('includes bounded profile-state authority metadata when supplied', async () => {
+    const health = await collectKingudHealth('1.2.3', {
+      backend: 'sqlite',
+      classification: 'sqlite-only',
+      authority_mode: 'sqlite-established',
+      runtime: 'kingud',
+      migrated: false
+    })
+
+    expect(health.profileStateAuthority).toEqual({
+      backend: 'sqlite',
+      classification: 'sqlite-only',
+      authority_mode: 'sqlite-established',
+      runtime: 'kingud',
+      migrated: false
+    })
+  })
 })
 
 describe('computeKingudBuildHash', () => {

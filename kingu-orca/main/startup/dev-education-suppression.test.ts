@@ -133,7 +133,12 @@ describe('suppressDevEducationForStore', () => {
       outcome: 'dismissed',
       lastCompletedStep: 1
     })
-    expect(state.ui.featureTipsSeenIds).toEqual(['voice-dictation', 'kingu-cli', 'cmd-j-palette'])
+    expect(state.ui.featureTipsSeenIds).toEqual([
+      'voice-dictation',
+      'agent-session-search',
+      'kingu-cli',
+      'cmd-j-palette'
+    ])
     expect(state.ui.contextualToursSeenIds).toEqual([
       'tasks',
       ...CONTEXTUAL_TOUR_IDS.filter((id) => id !== 'tasks')

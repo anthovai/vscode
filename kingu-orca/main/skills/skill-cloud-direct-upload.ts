@@ -57,7 +57,11 @@ export async function uploadSkillPackageToSignedPolicy(input: {
     input.allowLoopbackHttp === true &&
     policyUrl.protocol === 'http:' &&
     ['127.0.0.1', 'localhost', '[::1]'].includes(policyUrl.hostname)
-  if ((policyUrl.protocol !== 'https:' && !loopbackHttp) || policyUrl.username || policyUrl.password) {
+  if (
+    (policyUrl.protocol !== 'https:' && !loopbackHttp) ||
+    policyUrl.username ||
+    policyUrl.password
+  ) {
     throw new Error('skill-cloud-upload-url-invalid')
   }
   const archive = await stat(input.archivePath)

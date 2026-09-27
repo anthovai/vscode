@@ -53,9 +53,7 @@ export const KINGUD_INSTALL_MODEL: RemoteInstallModel = {
   nativeDepsPackageName: 'kingu-kingud',
   versionFilename: KINGUD_VERSION_FILENAME,
   installCompleteFilename: KINGUD_INSTALL_COMPLETE_FILENAME,
-  // Why the parameter is ignored: kingud's forked children are the same three .js files on
-  // every host. The Windows-only console-list agent patch is a relay/node-pty concern.
-  requiredArtifacts: () => kingudArtifactFilenames()
+  requiredArtifacts: (isWindows) => kingudArtifactFilenames(isWindows ? 'win32' : '')
 }
 
 export const REMOTE_INSTALL_MODELS: readonly RemoteInstallModel[] = [

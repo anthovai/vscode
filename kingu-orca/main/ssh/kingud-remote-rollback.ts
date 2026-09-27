@@ -14,6 +14,7 @@
  * failure this is meant to avoid, arrived at from the other side.
  */
 import type { SshConnection } from './ssh-connection'
+import { KINGUD_STARTUP_READINESS_TIMEOUT_MS } from '../../shared/kingud-profile-preflight'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { KINGUD_INSTALL_MODEL } from './remote-install-model'
 import { computeRemoteInstallDir } from './ssh-relay-versioned-install'
@@ -76,7 +77,6 @@ export type KingudRollbackResult =
   | { outcome: 'refused'; code: string; reason: string }
   | { outcome: 'failed'; code: string; reason: string }
 
-const DEFAULT_READINESS_TIMEOUT_MS = 90_000
 const READINESS_POLL_MS = 500
 const STOP_WAIT_SECONDS = 20
 
@@ -149,7 +149,10 @@ export async function rollbackKingud(
     const stopped = parseKingudStopOutcome(
       await exec(
         options,
-        stopKingudCommand(options.host, outgoingDir, { waitSeconds: STOP_WAIT_SECONDS })
+        stopKingudCommand(options.host, outgoingDir, {
+          waitSeconds: STOP_WAIT_SECONDS,
+          nodePath: options.nodePath
+        })
       )
     )
     if (!kingudStopFreedTheHost(stopped)) {
@@ -157,9 +160,9 @@ export async function rollbackKingud(
         outcome: 'failed',
         code: 'kingud_rollback_stop_incomplete',
         reason:
-          `kingud ${options.record.active} did not exit within ${STOP_WAIT_SECONDS}s of SIGTERM ` +
-          `(${stopped}). Nothing was restored — the store is untouched and the host is still ` +
-          'serving the version you tried to leave.'
+          `Could not verify that kingud ${options.record.active} exited (${stopped}). ` +
+          'Nothing was restored. Kingu requires matching runtime readiness before signaling ' +
+          'an incumbent and confirmed exit before replacing its state.'
       }
     }
   }
@@ -200,7 +203,7 @@ export async function rollbackKingud(
       port: options.port
     })
   )
-  const deadline = Date.now() + (options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS)
+  const deadline = Date.now() + (options.readinessTimeoutMs ?? KINGUD_STARTUP_READINESS_TIMEOUT_MS)
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   let parsed = parseKingudReadinessOutput('')
   while (Date.now() < deadline && parsed.state === 'pending') {

@@ -33,6 +33,13 @@ __kingu_restore_agent_teams_path() {
   export PATH="${KINGU_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __kingu_restore_agent_teams_path
+if [ -n "${KINGU_WSL_CLI_DIR:-}" ]; then
+  if [ -x "$KINGU_WSL_CLI_DIR/${KINGU_CLI_COMMAND:-}" ]; then
+    export PATH="$KINGU_WSL_CLI_DIR${PATH:+:$PATH}"
+  else
+    printf 'Kingu CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$KINGU_WSL_CLI_DIR/${KINGU_CLI_COMMAND:-}" >&2
+  fi
+fi
 # Why: user startup files may set the default OpenCode config after Kingu's
 # spawn env; restore the Kingu-managed config dir before the first prompt.
 [[ -n "${KINGU_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${KINGU_OPENCODE_CONFIG_DIR}"

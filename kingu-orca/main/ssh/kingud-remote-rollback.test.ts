@@ -71,7 +71,10 @@ function readyLine(version: string): string {
   })
 }
 
-function scriptHost(log: string[], overrides: { restore?: string } = {}): void {
+function scriptHost(
+  log: string[],
+  overrides: { restore?: string; readinessAtMs?: number } = {}
+): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
     const text = String(command)
     if (text.includes('state.tar') && text.includes('test -f') && !text.includes('tar -C')) {
@@ -93,6 +96,9 @@ function scriptHost(log: string[], overrides: { restore?: string } = {}): void {
       return '9999'
     }
     if (text.startsWith('cat ') && text.includes('.kingud-readiness')) {
+      if (overrides.readinessAtMs !== undefined && Date.now() < overrides.readinessAtMs) {
+        return ''
+      }
       return readyLine(TARGET)
     }
     return ''
@@ -131,6 +137,28 @@ describe('rollbackKingud', () => {
     // Restoring under a running kingud would replace the store beneath a process holding it;
     // starting first would let the older build migrate the newer build's state.
     expect(log).toEqual([`stop:${ACTIVE}`, 'restore', `launch:${TARGET}`])
+  })
+
+  it('allows rollback startup time after a slow bundled preflight', async () => {
+    let elapsedMs = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => elapsedMs)
+    const log: string[] = []
+    scriptHost(log, { readinessAtMs: 100_000 })
+    try {
+      const result = await rollbackKingud(
+        options({
+          readinessTimeoutMs: undefined,
+          sleep: async () => {
+            elapsedMs += 50_000
+          }
+        })
+      )
+      expect(result.outcome).toBe('rolled-back')
+      expect(elapsedMs).toBe(100_000)
+      expect(log).toEqual([`stop:${ACTIVE}`, 'restore', `launch:${TARGET}`])
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('refuses before touching anything when terminals started after activation', async () => {

@@ -164,7 +164,10 @@ describe('PTY provider dispatch', () => {
         ...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS,
         'CLAUDE_CODE_CHILD_SESSION',
         'CLAUDE_CODE_SESSION_ID',
-        'CLAUDE_CODE_BRIDGE_SESSION_ID'
+        'CLAUDE_CODE_BRIDGE_SESSION_ID',
+        'KINGU_PI_STATUS_OWNED',
+        'KINGU_PRIME_AGENT_STATUS_OWNED',
+        'KINGU_PI_TITLE_MARKER_OWNED'
       ].sort()
     )
     expect(mockSshProvider.spawn).toHaveBeenCalledWith(

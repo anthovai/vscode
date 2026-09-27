@@ -273,8 +273,8 @@ switched off until that is stood up here.
 
 ## Updating from the ADE
 
-The copy here is `anthovai/kingu-intelligence` at **`6827fbe3c`** (upstream
-`stablyai/orca` `122b8c25d`, 2026-09-24). To move it forward:
+The copy here is `anthovai/kingu-intelligence` at **`677f3608b6`** (upstream
+`stablyai/orca` `27b823f934`, 2026-09-27). To move it forward:
 
 1. In `kingu-intelligence`, sync upstream: `git merge -s ours --no-commit <upstream>`,
    then `node config/scripts/kingu-sync-upstream.mjs <last-upstream> <upstream>`,

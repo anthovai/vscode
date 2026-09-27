@@ -74,6 +74,7 @@ export class KinguRuntimeWithFitOverrideListeners extends KinguRuntimeWithStopRe
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
 
   protected ptyLifecycleGenerationById = new Map<string, number>()
+  protected pendingPtySurfaceRetirementsByPtyId = new Map<string, object>()
 
   protected nextPtyLifecycleGeneration = 1
 

@@ -125,11 +125,13 @@ describe('createPtySubprocess', () => {
     const saved = {
       KINGU_PANE_KEY: process.env.KINGU_PANE_KEY,
       KINGU_TAB_ID: process.env.KINGU_TAB_ID,
-      KINGU_WORKTREE_ID: process.env.KINGU_WORKTREE_ID
+      KINGU_WORKTREE_ID: process.env.KINGU_WORKTREE_ID,
+      KINGU_WSL_CLI_DIR: process.env.KINGU_WSL_CLI_DIR
     }
     process.env.KINGU_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.KINGU_TAB_ID = 'parent-tab'
     process.env.KINGU_WORKTREE_ID = 'parent-worktree'
+    process.env.KINGU_WSL_CLI_DIR = 'C:/parent/wsl-managed-cli'
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -147,6 +149,7 @@ describe('createPtySubprocess', () => {
     expect(env.KINGU_PANE_KEY).toBeUndefined()
     expect(env.KINGU_TAB_ID).toBeUndefined()
     expect(env.KINGU_WORKTREE_ID).toBeUndefined()
+    expect(env.KINGU_WSL_CLI_DIR).toBeUndefined()
   })
 
   it('preserves explicit child Kingu pane identity over parent env', async () => {

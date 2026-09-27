@@ -28,7 +28,6 @@ export class KinguRuntimeWithWriteOrchestrationPointerPty extends KinguRuntimeWi
     return writeOrchestrationPointerWithSettlement({
       ptyId,
       data,
-      admissionByPtyId: this.orchestrationPointerAdmissionByPtyId,
       controller: this.ptyController
     })
   }

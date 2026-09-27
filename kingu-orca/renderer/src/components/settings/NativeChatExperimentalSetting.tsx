@@ -168,7 +168,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
-                    'When Kingu quits or installs an update, chats that were mid-turn are automatically resumed when Kingu is reopened.'
+                    'When Kingu quits or installs an update, chats that were working are automatically resumed when Kingu is reopened.'
                   )}
                 </p>
               </div>

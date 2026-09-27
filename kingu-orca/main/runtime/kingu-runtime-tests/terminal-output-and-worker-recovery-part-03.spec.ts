@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { KinguRuntimeService, getDefaultWorkspaceSession } from '../kingu-runtime-test-mocks.spec'
 import type { OrchestrationDb } from '../orchestration/db'
@@ -40,7 +41,7 @@ describe('KinguRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new KinguRuntimeService(
-      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -451,7 +452,7 @@ describe('KinguRuntimeService', () => {
       return durableWrite.promise
     })
     const runtime = new KinguRuntimeService(
-      { ...runtimeStore, flushPendingOrThrowAsync } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushPendingOrThrowAsync }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )

@@ -12,6 +12,8 @@ import {
 import { startKingudWithLifecycle } from './kingud-lifecycle'
 import { KingudBindAddressError } from './kingud-bind-address'
 import { KingudInstanceLockError } from './kingud-instance-lock'
+import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
+import { KingudBundledRuntimeError } from './kingud-bundled-runtime'
 
 describe('parseArgs', () => {
   it('accepts --bind and leaves it unset when absent', () => {
@@ -38,7 +40,13 @@ describe('resolveKingudExitCode', () => {
       resolveKingudExitCode(new KingudInstanceLockError('kingud_instance_lock_held', 'held'))
     ).toBe(KINGUD_EXIT_CONFIGURATION)
     expect(resolveKingudExitCode(new KingudBindAddressError('bad'))).toBe(KINGUD_EXIT_CONFIGURATION)
+    expect(resolveKingudExitCode(new ProfileStateAccessError('recovery interrupted'))).toBe(
+      KINGUD_EXIT_CONFIGURATION
+    )
     expect(resolveKingudExitCode(new Error('port in use'))).toBe(KINGUD_EXIT_FAILED)
+    expect(resolveKingudExitCode(new KingudBundledRuntimeError('partial installation'))).toBe(
+      KINGUD_EXIT_CONFIGURATION
+    )
     expect(KINGUD_EXIT_CONFIGURATION).not.toBe(KINGUD_EXIT_FAILED)
   })
 })
@@ -57,7 +65,7 @@ describe('kingud lifecycle cleanup', () => {
     ).rejects.toThrow('startup failed')
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
-    expect(cleanupHost).toHaveBeenCalledOnce()
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it('preserves the startup error when rollback also fails', async () => {
@@ -95,5 +103,18 @@ describe('kingud lifecycle cleanup', () => {
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
     expect(cleanupHost).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the host aware of failed runtime teardown so it cannot release profile admission', async () => {
+    const failure = new Error('profile writer still running')
+    const cleanupHost = vi.fn(async () => {})
+    const handle = await startKingudWithLifecycle(async (registerCleanup) => {
+      registerCleanup(async () => {
+        throw failure
+      })
+      return {}
+    }, cleanupHost)
+    await expect(handle.stop()).rejects.toBe(failure)
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(false)
   })
 })

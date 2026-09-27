@@ -20,6 +20,7 @@ import {
   posixProcessAliveShellFunction
 } from './kingud-remote-host-support'
 import type { ServeReadiness } from '../server/serve-readiness'
+import { selectKingudSlotRuntimeCommand } from './kingud-remote-runtime'
 
 /** Stdout of the launched candidate: exactly one `kingu_server_ready` line, then nothing. */
 export const KINGUD_READINESS_FILENAME = '.kingud-readiness'
@@ -59,13 +60,15 @@ export function kingudLaunchCommand(host: RemoteHostPlatform, spec: KingudLaunch
   const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, 'kingud.js'))
   return [
     `cd ${dir} &&`,
+    `${selectKingudSlotRuntimeCommand(host, spec.remoteInstallDir, spec.nodePath)} &&`,
     // Why truncate: a re-launch into a dir that already holds a previous readiness line would
     // otherwise let the deploy activate on the OLD process's health payload.
     `: > ${readiness} &&`,
     'umask 077 &&',
     `KINGU_VERSION=${shellEscape(spec.fullVersion)}`,
     `KINGU_USER_DATA=${shellEscape(spec.userDataDir)}`,
-    `nohup ${shellEscape(spec.nodePath)} ${entry}`,
+    // Keep $! equal to the runtime PID rather than a waiting shell's PID.
+    `exec nohup "$kingud_runtime" ${entry}`,
     `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &`,
     `echo $! > ${pidFile} && cat ${pidFile}`

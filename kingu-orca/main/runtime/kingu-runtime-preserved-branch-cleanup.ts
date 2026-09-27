@@ -113,6 +113,13 @@ export class KinguRuntimeWithPreservedBranchCleanup extends KinguRuntimeWithTerm
       }) => string | null | Promise<string | null>)
     | null
 
+  protected readonly resolveCodexStructuredLaunchHomeFn:
+    | ((input: {
+        workspacePath: string
+        launchEnv: NodeJS.ProcessEnv
+      }) => string | null | Promise<string | null>)
+    | null
+
   protected readonly agentSessionClaimSigner: AgentSessionClaimSigner
 
   protected readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()

@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
 import type {
@@ -33,8 +33,12 @@ import {
 import { getProfileUserDataPath } from '../kingu-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../kingu-profiles/profile-ui-scope'
 import { transferKinguProfileProject } from '../kingu-profiles/profile-project-transfer'
+import { transferActiveProfileProject } from '../kingu-profiles/profile-active-transfer'
 import { findKinguProfileProjectsByPath } from '../kingu-profiles/profile-project-presence'
-import { flushActiveProfileBeforeFileMutation } from '../kingu-profiles/profile-persistence-deadline'
+import {
+  flushActiveProfileBeforeFileMutation,
+  flushActiveProfileBeforeRelaunch
+} from '../kingu-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
   createCloudLinkedKinguProfile,
@@ -47,6 +51,7 @@ import {
 import { registerKinguProfileOrgMemberHandlers } from './kingu-profile-org-members-handlers'
 import { onKinguCloudSessionInvalidated } from '../kingu-profiles/profile-cloud-session-invalidation'
 import { broadcastKinguProfileAuthStatusChanged } from './kingu-profile-auth-status-broadcast'
+import { transferProjectArgsFromUnknown } from './kingu-profile-project-transfer-args'
 
 type RegisterKinguProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -55,38 +60,14 @@ type RegisterKinguProfileHandlersOptions = {
 }
 
 function profileIdFromArgs(args: unknown): string {
-  if (
-    !args ||
-    typeof args !== 'object' ||
-    typeof (args as SwitchKinguProfileArgs).profileId !== 'string'
-  ) {
-    throw new Error('invalid_kingu_profile_id')
-  }
-  const profileId = (args as SwitchKinguProfileArgs).profileId.trim()
+  const profileId =
+    args && typeof args === 'object' && 'profileId' in args && typeof args.profileId === 'string'
+      ? args.profileId.trim()
+      : ''
   if (!profileId) {
     throw new Error('invalid_kingu_profile_id')
   }
   return profileId
-}
-
-function transferProjectArgsFromUnknown(args: unknown): TransferKinguProfileProjectArgs {
-  if (!args || typeof args !== 'object') {
-    throw new Error('invalid_kingu_profile_project_transfer')
-  }
-  const candidate = args as TransferKinguProfileProjectArgs
-  const sourceProfileId = candidate.sourceProfileId?.trim()
-  const targetProfileId = candidate.targetProfileId?.trim()
-  const repoId = candidate.repoId?.trim()
-  const mode = candidate.mode
-  if (!sourceProfileId || !targetProfileId || !repoId || (mode !== 'move' && mode !== 'copy')) {
-    throw new Error('invalid_kingu_profile_project_transfer')
-  }
-  return {
-    sourceProfileId,
-    targetProfileId,
-    repoId,
-    mode
-  }
 }
 
 function findProjectsByPathArgsFromUnknown(args: unknown): FindKinguProfileProjectsByPathArgs {
@@ -157,7 +138,12 @@ async function runBeforeProfileRelaunch(
   }
 }
 
-function scheduleProfileRelaunch(reason: Extract<AppRelaunchReason, `profile-${string}`>): void {
+type ProfileRelaunchReason = Extract<AppRelaunchReason, `profile-${string}`>
+
+function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebContents): void {
+  if (!sender.isDestroyed()) {
+    sender.send('app:restart-committed')
+  }
   setTimeout(() => {
     relaunchApp(reason)
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
@@ -197,7 +183,7 @@ export function registerKinguProfileHandlers(
 
   ipcMain.handle(
     'kinguProfiles:switch',
-    async (_event, args: SwitchKinguProfileArgs): Promise<SwitchKinguProfileResult> => {
+    async (event, args: SwitchKinguProfileArgs): Promise<SwitchKinguProfileResult> => {
       const profileId = profileIdFromArgs(args)
       const current = getKinguProfileListState()
       if (profileId === current.activeProfileId) {
@@ -217,11 +203,12 @@ export function registerKinguProfileHandlers(
       }
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
-      await flushActiveProfileBeforeFileMutation(store)
-      await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+      // Switching leaves source files intact; relaunch cleanup still needs its live writer.
+      await flushActiveProfileBeforeRelaunch(store)
       setActiveKinguProfile(profileId)
+      await runBeforeProfileRelaunch(options.onBeforeRelaunch)
 
-      scheduleProfileRelaunch('profile-switch')
+      scheduleProfileRelaunch('profile-switch', event.sender)
 
       return { status: 'relaunching' }
     }
@@ -230,7 +217,7 @@ export function registerKinguProfileHandlers(
   ipcMain.handle(
     'kinguProfiles:transferProject',
     async (
-      _event,
+      event,
       rawArgs: TransferKinguProfileProjectArgs
     ): Promise<TransferKinguProfileProjectResult> => {
       const args = transferProjectArgsFromUnknown(rawArgs)
@@ -241,19 +228,37 @@ export function registerKinguProfileHandlers(
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
         // Why: transfer before any relaunch side effect so a duplicate-target
         // or validation failure cannot strand the app in a quitting state.
-        await flushActiveProfileBeforeFileMutation(store)
-        const result = transferKinguProfileProject(args, getProfileUserDataPath())
+        const result = await transferActiveProfileProject(
+          args,
+          getProfileUserDataPath(),
+          store,
+          async () => {
+            await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+            scheduleProfileRelaunch('profile-transfer', event.sender)
+          }
+        )
         if (result.status === 'transferred') {
-          store.freezeWrites()
           await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-          setActiveKinguProfile(args.targetProfileId)
-          scheduleProfileRelaunch('profile-transfer')
+          try {
+            setActiveKinguProfile(args.targetProfileId)
+          } finally {
+            // The source has already changed and its writer cannot resume.
+            scheduleProfileRelaunch('profile-transfer', event.sender)
+          }
           return { ...result, willRelaunch: true }
         }
         return result
       }
-      await flushActiveProfileBeforeFileMutation(store)
-      return transferKinguProfileProject(args, getProfileUserDataPath())
+      if (args.sourceProfileId !== current.activeProfileId) {
+        await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+        return transferKinguProfileProject(args, getProfileUserDataPath())
+      }
+      const maintenance = await flushActiveProfileBeforeFileMutation(store)
+      try {
+        return transferKinguProfileProject(args, getProfileUserDataPath())
+      } finally {
+        await maintenance.resume()
+      }
     }
   )
 
