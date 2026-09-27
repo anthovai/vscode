@@ -153,7 +153,8 @@ class SessionsSetUpWidget extends Disposable {
 	}
 
 	private _start(): void {
-		if (!this.productService.defaultChatAgent?.chatExtensionId) {
+		// Kingu: without GitHub Copilot there is no GitHub sign-in to set up; Arkai runs on the user's own models.
+		if (!this.productService.defaultChatAgent?.chatExtensionId || this.productService.kinguDisableCopilot) {
 			this.onCompleted();
 			return;
 		}

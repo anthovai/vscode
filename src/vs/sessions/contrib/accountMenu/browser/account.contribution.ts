@@ -13,6 +13,7 @@ import { IObservable, runOnChange } from '../../../../base/common/observable.js'
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuRegistry, registerAction2, IMenuService } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import product from '../../../../platform/product/common/product.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDefaultAccountService } from '../../../../platform/defaultAccount/common/defaultAccount.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -104,7 +105,8 @@ registerAction2(class extends Action2 {
 			icon: Codicon.signIn,
 			menu: {
 				id: AccountMenu,
-				when: ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
+				// Kingu: this is GitHub Copilot's sign-in; without Copilot, Arkai needs none.
+				when: product.kinguDisableCopilot ? ContextKeyExpr.false() : ContextKeyExpr.notEquals('defaultAccountStatus', 'available'),
 				group: '1_account',
 				order: 1,
 			}
@@ -591,7 +593,8 @@ class TitleBarAccountWidget extends BaseActionViewItem {
 			this.appendKinguAiAccount(identities, panelStore, 'claude');
 		}
 		let copilotSection: HTMLElement | undefined;
-		if (this.accountName || this.isAccountLoading) {
+		// Kingu: the GitHub Copilot account row goes with Copilot.
+		if (!product.kinguDisableCopilot && (this.accountName || this.isAccountLoading)) {
 			const copilotAccount = copilotSection = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
 				'aria-label': localize('copilotAccountSectionLabel', "Arkai account")
 			}));

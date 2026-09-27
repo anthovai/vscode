@@ -17,6 +17,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { CloudSandboxEnabledSettingId, isCloudSandboxEnabled } from '../../../../../platform/agentHost/common/cloudSandboxAgentHost.js';
 import { RemoteAgentHostsEnabledSettingId } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IChatEntitlementService } from '../../../../../workbench/services/chat/common/chatEntitlementService.js';
+import { IProductService } from '../../../../../platform/product/common/productService.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	id: 'sessions',
@@ -47,8 +48,14 @@ class DefaultSessionsProviderContribution extends Disposable implements IWorkben
 		@ISessionsProvidersService sessionsProvidersService: ISessionsProvidersService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IChatEntitlementService chatEntitlementService: IChatEntitlementService,
+		@IProductService productService: IProductService,
 	) {
 		super();
+
+		// Kingu: GitHub Copilot is left out of the product; its cloud sessions go with it.
+		if (productService.kinguDisableCopilot) {
+			return;
+		}
 
 		const provider = this._register(instantiationService.createInstance(CopilotChatSessionsProvider, 'default'));
 		this._register(sessionsProvidersService.registerProvider(provider));

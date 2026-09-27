@@ -14,6 +14,7 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILanguageModelsService, IUserFriendlyLanguageModel } from '../../chat/common/languageModels.js';
 import { KINGU_SETUP_COMMAND_ID, KINGU_VENDOR_ID, kinguVendorConfigurationSchema } from '../common/kinguLanguageModels.js';
+import { KinguArkaiAgentContribution } from './kinguArkaiAgent.js';
 import { KinguLanguageModelProvider } from './kinguLanguageModelProvider.js';
 import { runKinguSetupFlow } from './kinguSetupFlow.js';
 import '../common/kinguProductDefaults.js';
@@ -60,6 +61,8 @@ class KinguLanguageModelContribution extends Disposable {
 }
 
 registerWorkbenchContribution2(KinguLanguageModelContribution.ID, KinguLanguageModelContribution, WorkbenchPhase.BlockRestore);
+// Arkai answers chat in the place GitHub Copilot did, once Copilot is left out of the product.
+registerWorkbenchContribution2(KinguArkaiAgentContribution.ID, KinguArkaiAgentContribution, WorkbenchPhase.BlockRestore);
 
 /**
  * Adds a Kingu endpoint.

@@ -15,7 +15,7 @@ import { URI } from '../../../base/common/uri.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import * as os from 'os';
 import * as inspector from 'inspector';
-import { AgentHostClaudeAgentEnabledEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostIpcChannels, IAgentHostInspectInfo, IAgentHostSocketInfo, IConnectionTrackerService, isAgentEnabled } from '../common/agentService.js';
+import { AgentHostClaudeAgentEnabledEnvVar, AgentHostCodexAgentCodexHomeEnvVar, AgentHostCodexAgentEnabledEnvVar, AgentHostCopilotAgentEnabledEnvVar, AgentHostIpcChannels, IAgentHostInspectInfo, IAgentHostSocketInfo, IConnectionTrackerService, isAgentEnabled } from '../common/agentService.js';
 import { AgentHostCodexEnabledConfigKey, platformRootSchema } from '../common/agentHostSchema.js';
 import { AgentModelRefreshScheduler, MODEL_REFRESH_INTERVAL_MS } from './agentModelRefreshScheduler.js';
 import { AgentService } from './agentService.js';
@@ -165,7 +165,10 @@ async function startAgentHost(): Promise<void> {
 		// Kingu: Arkai, Kingu's own agent, on OMP. Registered first, so it is the host's default agent;
 		// offered even before OMP is installed, so its first turn can say how.
 		providerService.registerProvider(acpInstantiationService.createInstance(ArkaiAgent));
-		providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
+		// Kingu: GitHub Copilot only when asked for; Arkai takes its place.
+		if (isAgentEnabled(process.env[AgentHostCopilotAgentEnabledEnvVar], false)) {
+			providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
+		}
 		// Claude and Codex providers are gated on two things:
 		//  1. The user-facing enable toggle (`chat.agentHost.<x>Agent.enabled`,
 		//     forwarded as an env var by the starters). Claude defaults to on.

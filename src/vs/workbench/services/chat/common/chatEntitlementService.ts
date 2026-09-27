@@ -459,6 +459,12 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 			return; // we need a default chat agent configured going forward from here
 		}
 
+		// Kingu: no GitHub Copilot, so none of its sign-in, setup, entitlement or quota flows; Arkai needs none of them.
+		// The setup-hidden key stays unset, so the chat view still shows for Arkai.
+		if (productService.kinguDisableCopilot) {
+			return;
+		}
+
 		const context = this.context = new Lazy(() => this._register(instantiationService.createInstance(ChatEntitlementContext)));
 		this.requests = new Lazy(() => this._register(instantiationService.createInstance(ChatEntitlementRequests, context.value, {
 			clearQuotas: () => this.clearQuotas(),

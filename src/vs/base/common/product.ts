@@ -274,6 +274,13 @@ export interface IProductConfiguration {
 	readonly aiGeneratedWorkspaceTrust?: IAiGeneratedWorkspaceTrust;
 
 	readonly defaultChatAgent: IDefaultChatAgent;
+	/**
+	 * Kingu: GitHub Copilot is left out of the product. Its extensions are not
+	 * loaded and its sign-in, setup and quota flows stay off; Kingu's own agent,
+	 * Arkai, takes its place. `defaultChatAgent` stays, since code reads it
+	 * unconditionally.
+	 */
+	readonly kinguDisableCopilot?: boolean;
 	readonly chatParticipantRegistry?: string;
 	readonly chatSessionRecommendations?: IChatSessionRecommendation[];
 	readonly emergencyAlertUrl?: string;

@@ -230,6 +230,13 @@ export const AgentHostClaudeAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_CLAUDE_AGENT
  */
 export const AgentHostCodexAgentEnabledEnvVar = 'VSCODE_AGENT_HOST_CODEX_AGENT_ENABLED';
 
+/**
+ * Kingu: whether the agent host offers GitHub Copilot. Kingu's own agent is
+ * Arkai, so Copilot is off unless this is `'true'`; the code stays, so upstream
+ * merges keep applying.
+ */
+export const AgentHostCopilotAgentEnabledEnvVar = 'KINGU_AGENT_HOST_COPILOT_AGENT_ENABLED';
+
 /** Overrides the soft cap on resident session roots. Primarily used by integration tests. */
 export const AgentHostSessionResidencyLimitEnvVar = 'VSCODE_AGENT_HOST_SESSION_RESIDENCY_LIMIT';
 

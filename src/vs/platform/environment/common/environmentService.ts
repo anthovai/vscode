@@ -218,10 +218,13 @@ export abstract class AbstractNativeEnvironmentService implements INativeEnviron
 
 	get skipBuiltinExtensions(): readonly string[] {
 		const value = env['VSCODE_SKIP_BUILTIN_EXTENSIONS'];
-		if (!value) {
-			return [];
+		const skipped = value ? value.split(',').map(id => id.trim()).filter(id => id) : [];
+		// Kingu: GitHub Copilot is left out of the product; Arkai takes its place.
+		const chatAgent = this.productService.kinguDisableCopilot ? this.productService.defaultChatAgent : undefined;
+		if (chatAgent) {
+			skipped.push(...[chatAgent.extensionId, chatAgent.chatExtensionId].filter(id => !!id));
 		}
-		return value.split(',').map(id => id.trim()).filter(id => id);
+		return skipped;
 	}
 
 	@memoize
