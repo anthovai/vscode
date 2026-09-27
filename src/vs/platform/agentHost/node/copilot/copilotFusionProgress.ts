@@ -113,14 +113,6 @@ function phaseLabel(kind: FusionPhase['phaseKind'], pattern: FusionPhase['patter
 	}
 }
 
-function workflowDescription(pattern: FusionPhase['pattern']): string {
-	switch (pattern) {
-		case 'single': return localize('copilot.fusion.singleDescription', "Using Single: one solver will work on your request.");
-		case 'cascade': return localize('copilot.fusion.cascadeDescription', "Using Cascade: a solver will work on your request, then another model will review and fix up the result if needed.");
-		case 'critique': return localize('copilot.fusion.critiqueDescription', "Using Critique: a solver will draft a result, another model will critique it, and the original solver will revise it if needed.");
-	}
-}
-
 function milestone(summary: string, status: AgentFusionProgressStatus, details?: string, description?: string): SystemNotificationResponsePart {
 	const content = new MarkdownString().appendText(summary);
 	if (description) {
@@ -132,7 +124,11 @@ function milestone(summary: string, status: AgentFusionProgressStatus, details?:
 	return {
 		kind: ResponsePartKind.SystemNotification,
 		content: { markdown: content.value },
-		_meta: toAgentSystemNotificationMeta({ kind: AgentSystemNotificationKind.FusionProgress, fusionStatus: status }),
+		_meta: toAgentSystemNotificationMeta({
+			kind: AgentSystemNotificationKind.FusionProgress,
+			fusionStatus: status,
+			fusionDescription: status === 'selected' ? description ?? '' : undefined,
+		}),
 	};
 }
 
@@ -210,7 +206,7 @@ export class CopilotFusionProgress {
 				this._inFlight = true;
 				this._fusionId = d.fusionId;
 				this._patterns.set(d.fusionId, d.pattern);
-				part = milestone(localize('copilot.fusion.selected', "Selected {0} workflow", patternLabel(d.pattern)), 'selected', undefined, workflowDescription(d.pattern));
+				part = milestone(localize('copilot.fusion.selected', "Selected {0} workflow", patternLabel(d.pattern)), 'selected', undefined, d.hint);
 				this._activity = localize('copilot.fusion.preparing', "Preparing the {0} workflow...", patternLabel(d.pattern));
 				break;
 			}
@@ -277,14 +273,13 @@ export class CopilotFusionProgress {
 				const d = event.data;
 				this._finishedFusions.add(d.fusionId);
 				this._inFlight = false;
+				// The phase pills already show a clean run; only a fallback or an abnormal ending needs a row.
 				const degraded = d.outcome === 'degraded' || (d.degradedReason !== null && d.degradedReason !== undefined);
-				const summary = degraded
-					? localize('copilot.fusion.completedDegraded', "HydraFusion workflow completed with a fallback")
-					: d.outcome === 'completed'
-						? localize('copilot.fusion.completed', "HydraFusion workflow completed")
-						: localize('copilot.fusion.ended', "HydraFusion workflow ended: {0}", d.outcome);
-				const details = localize('copilot.fusion.duration', "Duration: {0}", getDurationString(d.durationMs));
-				part = milestone(summary, degraded || d.outcome !== 'completed' ? 'degraded' : 'completed', details);
+				if (degraded) {
+					part = milestone(localize('copilot.fusion.completedDegraded', "HydraFusion workflow completed with a fallback"), 'degraded');
+				} else if (d.outcome !== 'completed') {
+					part = milestone(localize('copilot.fusion.ended', "HydraFusion workflow ended: {0}", d.outcome), 'degraded');
+				}
 				this._phase = undefined;
 				this._activity = undefined;
 				break;

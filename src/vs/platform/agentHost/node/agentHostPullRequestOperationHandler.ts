@@ -5,6 +5,7 @@
 
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { equals } from '../../../base/common/objects.js';
+import { isEqualOrParent, relativePath } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { IAgentHostAuthenticationService } from './agentHostAuthenticationService.js';
@@ -25,10 +26,11 @@ import { IAgentBranchNameGenerator } from './shared/agentBranchNameGenerator.js'
 import { SessionConfigKey } from '../common/sessionConfigKeys.js';
 import { AgentMergeConfigKey, agentMergeRootConfigSchema, readAgentMergeFolderState, withAgentMergeFolderState } from '../common/agentMerge.js';
 import { IAgentConfigurationService } from './agentConfigurationService.js';
-import { createPullRequestDetailsResult, readPullRequestOperationMeta, readPullRequestValidationMeta, type IPullRequestContext, type IPullRequestCreateOptions } from '../common/meta/agentPullRequestOperationMeta.js';
+import { createPullRequestDetailsResult, readPullRequestConversationMeta, readPullRequestOperationMeta, readPullRequestValidationMeta, type IPullRequestContext, type IPullRequestCreateOptions } from '../common/meta/agentPullRequestOperationMeta.js';
 import { getAgentMergeConfiguration } from './agentMergeConfiguration.js';
-import { resolveChangesetOwnerScope, resolveGitHubStateFolder } from './agentHostBranchChangesetScope.js';
+import { isSessionChatInFolder, resolveChangesetOwnerScope, resolveGitHubStateFolder } from './agentHostBranchChangesetScope.js';
 import { AgentHostStateManager, IAgentHostStateManager } from './agentHostStateManager.js';
+import { getWorkingDirectoryKey } from '../common/agentHostWorkingDirectories.js';
 
 /**
  * Soft upper bound, in characters, for the conversation context fed to the
@@ -114,7 +116,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 	async prepare(params: InvokeChangesetOperationParams, token: CancellationToken): Promise<InvokeChangesetOperationResult> {
 		return this._withAbortSignal(token, async signal => {
 			const expectedContext = readPullRequestValidationMeta(params);
-			const { sessionUri, sourceUri, ownerUri, sessionState, workingDirectory, gitHubState, branchName, baseBranchName, authToken, preparationContext } = await this._resolveContext(params, token, expectedContext);
+			const { sessionUri, sourceUri, ownerUri, conversationState, workingDirectory, gitHubState, branchName, baseBranchName, authToken, preparationContext } = await this._resolveContext(params, token, expectedContext);
 			if (expectedContext) {
 				return {};
 			}
@@ -132,7 +134,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 			let description = '';
 			let generationError: string | undefined;
 			try {
-				({ title, description } = await this._generateTitleAndDescription(sessionState, branchName, baseBranchName, branchChanges, signal, token));
+				({ title, description } = await this._generateTitleAndDescription(conversationState, workingDirectory, branchName, baseBranchName, branchChanges, signal, token));
 			} catch (err) {
 				this._throwIfCancelled(token);
 				generationError = this._reportGenerationError(err);
@@ -200,6 +202,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		if (!workingDirectoryStr) {
 			throw new ProtocolError(JsonRpcErrorCodes.InternalError, `Changeset owner has no working directory: ${parsed.ownerUri}`);
 		}
+		const conversationState = this._getConversationState(sessionUri, workingDirectoryStr, readPullRequestConversationMeta(params)) ?? sessionState;
 
 		const gitHubFolder = resolveGitHubStateFolder(this._stateManager, parsed.ownerUri);
 		const gitHubState = readFolderGitHubState(this._stateManager.getSessionState(sessionUri)?._meta ?? sessionState._meta, gitHubFolder.folderKey);
@@ -262,9 +265,23 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 
 		return {
 			sessionUri, sourceUri: scope.sourceUri, ownerUri: parsed.ownerUri, isSessionGitHubFolder: gitHubFolder.isSessionFolder,
-			sessionState, workingDirectory, effectiveBaseBranch, gitState, branchName, baseBranchName, authToken,
+			sessionState, conversationState, workingDirectory, effectiveBaseBranch, gitState, branchName, baseBranchName, authToken,
 			gitHubState: repository, preparationContext,
 		};
+	}
+
+	/**
+	 * The conversation of the chat Create PR was opened from. Chats sharing a
+	 * folder share its changeset, whose representative chat may be a different
+	 * one. The client-named chat is used only when it is a chat of this session
+	 * working in the changeset's folder, and only for conversation context:
+	 * working directory, branches and Git stay folder-scoped.
+	 */
+	private _getConversationState(sessionUri: string, workingDirectory: string, requestedChat: string | undefined): ISessionWithDefaultChat | undefined {
+		if (!requestedChat || !isSessionChatInFolder(this._stateManager, sessionUri, requestedChat, getWorkingDirectoryKey(workingDirectory))) {
+			return undefined;
+		}
+		return this._getSessionState(requestedChat);
 	}
 
 	private _stalePreparationError(): ProtocolError {
@@ -281,7 +298,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		};
 		this._validateAgentMergeAvailable(options);
 		const context = await this._resolveContext(params, token, submitted?.expectedContext);
-		const { sessionUri, sourceUri, ownerUri, sessionState, workingDirectory, gitHubState, effectiveBaseBranch, baseBranchName, authToken } = context;
+		const { sessionUri, sourceUri, ownerUri, sessionState, conversationState, workingDirectory, gitHubState, effectiveBaseBranch, baseBranchName, authToken } = context;
 		let { gitState, branchName } = context;
 
 		if (submitted?.autoMergeMethod) {
@@ -307,7 +324,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 			try {
 				const generatedBranchName = await this._branchNameGenerator.generateBranchName({
 					sessionId: URI.parse(sessionUri).path.split('/').filter(Boolean).pop() ?? sessionUri,
-					message: sessionState.turns.find(turn => turn.message.text.trim())?.message.text,
+					message: conversationState.turns.find(turn => turn.message.text.trim())?.message.text,
 					githubToken: authToken,
 					signal,
 					branchPrefix: typeof branchPrefix === 'string' ? branchPrefix : undefined,
@@ -370,7 +387,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		let generated: { title: string; description: string } | undefined;
 		if (!submitted) {
 			try {
-				generated = await this._generateTitleAndDescription(sessionState, branchName, baseBranchName, branchChanges, signal, token);
+				generated = await this._generateTitleAndDescription(conversationState, workingDirectory, branchName, baseBranchName, branchChanges, signal, token);
 			} catch (err) {
 				this._throwIfCancelled(token);
 				this._reportGenerationError(err);
@@ -600,6 +617,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 	/** Generates from bounded conversation and file context; callers decide how to surface failures. */
 	private async _generateTitleAndDescription(
 		sessionState: ISessionWithDefaultChat,
+		workingDirectory: URI,
 		branchName: string,
 		base: string,
 		branchChanges: readonly ISessionFileDiff[],
@@ -613,7 +631,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		});
 
 		const conversation = buildConversationContext(sessionState.turns, { maxChars: MAX_PR_CONVERSATION_CONTEXT_CHARS });
-		const changeSummary = this._summarizeDiffsForPrompt(branchChanges);
+		const changeSummary = this._summarizeDiffsForPrompt(branchChanges, workingDirectory);
 		if (!conversation && !changeSummary) {
 			throw new Error(localize('agentHost.changeset.pr.generationNoContext', "There is no conversation or change context to generate a pull request title and description."));
 		}
@@ -700,7 +718,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		];
 	}
 
-	private _summarizeDiffsForPrompt(diffs: readonly ISessionFileDiff[]): string {
+	private _summarizeDiffsForPrompt(diffs: readonly ISessionFileDiff[], workingDirectory: URI): string {
 		const lines: string[] = [];
 		let length = 0;
 		for (const diff of diffs) {
@@ -715,7 +733,7 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 			} else if (before && after && before !== after) {
 				kind = 'Rename';
 			}
-			const line = `- ${kind}: ${this._displayUri(path)} (+${diff.diff?.added ?? 0} -${diff.diff?.removed ?? 0})`;
+			const line = `- ${kind}: ${this._displayUri(path, workingDirectory)} (+${diff.diff?.added ?? 0} -${diff.diff?.removed ?? 0})`;
 			lines.push(line);
 			// `+ 1` accounts for the newline that joins this line to the previous one.
 			length += line.length + (lines.length > 1 ? 1 : 0);
@@ -727,9 +745,18 @@ export class AgentHostPullRequestOperationHandler implements IChangesetOperation
 		return lines.join('\n');
 	}
 
-	private _displayUri(uri: string): string {
+	/**
+	 * Paths inside the repository are shown relative to it: absolute worktree
+	 * paths repeat a long prefix on every line, so far fewer files fit in the
+	 * bounded change summary and whole areas of the change could be cut off.
+	 */
+	private _displayUri(uri: string, workingDirectory: URI): string {
 		try {
 			const parsed = URI.parse(uri);
+			const relative = isEqualOrParent(parsed, workingDirectory) ? relativePath(workingDirectory, parsed) : undefined;
+			if (relative) {
+				return relative;
+			}
 			return parsed.scheme === 'file' ? parsed.fsPath : parsed.path || uri;
 		} catch {
 			return uri;

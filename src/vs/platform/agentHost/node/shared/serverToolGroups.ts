@@ -26,10 +26,10 @@ import { createKinguComputerServerToolGroup, type IKinguComputerToolAccessor } f
  * When omitted (the pure display path) the session group's `execute` is inert,
  * but its definitions and display remain available.
  */
-export function buildServerToolGroups(sessionAccessor?: ISessionServerToolAccessor, agentMergeAccessor?: IAgentMergeToolAccessor, artifactAccessor?: IArtifactServerToolAccessor, computerAccessor?: IKinguComputerToolAccessor): readonly IServerToolGroup[] {
+export function buildServerToolGroups(sessionAccessor?: ISessionServerToolAccessor, agentMergeAccessor?: IAgentMergeToolAccessor, artifactAccessor?: IArtifactServerToolAccessor, areAgentOrchestrationLimitsEnabled?: () => boolean, computerAccessor?: IKinguComputerToolAccessor): readonly IServerToolGroup[] {
 	return [
 		feedbackServerToolGroup,
-		createSessionServerToolGroup(sessionAccessor),
+		createSessionServerToolGroup(sessionAccessor, areAgentOrchestrationLimitsEnabled),
 		createAgentMergeServerToolGroup(agentMergeAccessor),
 		createArtifactServerToolGroup(artifactAccessor),
 		// Without an accessor this contributes its definitions and display and

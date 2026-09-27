@@ -66,6 +66,7 @@ import { join } from '../../../base/common/path.js';
 import ErrorTelemetry from '../../telemetry/node/errorTelemetry.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { AgentHostLaunchKindEnvVar, readAgentHostLaunchKind, type AgentHostLaunchKind } from '../common/agentHostTelemetry.js';
+import { markNodeCompileCacheReady } from '../../../base/node/nodeCompileCache.js';
 
 // Entry point for the agent host utility process.
 // Sets up IPC, logging, and registers agent providers (Copilot).
@@ -513,6 +514,7 @@ async function startAgentHost(): Promise<void> {
 		logService.error('Failed to start WebSocket server', err);
 	}).finally(() => {
 		agentService.markStartupComplete();
+		markNodeCompileCacheReady(message => logService.info(message));
 	});
 
 	process.once('exit', () => {
