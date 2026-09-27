@@ -1025,7 +1025,7 @@ suite('LocalAgentHostSessionsProvider', () => {
 		assert.deepStrictEqual(
 			provider.sessionTypes.map(t => ({ id: t.id, icon: t.icon.id, supportsWorktreeConfiguration: t.supportsWorktreeConfiguration })),
 			[
-				{ id: 'copilotcli', icon: 'copilot', supportsWorktreeConfiguration: true },
+				{ id: 'copilotcli', icon: 'github', supportsWorktreeConfiguration: true },
 				{ id: 'claude', icon: 'claude', supportsWorktreeConfiguration: false },
 				{ id: 'openai', icon: 'openai', supportsWorktreeConfiguration: false },
 				{ id: 'unknown-agent', icon: 'vm', supportsWorktreeConfiguration: false },
@@ -1145,7 +1145,7 @@ suite('LocalAgentHostSessionsProvider', () => {
 			provider.getSessions().map(s => ({ sessionType: s.sessionType, icon: s.icon.id })).sort((a, b) => a.sessionType.localeCompare(b.sessionType)),
 			[
 				{ sessionType: 'claude', icon: 'claude' },
-				{ sessionType: 'copilotcli', icon: 'copilot' },
+				{ sessionType: 'copilotcli', icon: 'github' },
 				{ sessionType: 'unknown-agent', icon: 'vm' },
 			],
 		);

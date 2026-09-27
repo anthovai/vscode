@@ -2357,7 +2357,7 @@ suite('CopilotAgent', () => {
 		}
 	});
 
-	test('advertises Copilot as its display name', async () => {
+	test('advertises GitHub Copilot as its display name', async () => {
 		const agent = createTestAgent(disposables);
 		try {
 			assert.deepStrictEqual({
@@ -2366,8 +2366,8 @@ suite('CopilotAgent', () => {
 			}, {
 				descriptor: {
 					provider: 'copilotcli',
-					displayName: 'Copilot',
-					description: 'Copilot SDK agent running in the local agent host process',
+					displayName: 'GitHub Copilot',
+					description: 'GitHub Copilot, optional: needs a GitHub account with Copilot',
 					capabilities: { multipleChats: { fork: true, sideChat: true } },
 				},
 				agentHostCapabilities: { workspaceConversion: true },

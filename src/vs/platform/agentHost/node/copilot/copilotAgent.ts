@@ -1382,8 +1382,9 @@ export class CopilotAgent extends Disposable implements IAgent {
 	getDescriptor(): IAgentDescriptor {
 		return {
 			provider: 'copilotcli',
-			displayName: 'Arkai',
-			description: localize('copilotAgent.description', "Arkai SDK agent running in the local agent host process"),
+			// Kingu: Arkai is Kingu's own agent now (on OMP); this is GitHub Copilot, optional, under its own name.
+			displayName: localize('kingu.githubCopilot.displayName', "GitHub Copilot"),
+			description: localize('kingu.githubCopilot.description', "GitHub Copilot, optional: needs a GitHub account with Copilot"),
 			capabilities: {
 				multipleChats: { fork: true, sideChat: true },
 				...(this._isMultiRootEnabled() ? { multipleWorkingDirectories: { immutablePrimary: true } } : {}),

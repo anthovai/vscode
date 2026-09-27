@@ -26,6 +26,7 @@ import { CopilotAgent } from './copilot/copilotAgent.js';
 import { ClaudeAgent } from './claude/claudeAgent.js';
 import { AcpAgent } from './acp/acpAgent.js';
 import { detectAcpAgentProfiles } from './acp/acpAgentProfiles.js';
+import { ArkaiAgent } from './acp/arkaiAgent.js';
 import { GeminiAgent } from './acp/geminiAgent.js';
 import { ClaudeSdkPackage } from './claude/claudeAgentSdkService.js';
 import { CodexAgent, CodexSdkPackage } from './codex/codexAgent.js';
@@ -159,9 +160,12 @@ async function startAgentHost(): Promise<void> {
 		const agentSdkDownloader = runtimeServices.agentSdkDownloader;
 		const providerService = runtimeServices.providerService;
 		sdkDownloadProgress = runtime.sdkDownloadProgress;
-		providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
-		// Kingu: ACP agents (Gemini and the rest) ask Jev through the windows.
+		// Kingu: ACP agents (Arkai, Gemini and the rest) ask Jev through the windows.
 		const acpInstantiationService = instantiationService.createChild(new ServiceCollection([IJevBridgeRegistry, jevBridgeRegistry]), disposables);
+		// Kingu: Arkai, Kingu's own agent, on OMP. Registered first, so it is the host's default agent;
+		// offered even before OMP is installed, so its first turn can say how.
+		providerService.registerProvider(acpInstantiationService.createInstance(ArkaiAgent));
+		providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
 		// Claude and Codex providers are gated on two things:
 		//  1. The user-facing enable toggle (`chat.agentHost.<x>Agent.enabled`,
 		//     forwarded as an env var by the starters). Claude defaults to on.
@@ -186,7 +190,8 @@ async function startAgentHost(): Promise<void> {
 		// Goose, Kimi, ...), each once its CLI is found on PATH. Registered as they
 		// are found, like Codex, so the host does not wait on their `--help`.
 		void detectAcpAgentProfiles(logService).then(profiles => {
-			for (const profile of profiles) {
+			// OMP is Arkai's engine, and is offered as Arkai rather than a second time under its own name.
+			for (const profile of profiles.filter(candidate => candidate.id !== 'omp')) {
 				providerService.registerProvider(acpInstantiationService.createInstance(AcpAgent, profile));
 			}
 		}, error => logService.warn('[ACP] could not look for agent CLIs', error));

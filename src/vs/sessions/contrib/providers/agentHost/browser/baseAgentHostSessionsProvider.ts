@@ -583,8 +583,9 @@ function toGitHubInfo(meta: SessionMeta | undefined, folderKey: string | undefin
 /** Copilot CLI session type */
 export const CopilotCLISessionType: ISessionType = {
 	id: 'copilotcli',
-	label: localize('copilotCLI', "Arkai"),
-	icon: Codicon.copilot,
+	// Kingu: GitHub Copilot under its own name and mark; the Copilot codicon draws Arkai's mark, and Arkai is Kingu's own agent.
+	label: localize('kingu.githubCopilot.sessionType', "GitHub Copilot"),
+	icon: Codicon.github,
 	supportsWorktreeConfiguration: true,
 	authRequirement: SessionTypeAuthRequirement.GitHub,
 };
@@ -3716,6 +3717,11 @@ export abstract class BaseAgentHostSessionsProvider extends Disposable implement
 
 		if (provider === 'openai' || provider.includes('codex')) {
 			return Codicon.openai;
+		}
+
+		// Kingu: Arkai, Kingu's own agent; the Copilot codicon draws Arkai's mark.
+		if (provider === 'arkai') {
+			return Codicon.copilot;
 		}
 
 		// Kingu: the Gemini agent (the user's Gemini CLI over ACP).

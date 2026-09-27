@@ -672,7 +672,7 @@ suite('RemoteAgentHostSessionsProvider', () => {
 		assert.deepStrictEqual(
 			provider.sessionTypes.map(t => ({ id: t.id, icon: t.icon.id })),
 			[
-				{ id: CopilotCLISessionType.id, icon: 'copilot' },
+				{ id: CopilotCLISessionType.id, icon: 'github' },
 				{ id: 'claude', icon: 'claude' },
 				{ id: 'openai', icon: 'openai' },
 				{ id: 'unknown-agent', icon: 'remote' },

@@ -27,6 +27,12 @@ import ts from 'typescript';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const NAME = 'Arkai';
 
+/**
+ * Messages that name GitHub Copilot the product and keep its name: since Arkai
+ * became Kingu's own agent (on OMP), Copilot is an optional agent beside it.
+ */
+const GITHUB_COPILOT_KEYS = new Set(['kingu.githubCopilot.displayName', 'kingu.githubCopilot.description', 'kingu.githubCopilot.sessionType']);
+
 /** The shown text with the new name: "GitHub Copilot" and "Copilot" as a word both become Arkai. */
 export function rename(text: string): string {
 	return text.replace(/\bGitHub Copilot\b/g, NAME).replace(/\bCopilot\b/g, NAME).replace(/\b([Aa]) Arkai\b/g, '$1n Arkai');
@@ -164,7 +170,7 @@ export function renameJsonFile(file: string, shown: (key: string | undefined) =>
 function main(): void {
 	let total = 0;
 	for (const file of files(path.join(ROOT, 'src', 'vs'), name => name.endsWith('.ts') && !name.endsWith('.d.ts') && !name.includes('.test.'))) {
-		const n = renameLocalizeMessages(file, /\bCopilot\b/, raw => rename(raw));
+		const n = renameLocalizeMessages(file, /\bCopilot\b/, (raw, key) => key !== undefined && GITHUB_COPILOT_KEYS.has(key) ? raw : rename(raw));
 		if (n) {
 			console.log(`${path.relative(ROOT, file)}: ${n}`);
 			total += n;
