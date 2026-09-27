@@ -80,8 +80,20 @@ export interface IAcpAgentProfile {
 	modelDisplayName?(model: IAcpModel): string;
 	/** Models the CLI runs by id without listing them. */
 	readonly extraModels?: readonly IAcpModel[];
+	/**
+	 * Models to offer before the CLI's own list is read, first the default:
+	 * reading it starts the CLI, which can take half a minute, and an agent
+	 * with no models is passed over when a new session picks one.
+	 */
+	readonly initialModels?: readonly IAcpModel[];
 	/** Where the CLI writes its own log, when it reports provider errors there rather than on stderr. */
 	readonly logDirectory?: string;
+	/**
+	 * What to say when a turn goes quiet with no error to explain it, in place
+	 * of the guess about rate limits; for an agent on a local model, which is
+	 * slow to load and to answer rather than limited.
+	 */
+	quietMessage?(seconds: number): string;
 }
 
 interface IToolState {
@@ -293,6 +305,9 @@ export class AcpAgent extends Disposable implements IAgent {
 	) {
 		super();
 		this.id = _profile.id;
+		if (_profile.initialModels?.length) {
+			this._models.set(_profile.initialModels.map(model => this._toModelInfo(model)), undefined);
+		}
 		queueMicrotask(() => { void this.refreshModels(); });
 	}
 
@@ -332,12 +347,7 @@ export class AcpAgent extends Disposable implements IAgent {
 			// The CLI's own current model first: the picker takes the first model as the default.
 			const current = session.models?.currentModelId ?? configOption?.currentValue;
 			const listed = [...available, ...extra].sort((a, b) => Number(b.modelId === current) - Number(a.modelId === current));
-			const models = (listed.length ? listed : [{ modelId: defaultModelId(this.id), name: localize('acp.defaultModel', "{0} (configured model)", this._profile.displayName) }]).map(model => ({
-				provider: this.id,
-				id: this._fromAcpModelId(model.modelId),
-				name: this._profile.modelDisplayName?.(model) ?? model.name,
-				supportsVision: true,
-			} satisfies IAgentModelInfo));
+			const models = (listed.length ? listed : [{ modelId: defaultModelId(this.id), name: localize('acp.defaultModel', "{0} (configured model)", this._profile.displayName) }]).map(model => this._toModelInfo(model));
 			this._logService.info(`[${this._profile.displayName}] Models refreshed. Count: ${models.length}, ${models.map(model => model.name).join(', ')}`);
 			this._models.set(models, undefined);
 		} catch (error) {
@@ -391,6 +401,15 @@ export class AcpAgent extends Disposable implements IAgent {
 	private _noteCapabilities(result: IAcpInitializeResult): void {
 		this._canLoadSessions = !!result.agentCapabilities?.loadSession;
 		this._authMethods = result.authMethods ?? [];
+	}
+
+	private _toModelInfo(model: IAcpModel): IAgentModelInfo {
+		return {
+			provider: this.id,
+			id: this._fromAcpModelId(model.modelId),
+			name: this._profile.modelDisplayName?.(model) ?? model.name,
+			supportsVision: true,
+		};
 	}
 
 	private _fromAcpModelId(modelId: string): string {
@@ -790,7 +809,7 @@ export class AcpAgent extends Disposable implements IAgent {
 			default:
 				content = hint
 					? localize('acp.stalledRetrying', "{0} has sent nothing for {1} seconds. Its CLI reports: {2}. It may keep retrying for several minutes; stop the turn to give up.", name, seconds, hint)
-					: localize('acp.stalled', "{0} has sent nothing for {1} seconds. Its CLI may be retrying after a rate limit or a used-up quota; stop the turn to give up, or keep waiting.", name, seconds);
+					: this._profile.quietMessage?.(seconds) ?? localize('acp.stalled', "{0} has sent nothing for {1} seconds. Its CLI may be retrying after a rate limit or a used-up quota; stop the turn to give up, or keep waiting.", name, seconds);
 		}
 		if (reason !== undefined && reason !== AcpStallReason.Working && hint) {
 			content = `${content} ${localize('acp.stalledReports', "Its CLI reports: {0}", hint)}`;

@@ -12,6 +12,7 @@ import type { AgentProvider } from '../../common/agent.js';
 import { IJevBridgeRegistry } from '../jevBridgeRegistry.js';
 import { AcpAgent, IAcpAgentProfile } from './acpAgent.js';
 import { resolveAcpCommand } from './acpClient.js';
+import { CHYLE_MODEL_ID, ensureChyleRuntime } from './chyleRuntime.js';
 
 export const ARKAI_AGENT_PROVIDER_ID: AgentProvider = 'arkai';
 
@@ -22,19 +23,48 @@ export const ARKAI_AGENT_PROVIDER_ID: AgentProvider = 'arkai';
  */
 export const ARKAI_OMP_PROFILE = 'kingu-arkai';
 
-/** Who Arkai is, added to OMP's own system prompt. */
-const ARKAI_IDENTITY = 'You are Arkai, the coding agent of Kingu. When asked who you are, say you are Arkai. You run on the models the user has set up: local models or their own AI accounts and keys.';
+/**
+ * Arkai's light mode: six tools, a short prompt of its own and no thinking,
+ * without OMP's skills, rules, language servers or extensions. OMP's own
+ * prompt is ~12k tokens, which a local model reads for minutes on every
+ * turn; this one is ~2.7k in all. Kept on one line with no shell characters,
+ * since on Windows the CLI may start through a `.cmd` shim.
+ */
+const ARKAI_TOOLS = 'read,write,edit,bash,grep,glob';
+const ARKAI_SYSTEM_PROMPT = [
+	'You are Arkai, the coding agent of Kingu. You work in the project directory of the user, with tools.',
+	'When asked who you are, say you are Arkai. Answer questions directly.',
+	'For a task: do it without asking for permission or confirmation.',
+	'Read the files you will edit before changing them.',
+	'Change files with the write or edit tool, never by describing the change.',
+	'Use paths relative to the project directory.',
+	'After changing code, run it or its tests with bash when a command for that exists, and fix what fails.',
+	'Keep changes to what was asked. Do not add files, dependencies or features that were not requested.',
+	'When done, reply with one or two sentences saying what you changed.',
+].join(' ');
 
-const ARKAI_PROFILE: IAcpAgentProfile = {
-	id: ARKAI_AGENT_PROVIDER_ID,
-	displayName: localize('arkai.displayName', "Arkai"),
-	description: localize('arkai.description', "Kingu's own agent, running on your local models or your own AI accounts"),
-	resolveCommand: () => resolveAcpCommand('omp', ['--profile', ARKAI_OMP_PROFILE, '--append-system-prompt', ARKAI_IDENTITY, 'acp']),
-	notInstalledMessage: localize('arkai.notInstalled', "Arkai's engine (OMP) is not installed. Install it with `bun install -g @oh-my-pi/pi-coding-agent`, then restart Kingu."),
-	// OMP signs in to each provider on its own, from keys in the environment or a login; a model without one fails its turn and says so.
-	signedOutMessage: async () => undefined,
-	logDirectory: join(homedir(), '.omp', 'profiles', ARKAI_OMP_PROFILE, 'logs'),
-};
+/** Where Arkai's OMP profile keeps its settings and provider file (`models.yml`). */
+const ARKAI_AGENT_DIR = join(homedir(), '.omp', 'profiles', ARKAI_OMP_PROFILE, 'agent');
+
+function arkaiProfile(logService: ILogService): IAcpAgentProfile {
+	return {
+		id: ARKAI_AGENT_PROVIDER_ID,
+		displayName: localize('arkai.displayName', "Arkai"),
+		description: localize('arkai.description', "Kingu's own agent, running on Chyle 1, your local models or your own AI accounts"),
+		resolveCommand: async () => {
+			// Chyle, Arkai's own model, needs no account: bring up its local server and gateway first.
+			await ensureChyleRuntime(ARKAI_AGENT_DIR, logService).catch(error => logService.warn(`[Chyle] ${error instanceof Error ? error.message : String(error)}`));
+			return resolveAcpCommand('omp', ['--profile', ARKAI_OMP_PROFILE, '--tools', ARKAI_TOOLS, '--no-skills', '--no-rules', '--no-lsp', '--no-extensions', '--thinking', 'off', '--system-prompt', ARKAI_SYSTEM_PROMPT, 'acp']);
+		},
+		notInstalledMessage: localize('arkai.notInstalled', "Arkai's engine (OMP) is not installed. Install it with `bun install -g @oh-my-pi/pi-coding-agent`, then restart Kingu."),
+		// OMP signs in to each provider on its own, from keys in the environment or a login; Chyle needs neither.
+		signedOutMessage: async () => undefined,
+		logDirectory: join(homedir(), '.omp', 'profiles', ARKAI_OMP_PROFILE, 'logs'),
+		// Chyle 1, Arkai's default (the profile's `modelRoles.default`), offered while OMP starts.
+		initialModels: [{ modelId: `chyle/${CHYLE_MODEL_ID}`, name: 'Chyle 1' }],
+		quietMessage: seconds => localize('arkai.quiet', "Arkai has sent nothing for {0} seconds. On Chyle 1, which runs on this computer, the first answer waits for the model to load and each answer comes whole rather than word by word; keep waiting, or stop the turn to give up.", seconds),
+	};
+}
 
 /**
  * Kingu: Arkai, Kingu's own agent. Its engine is OMP (oh-my-pi) over ACP
@@ -47,6 +77,6 @@ export class ArkaiAgent extends AcpAgent {
 		@INativeEnvironmentService environmentService: INativeEnvironmentService,
 		@IJevBridgeRegistry jev: IJevBridgeRegistry,
 	) {
-		super(ARKAI_PROFILE, logService, environmentService, jev);
+		super(arkaiProfile(logService), logService, environmentService, jev);
 	}
 }
