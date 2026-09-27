@@ -181,6 +181,11 @@ export class AcpClient extends Disposable {
 		this._register({ dispose: () => { void this.kill(); } });
 	}
 
+	/** The CLI's process id, for matching what it writes elsewhere (its log file names). */
+	get pid(): number | undefined {
+		return this._child.pid;
+	}
+
 	get exited(): boolean {
 		return this._exited;
 	}

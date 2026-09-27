@@ -36,6 +36,7 @@ import {
 	type IAgentModelInfo,
 	type IAgentResolveChatConfigParams,
 } from '../../common/agent.js';
+import { ACP_STALL_EVIDENCE_CHARS, ACP_STALL_QUESTIONS, acpOutputLines, acpRetryHint, AcpStallReason, acpStallReason, acpStallState } from '../../common/acpStall.js';
 import { PendingRequestRegistry } from '../../common/pendingRequestRegistry.js';
 import type { ResolveSessionConfigResult, SessionConfigCompletionsResult } from '../../common/state/protocol/commands.js';
 import type { AgentSelection, MessageAttachment, ModelSelection, ProtectedResourceMetadata, ToolDefinition } from '../../common/state/protocol/state.js';
@@ -55,6 +56,7 @@ import {
 	type Turn,
 } from '../../common/state/sessionState.js';
 import { ensureWorkspacelessScratchDir } from '../workspacelessScratchDir.js';
+import { IJevBridgeRegistry } from '../jevBridgeRegistry.js';
 import { ACP_AUTH_REQUIRED, AcpClient, AcpError, IAcpAuthMethod, IAcpConfigOption, IAcpInitializeResult, IAcpModel, IAcpNewSessionResult, IAcpPermissionRequest, IAcpSpawnCommand, IAcpToolCall, IAcpToolCallContent, AcpSessionUpdate } from './acpClient.js';
 
 /**
@@ -78,6 +80,8 @@ export interface IAcpAgentProfile {
 	modelDisplayName?(model: IAcpModel): string;
 	/** Models the CLI runs by id without listing them. */
 	readonly extraModels?: readonly IAcpModel[];
+	/** Where the CLI writes its own log, when it reports provider errors there rather than on stderr. */
+	readonly logDirectory?: string;
 }
 
 interface IToolState {
@@ -104,15 +108,15 @@ interface IActiveTurn {
 	lastActivity: number;
 	/** Whether the user has been told the CLI has gone quiet, since it last sent anything. */
 	stallNoticed: boolean;
-	/** The CLI's last stderr line about a retry, a rate limit or a quota. */
-	retryHint: string | undefined;
+	/** The CLI's latest stderr, kept as evidence for why it may go quiet. */
+	stderrTail: string;
 }
 
 /** How long a turn may go without a word from the CLI before the user is told why it may be waiting. */
 const STALL_NOTICE_MS = 45_000;
 
-/** A stderr line that explains a wait: a retry, a rate limit, or a quota. */
-const RETRY_HINT = /\b(429|retry|retrying|rate.?limit|quota|resource.?exhausted|overloaded|503|capacity)\b/i;
+/** How much of the newest file in a CLI's log directory is read as evidence, from the end. */
+const CLI_LOG_TAIL_BYTES = 16_000;
 
 interface IAcpChat {
 	readonly chat: URI;
@@ -285,6 +289,7 @@ export class AcpAgent extends Disposable implements IAgent {
 		private readonly _profile: IAcpAgentProfile,
 		@ILogService private readonly _logService: ILogService,
 		@INativeEnvironmentService private readonly _environmentService: INativeEnvironmentService,
+		@IJevBridgeRegistry private readonly _jev: IJevBridgeRegistry,
 	) {
 		super();
 		this.id = _profile.id;
@@ -609,9 +614,8 @@ export class AcpAgent extends Disposable implements IAgent {
 		});
 		client.onDidWriteStderr(chunk => {
 			const active = record.active;
-			const line = chunk.split(/\r?\n/).map(text => text.trim()).filter(text => RETRY_HINT.test(text)).pop();
-			if (active && line) {
-				active.retryHint = line.length > 300 ? `${line.slice(0, 300)}...` : line;
+			if (active) {
+				active.stderrTail = `${active.stderrTail}${chunk}`.slice(-ACP_STALL_EVIDENCE_CHARS);
 			}
 		});
 		client.onDidExit(({ code }) => {
@@ -696,7 +700,7 @@ export class AcpAgent extends Disposable implements IAgent {
 			record.workingDirectory = requested;
 		}
 		const id = turnId ?? generateUuid();
-		const active: IActiveTurn = { turnId: id, prompt, startedAt: Date.now(), markdownPartId: undefined, reasoningPartId: undefined, partCounter: 0, markdown: new Map(), tools: new Map(), cancelled: false, lastActivity: Date.now(), stallNoticed: false, retryHint: undefined };
+		const active: IActiveTurn = { turnId: id, prompt, startedAt: Date.now(), markdownPartId: undefined, reasoningPartId: undefined, partCounter: 0, markdown: new Map(), tools: new Map(), cancelled: false, lastActivity: Date.now(), stallNoticed: false, stderrTail: '' };
 		record.active = active;
 		const watchdog = setInterval(() => this._checkStall(record, active), 5_000);
 		record.summary ??= prompt.slice(0, 80);
@@ -736,18 +740,106 @@ export class AcpAgent extends Disposable implements IAgent {
 	 * A turn the CLI has gone quiet on: CLIs retry rate limits and quota
 	 * errors on their own, for minutes, with nothing on the protocol to say so.
 	 * The user is told once per silence, with the CLI's own words when it wrote
-	 * any, so a wait is not mistaken for work.
+	 * any (on stderr, or in its own log), so a wait is not mistaken for work.
+	 * With Jev on, the words are also classified, so the notice can say what
+	 * to do: wait out a rate limit, or switch model when a quota is used up.
 	 */
 	private _checkStall(record: IAcpChat, active: IActiveTurn): void {
 		if (active.cancelled || active.stallNoticed || record.active !== active || Date.now() - active.lastActivity < STALL_NOTICE_MS) {
 			return;
 		}
 		active.stallNoticed = true;
-		const seconds = Math.round((Date.now() - active.lastActivity) / 1000);
-		const content = active.retryHint
-			? localize('acp.stalledRetrying', "{0} has sent nothing for {1} seconds. Its CLI reports: {2}. It may keep retrying for several minutes; stop the turn to give up.", this._profile.displayName, seconds, active.retryHint)
-			: localize('acp.stalled', "{0} has sent nothing for {1} seconds. Its CLI may be retrying after a rate limit or a used-up quota; stop the turn to give up, or keep waiting.", this._profile.displayName, seconds);
+		void this._noticeStall(record, active);
+	}
+
+	private async _noticeStall(record: IAcpChat, active: IActiveTurn): Promise<void> {
+		const quietSince = active.lastActivity;
+		const lines = [...acpOutputLines(active.stderrTail), ...await this._readCliLog(active.startedAt, record.client?.pid)];
+		const hint = acpRetryHint(lines);
+		let reason: AcpStallReason | undefined;
+		if (lines.length) {
+			const seconds = Math.round((Date.now() - quietSince) / 1000);
+			reason = acpStallReason(await this._jev.decide({ state: acpStallState(this._profile.displayName, seconds, lines), questions: ACP_STALL_QUESTIONS }));
+		}
+		// The CLI may have spoken, or the turn ended, while the evidence was read.
+		if (active.cancelled || record.active !== active || active.lastActivity !== quietSince) {
+			return;
+		}
+		const name = this._profile.displayName;
+		const seconds = Math.round((Date.now() - quietSince) / 1000);
+		let content: string;
+		switch (reason) {
+			case AcpStallReason.QuotaExhausted:
+				content = localize('acp.stalledQuota', "{0} has sent nothing for {1} seconds: its model's quota looks used up. Retrying will not help until the quota resets; stop the turn and pick another model.", name, seconds);
+				break;
+			case AcpStallReason.RateLimited:
+				content = localize('acp.stalledRateLimited', "{0} has sent nothing for {1} seconds: it is being rate limited and is retrying on its own. It should carry on shortly; stop the turn to give up.", name, seconds);
+				break;
+			case AcpStallReason.SignedOut:
+				content = localize('acp.stalledSignedOut', "{0} has sent nothing for {1} seconds: its provider refuses its sign-in or API key. Stop the turn and sign in to {0} again.", name, seconds);
+				break;
+			case AcpStallReason.Network:
+				content = localize('acp.stalledNetwork', "{0} has sent nothing for {1} seconds: it cannot reach its provider. Check the network connection, or stop the turn.", name, seconds);
+				break;
+			case AcpStallReason.Overloaded:
+				content = localize('acp.stalledOverloaded', "{0} has sent nothing for {1} seconds: its provider is overloaded and it is retrying on its own. Stop the turn to give up, or pick another model.", name, seconds);
+				break;
+			case AcpStallReason.Working:
+				content = localize('acp.stalledWorking', "{0} has sent nothing for {1} seconds, but its output shows no error: it is probably still working.", name, seconds);
+				break;
+			default:
+				content = hint
+					? localize('acp.stalledRetrying', "{0} has sent nothing for {1} seconds. Its CLI reports: {2}. It may keep retrying for several minutes; stop the turn to give up.", name, seconds, hint)
+					: localize('acp.stalled', "{0} has sent nothing for {1} seconds. Its CLI may be retrying after a rate limit or a used-up quota; stop the turn to give up, or keep waiting.", name, seconds);
+		}
+		if (reason !== undefined && reason !== AcpStallReason.Working && hint) {
+			content = `${content} ${localize('acp.stalledReports', "Its CLI reports: {0}", hint)}`;
+		}
 		this._fire(record, { type: ActionType.ChatResponsePart, turnId: active.turnId, part: { kind: ResponsePartKind.SystemNotification, content } });
+	}
+
+	/**
+	 * The latest lines of the CLI's own log, for a CLI that keeps one: the newest
+	 * file in its log directory written since the turn began, preferring one
+	 * named after this CLI's process (OMP writes `omp.<date>.<pid>.log`), since
+	 * other runs of the same CLI share the directory.
+	 */
+	private async _readCliLog(since: number, pid: number | undefined): Promise<string[]> {
+		const directory = this._profile.logDirectory;
+		if (!directory) {
+			return [];
+		}
+		try {
+			const ownName = pid !== undefined ? new RegExp(`(^|\\D)${pid}(\\D|$)`) : undefined;
+			let newest: { path: string; mtime: number; size: number; own: boolean } | undefined;
+			for (const name of await fs.readdir(directory)) {
+				const path = join(directory, name);
+				const stat = await fs.stat(path);
+				if (!stat.isFile() || stat.mtimeMs < since) {
+					continue;
+				}
+				const own = !!ownName?.test(name);
+				if (!newest || Number(own) > Number(newest.own) || (own === newest.own && stat.mtimeMs > newest.mtime)) {
+					newest = { path, mtime: stat.mtimeMs, size: stat.size, own };
+				}
+			}
+			if (!newest) {
+				return [];
+			}
+			const handle = await fs.open(newest.path, 'r');
+			try {
+				const length = Math.min(newest.size, CLI_LOG_TAIL_BYTES);
+				const buffer = Buffer.alloc(length);
+				await handle.read(buffer, 0, length, newest.size - length);
+				// The first line is likely cut part way through; it is dropped.
+				return acpOutputLines(buffer.toString('utf8')).slice(length < newest.size ? 1 : 0);
+			} finally {
+				await handle.close();
+			}
+		} catch (error) {
+			this._logService.trace(`[${this._profile.displayName}] could not read the CLI's log: ${error instanceof Error ? error.message : String(error)}`);
+			return [];
+		}
 	}
 
 	/** The prompt as ACP content: the text, then attached files as links the CLI reads itself. */

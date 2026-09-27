@@ -23,6 +23,11 @@ export interface IAcpAgentCatalogEntry {
 	 * run, and signs in from its first screen.
 	 */
 	readonly loginArgs?: readonly string[];
+	/**
+	 * Where the CLI writes its own log, under the user's home, for a CLI that
+	 * reports retries and provider errors there rather than on stderr.
+	 */
+	readonly logDirectory?: string;
 }
 
 /**
@@ -44,7 +49,8 @@ export const ACP_AGENT_CATALOG: readonly IAcpAgentCatalogEntry[] = [
 	{ id: 'opencode2', displayName: 'OpenCode 2', executables: ['opencode2'], loginArgs: ['auth', 'login'], envAliases: { GOOGLE_GENERATIVE_AI_API_KEY: 'GEMINI_API_KEY' } },
 	{ id: 'mimo-code', displayName: 'MiMo Code', executables: ['mimo'] },
 	{ id: 'pi', displayName: 'Pi', executables: ['pi'] },
-	{ id: 'omp', displayName: 'OMP', executables: ['omp'] },
+	// OMP retries a provider's 429 every minute and says so only in its log.
+	{ id: 'omp', displayName: 'OMP', executables: ['omp'], loginArgs: ['login'], logDirectory: '.omp/logs' },
 	{ id: 'prime-agent', displayName: 'Prime Agent', executables: ['prime-agent'] },
 	{ id: 'antigravity', displayName: 'Antigravity', executables: ['agy'] },
 	{ id: 'aider', displayName: 'Aider', executables: ['aider'] },

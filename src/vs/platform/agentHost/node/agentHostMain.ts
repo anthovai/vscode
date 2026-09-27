@@ -31,6 +31,7 @@ import { ClaudeSdkPackage } from './claude/claudeAgentSdkService.js';
 import { CodexAgent, CodexSdkPackage } from './codex/codexAgent.js';
 import { createCodexProviderConfiguration } from './codex/codexProviderConfiguration.js';
 import { ByokLmBridgeRegistry } from './byokLmBridgeRegistry.js';
+import { IJevBridgeRegistry, JevBridgeRegistry } from './jevBridgeRegistry.js';
 import { IAgentHostProxyResolver } from './agentHostProxyResolver.js';
 import { IAgentSdkDownloader, type IAgentSdkDownloadProgress } from './agentSdkDownloader.js';
 import { IAgentHostProviderService } from './agentHostProviderService.js';
@@ -52,11 +53,13 @@ import { IProductService } from '../../product/common/productService.js';
 import { localize } from '../../../nls.js';
 import { IFileService } from '../../files/common/files.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import { ServiceCollection } from '../../instantiation/common/serviceCollection.js';
 import { createAgentHostRuntime, type IAgentHostRuntime } from './agentHostBootstrap.js';
 import { BANG_COMMAND_PREFIX } from './agentHostBangCommand.js';
 import { AgentHostClientFileSystemProvider } from '../common/agentHostClientFileSystemProvider.js';
 import { AGENT_CLIENT_SCHEME } from '../common/agentClientUri.js';
 import { AGENT_HOST_CLIENT_BYOK_LM_CHANNEL, createAgentHostClientByokLmConnection } from '../common/agentHostClientByokLmChannel.js';
+import { AGENT_HOST_CLIENT_JEV_CHANNEL, createAgentHostClientJevConnection } from '../common/agentHostClientJevChannel.js';
 import { AGENT_HOST_CLIENT_PROXY_CHANNEL, createAgentHostClientProxyConnection } from '../common/agentHostClientProxyChannel.js';
 import { join } from '../../../base/common/path.js';
 import ErrorTelemetry from '../../telemetry/node/errorTelemetry.js';
@@ -118,6 +121,8 @@ async function startAgentHost(): Promise<void> {
 	// after the block) can forward agent-SDK download progress to clients.
 	let sdkDownloadProgress: Event<IAgentSdkDownloadProgress> | undefined;
 	let byokLmBridgeRegistry: ByokLmBridgeRegistry;
+	// Kingu: ACP agents ask Jev through whichever window has it on.
+	const jevBridgeRegistry = new JevBridgeRegistry();
 	let proxyResolver!: IAgentHostProxyResolver;
 	const hostLaunchKind = readAgentHostLaunchKind(process.env[AgentHostLaunchKindEnvVar]);
 	try {
@@ -155,6 +160,8 @@ async function startAgentHost(): Promise<void> {
 		const providerService = runtimeServices.providerService;
 		sdkDownloadProgress = runtime.sdkDownloadProgress;
 		providerService.registerProvider(instantiationService.createInstance(CopilotAgent));
+		// Kingu: ACP agents (Gemini and the rest) ask Jev through the windows.
+		const acpInstantiationService = instantiationService.createChild(new ServiceCollection([IJevBridgeRegistry, jevBridgeRegistry]), disposables);
 		// Claude and Codex providers are gated on two things:
 		//  1. The user-facing enable toggle (`chat.agentHost.<x>Agent.enabled`,
 		//     forwarded as an env var by the starters). Claude defaults to on.
@@ -174,13 +181,13 @@ async function startAgentHost(): Promise<void> {
 		}
 		// Kingu: Gemini runs the user's own Gemini CLI over ACP; with no CLI
 		// installed it offers no models and stays unusable in the pickers.
-		providerService.registerProvider(instantiationService.createInstance(GeminiAgent));
+		providerService.registerProvider(acpInstantiationService.createInstance(GeminiAgent));
 		// Kingu: the ADE's other agents whose CLIs serve ACP (Qwen Code, OpenCode,
 		// Goose, Kimi, ...), each once its CLI is found on PATH. Registered as they
 		// are found, like Codex, so the host does not wait on their `--help`.
 		void detectAcpAgentProfiles(logService).then(profiles => {
 			for (const profile of profiles) {
-				providerService.registerProvider(instantiationService.createInstance(AcpAgent, profile));
+				providerService.registerProvider(acpInstantiationService.createInstance(AcpAgent, profile));
 			}
 		}, error => logService.warn('[ACP] could not look for agent CLIs', error));
 		// Codex registration is one-way (register-on-enable): the env-var toggle
@@ -290,6 +297,7 @@ async function startAgentHost(): Promise<void> {
 					const byokLmConnection = createAgentHostClientByokLmConnection(getChannel(AGENT_HOST_CLIENT_BYOK_LM_CHANNEL));
 					connectionStore.add(byokLmBridgeRegistry.register(clientId, byokLmConnection));
 				}
+				connectionStore.add(jevBridgeRegistry.register(clientId, createAgentHostClientJevConnection(getChannel(AGENT_HOST_CLIENT_JEV_CHANNEL))));
 				authorityRegistrations.set(connection, connectionStore);
 			};
 			localDataPlaneDisposables.add(server.onDidAddConnection(registerConnection));

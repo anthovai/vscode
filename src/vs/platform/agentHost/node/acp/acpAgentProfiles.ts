@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { spawn } from 'child_process';
+import { homedir } from 'os';
+import { join } from '../../../../base/common/path.js';
 import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../log/common/log.js';
 import { IAcpAgentProfile } from './acpAgent.js';
@@ -90,6 +92,7 @@ function profileFor(candidate: IAcpAgentCatalogEntry, executable: string, args: 
 			}
 			return { ...command, env };
 		},
+		logDirectory: candidate.logDirectory ? join(homedir(), candidate.logDirectory) : undefined,
 		notInstalledMessage: localize('acp.notInstalled', "The {0} CLI (`{1}`) is no longer on PATH. Install it again, then restart Kingu.", candidate.displayName, executable),
 		signedOutMessage: async authMethods => {
 			const ways = authMethods.map(method => method.description ? `${method.name}: ${method.description}` : method.name);

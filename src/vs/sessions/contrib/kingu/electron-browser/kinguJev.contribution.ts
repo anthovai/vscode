@@ -12,6 +12,7 @@ import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { AgentHostJevRequest, IAgentHostJevHandler } from '../../../../platform/agentHost/common/agentHostClientJevChannel.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { createDecorator, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
@@ -41,7 +42,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			type: 'boolean',
 			default: false,
 			scope: ConfigurationScope.APPLICATION,
-			markdownDescription: localize('kingu.jev.enabled', "Use TypeSafe's Jev to tell when an agent running in a terminal (Claude Code, Codex, …) is waiting for you, has finished, or has stopped on an error, and mark its terminal. When on, the most recent output of **agent terminals only** (up to a few thousand characters, after the output goes quiet) is sent to TypeSafe's API. Needs an API key: run **Kingu: Set Jev API Key**."),
+			markdownDescription: localize('kingu.jev.enabled', "Use TypeSafe's Jev to tell when an agent running in a terminal (Claude Code, Codex, …) is waiting for you, has finished, or has stopped on an error, and mark its terminal; and, when an agent CLI in a chat (OMP, OpenCode, Qwen Code, …) goes quiet, to say why (a used-up quota, a rate limit, a refused sign-in, …). When on, TypeSafe's API is sent the most recent output of **agent terminals only** (up to a few thousand characters, after the output goes quiet), and the latest error output of a quiet agent CLI (its stderr and its own log). Needs an API key: run **Kingu: Set Jev API Key**."),
 		},
 		[JEV_ENDPOINT_SETTING]: {
 			type: 'string',
@@ -309,6 +310,25 @@ class KinguJevService extends Disposable implements IKinguJevService {
 }
 
 registerSingleton(IKinguJevService, KinguJevService, InstantiationType.Delayed);
+
+/**
+ * Jev for the agent host: an ACP agent that has gone quiet in a chat asks why,
+ * from its CLI's latest error output. Answered only while Jev is on.
+ */
+class KinguAgentHostJevHandler implements IAgentHostJevHandler {
+
+	declare readonly _serviceBrand: undefined;
+
+	constructor(
+		@IKinguJevService private readonly _jevService: IKinguJevService,
+	) { }
+
+	async decide(request: AgentHostJevRequest): Promise<JevResult> {
+		return this._jevService.isActive ? await this._jevService.decide(request) : { ok: false, problem: 'no-key' };
+	}
+}
+
+registerSingleton(IAgentHostJevHandler, KinguAgentHostJevHandler, InstantiationType.Delayed);
 
 /** Brings the service up with the window, so terminals are watched from the start when Jev is on. */
 class KinguJevContribution extends Disposable {

@@ -79,8 +79,9 @@ export function parseJevResponse(body: unknown): JevResult {
 			parsed[key] = { type: 'choice', choice: answer.choice, confidence, probabilities: answer.probabilities };
 		} else if (answer.type === 'score' && isNumber(answer.score) && isProbabilities(answer.probabilities)) {
 			parsed[key] = { type: 'score', score: answer.score, confidence, probabilities: answer.probabilities };
-		} else if (answer.type === 'noul' && isNumber(answer.probability)) {
-			parsed[key] = { type: 'noul', probability: answer.probability, confidence };
+		} else if (answer.type === 'noul' && isNumber(answer.noul)) {
+			// The API names a yes/no answer's probability after its type: `{ "type": "noul", "noul": 0.95 }`.
+			parsed[key] = { type: 'noul', probability: answer.noul, confidence };
 		}
 	}
 	if (Object.keys(parsed).length === 0) {

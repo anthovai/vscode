@@ -7,6 +7,7 @@ import { localize } from '../../../../nls.js';
 import { INativeEnvironmentService } from '../../../environment/common/environment.js';
 import { ILogService } from '../../../log/common/log.js';
 import type { AgentProvider } from '../../common/agent.js';
+import { IJevBridgeRegistry } from '../jevBridgeRegistry.js';
 import { AcpAgent, IAcpAgentProfile } from './acpAgent.js';
 import { IAcpModel, resolveGeminiCommand } from './acpClient.js';
 import { readGeminiAuthStatus } from './geminiAuth.js';
@@ -62,7 +63,8 @@ export class GeminiAgent extends AcpAgent {
 	constructor(
 		@ILogService logService: ILogService,
 		@INativeEnvironmentService environmentService: INativeEnvironmentService,
+		@IJevBridgeRegistry jev: IJevBridgeRegistry,
 	) {
-		super(GEMINI_PROFILE, logService, environmentService);
+		super(GEMINI_PROFILE, logService, environmentService, jev);
 	}
 }

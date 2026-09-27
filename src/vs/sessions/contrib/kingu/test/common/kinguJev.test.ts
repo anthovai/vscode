@@ -25,7 +25,7 @@ suite('Kingu Jev', () => {
 			model: 'jev-1.13.0',
 			answers: {
 				status: { type: 'choice', choice: 'needs_input', confidence: 0.91, probabilities: { needs_input: 0.91, working: 0.09 } },
-				urgent: { type: 'noul', probability: 0.2, confidence: 0.8 },
+				urgent: { type: 'noul', noul: 0.2, confidence: 0.8 },
 				broken: { type: 'choice', choice: 7 },
 			},
 			usage: { input_tokens: 312, output_tokens: 0 },
