@@ -35,6 +35,12 @@ export const KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID = 'kingu.ai.signInInTermina
  */
 export const KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID = 'kingu.ai.chooseSignIn';
 
+/**
+ * `kingu.ai.arkaiUsage()`: what Arkai's own model (Chyle 1, on this computer)
+ * used today, as {@link IKinguAiUsage}; `undefined` before its first answer.
+ */
+export const KINGU_AI_ARKAI_USAGE_COMMAND_ID = 'kingu.ai.arkaiUsage';
+
 /** An ACP agent this machine runs, as the account panel shows it. */
 export interface IKinguAiAgentAccount {
 	readonly id: string;

@@ -100,6 +100,10 @@ export class KinguAiAccountsSection {
 				? localize('kingu.aiAccounts.signInTerminalHow', "Sign In opens a terminal running its own login.")
 				: localize('kingu.aiAccounts.signInHow', "Sign In runs its login and uses the new account.");
 		}
+		if (row.signIn === 'none') {
+			// Arkai on its own model: nothing to sign in to.
+			return;
+		}
 		const button = smallButton(card, row.signedIn ? 'ghost' : 'outline', row.signIn === 'terminal' ? 'square-terminal' : 'circle-user-round',
 			row.signedIn ? localize('kingu.aiAccounts.signInAgain', "Sign In Again") : localize('kingu.aiAccounts.signIn', "Sign In"),
 			() => void this._signIn(row), this._loading);

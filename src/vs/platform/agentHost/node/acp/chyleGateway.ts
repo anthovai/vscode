@@ -119,6 +119,14 @@ export interface IChyleGatewayOptions {
 	readonly onRepair?: (model: string, count: number) => void;
 	/** Awaited before each request is forwarded, while the model server is still starting. */
 	readonly upstreamReady?: () => Promise<unknown>;
+	/** Told the tokens each answered request used, as the model server counts them. */
+	readonly onUsage?: (usage: IChyleUsage) => void;
+}
+
+/** The tokens one request used. */
+export interface IChyleUsage {
+	readonly promptTokens: number;
+	readonly completionTokens: number;
 }
 
 /** Starts the gateway on 127.0.0.1:`port` (0 for any free port), in front of `upstream`. */
@@ -156,6 +164,10 @@ export async function startChyleGateway(upstream: string, port: number, options:
 				return;
 			}
 			const completion = JSON.parse(answer) as IChatCompletion;
+			const usage = completion.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+			if (usage) {
+				options.onUsage?.({ promptTokens: usage.prompt_tokens ?? 0, completionTokens: usage.completion_tokens ?? 0 });
+			}
 			const repaired = repairChyleCompletion(completion, tools);
 			if (repaired) {
 				options.onRepair?.(completion.model, repaired);

@@ -8,7 +8,7 @@ import { existsSync, promises as fs } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from '../../../../base/common/path.js';
 import { ILogService } from '../../../log/common/log.js';
-import { IChyleGateway, startChyleGateway } from './chyleGateway.js';
+import { IChyleGateway, IChyleUsage, startChyleGateway } from './chyleGateway.js';
 
 /**
  * Kingu: what Arkai needs to run on Chyle, its own model, on this machine:
@@ -126,11 +126,57 @@ async function ensureOllama(log: ILogService): Promise<boolean> {
 	return false;
 }
 
+/**
+ * Chyle's use today, `~/.arkai/usage.json`: what the Arkai status shows, since
+ * a local model has no account or limit to read one from.
+ * `{ "date": "YYYY-MM-DD", "promptTokens", "completionTokens", "requests" }`,
+ * started over each day.
+ */
+export const CHYLE_USAGE_FILE = join(homedir(), '.arkai', 'usage.json');
+
+interface IChyleDailyUsage {
+	readonly date: string;
+	readonly promptTokens: number;
+	readonly completionTokens: number;
+	readonly requests: number;
+}
+
+let usageWrites: Promise<void> = Promise.resolve();
+
+/** `YYYY-MM-DD` in local time, as "today" means to the user. */
+export function localDate(date: Date): string {
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** Adds a request's tokens to today's total; writes one at a time. */
+function recordUsage(usage: IChyleUsage): Promise<void> {
+	usageWrites = usageWrites.catch(() => undefined).then(async () => {
+		const today = localDate(new Date());
+		let current: IChyleDailyUsage | undefined;
+		try {
+			current = JSON.parse(await fs.readFile(CHYLE_USAGE_FILE, 'utf8')) as IChyleDailyUsage;
+		} catch {
+			current = undefined;
+		}
+		const base = current?.date === today ? current : { date: today, promptTokens: 0, completionTokens: 0, requests: 0 };
+		const next: IChyleDailyUsage = {
+			date: today,
+			promptTokens: base.promptTokens + usage.promptTokens,
+			completionTokens: base.completionTokens + usage.completionTokens,
+			requests: base.requests + 1,
+		};
+		await fs.mkdir(dirname(CHYLE_USAGE_FILE), { recursive: true });
+		await fs.writeFile(CHYLE_USAGE_FILE, JSON.stringify(next), 'utf8');
+	});
+	return usageWrites;
+}
+
 async function ensureGateway(ollama: Promise<boolean>, log: ILogService): Promise<IChyleGateway | undefined> {
 	try {
 		const gateway = await startChyleGateway(OLLAMA_URL, CHYLE_GATEWAY_PORT, {
 			onRepair: (model, count) => log.info(`[Chyle] gateway recovered ${count} tool call(s) ${model} wrote as text`),
 			upstreamReady: () => ollama,
+			onUsage: usage => { void recordUsage(usage).catch(error => log.trace(`[Chyle] could not record usage: ${error instanceof Error ? error.message : String(error)}`)); },
 		});
 		log.info(`[Chyle] gateway on http://127.0.0.1:${gateway.port} -> ${OLLAMA_URL}`);
 		return gateway;

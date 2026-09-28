@@ -673,6 +673,21 @@ export class ChatStatusDashboard extends DomWidget {
 
 	private renderKinguUsageRows(container: HTMLElement, rows: readonly IKinguAiAccountRow[]): void {
 		const now = Date.now();
+		// Arkai leads: Kingu's own agent, on Chyle 1 on this computer, whose use has no limit to near.
+		const arkai = rows.find(row => row.id === 'arkai');
+		if (arkai) {
+			const tokens = arkai.usage?.tokensToday ?? 0;
+			container.appendChild($('div.quota-indicator', undefined,
+				$('div.quota-title', undefined, $('span', undefined, arkai.label)),
+				$('div.quota-details', undefined,
+					$('div.quota-percentage', undefined,
+						$('span.quota-value', undefined, this.quotaCreditsFormatter.value.format(tokens)),
+						$('span.quota-value-suffix', undefined, localize('kingu.usage.tokensToday', "tokens today")),
+					),
+					$('span.quota-reset', undefined, localize('kingu.usage.noLimit', "No limit, on this computer")),
+				),
+			));
+		}
 		const limited = rows
 			.filter(row => row.signedIn && row.usage?.usedPercent !== undefined)
 			.sort((a, b) => (b.usage?.usedPercent ?? 0) - (a.usage?.usedPercent ?? 0));
@@ -699,7 +714,7 @@ export class ChatStatusDashboard extends DomWidget {
 				$('div.quota-bar', undefined, bit),
 			));
 		} else {
-			container.appendChild($('div.kingu-ai-usage-note', undefined, localize('kingu.usage.noLimits', "No AI account has reported a limit yet.")));
+			container.appendChild($('div.kingu-ai-usage-note', undefined, localize('kingu.usage.noLimits', "No other AI account has reported a limit yet.")));
 		}
 		container.appendChild($('div.kingu-ai-usage-note', undefined, summarizeKinguAiAccounts(rows)));
 

@@ -12,6 +12,7 @@ import { ServicesAccessor } from '../../../../platform/instantiation/common/inst
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { KINGU_ORCA_CHANNEL_NAME } from '../../../../platform/kinguOrca/common/kinguOrca.js';
 import { IKinguClaudeAccount, IKinguGeminiStatus, IKinguGeminiUsage, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService, ProgressLocation } from '../../../../platform/progress/common/progress.js';
@@ -20,6 +21,8 @@ import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/
 import { ACP_AGENT_CATALOG, acpAgentCatalogEntry, acpAgentLoginCommand } from '../../../../platform/agentHost/common/acpAgentCatalog.js';
 import { IAgentSdkSetupService } from '../../../services/agentHost/browser/agentSdkSetupService.js';
 import { ITerminalService } from '../../terminal/browser/terminal.js';
+import { IPathService } from '../../../services/path/common/pathService.js';
+import { joinPath } from '../../../../base/common/resources.js';
 import { agentSdkSetupSessionType } from '../../chat/browser/agentSessions/agentHost/agentHostSdkSetupNotification.js';
 import { hasAnyModelTargetingSessionType } from '../../chat/browser/agentSessions/sessionTypeAvailability.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
@@ -32,6 +35,7 @@ import {
 	isKinguAiProvider,
 	KINGU_AI_ACCOUNT_STATUS_COMMAND_ID,
 	KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID,
+	KINGU_AI_ARKAI_USAGE_COMMAND_ID,
 	KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID,
 	KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID,
 	KINGU_AI_PROVIDERS,
@@ -280,6 +284,25 @@ CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, async 
 	const entry = typeof agentId === 'string' ? acpAgentCatalogEntry(agentId) : undefined;
 	if (entry) {
 		await runInTerminal(accessor.get(ITerminalService), localize('kingu.ai.signInTerminal', "Sign in to {0}", entry.displayName), acpAgentLoginCommand(entry));
+	}
+});
+
+/**
+ * Chyle's use today, from the file the agent host's Chyle gateway keeps
+ * (`~/.arkai/usage.json`, see `chyleRuntime.ts`); nothing before its first
+ * answer of the day.
+ */
+CommandsRegistry.registerCommand(KINGU_AI_ARKAI_USAGE_COMMAND_ID, async (accessor: ServicesAccessor): Promise<IKinguAiUsage | undefined> => {
+	const fileService = accessor.get(IFileService);
+	const home = await accessor.get(IPathService).userHome();
+	try {
+		const content = await fileService.readFile(joinPath(home, '.arkai', 'usage.json'));
+		const usage = JSON.parse(content.value.toString()) as { date?: string; promptTokens?: number; completionTokens?: number };
+		const now = new Date();
+		const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+		return usage.date === today ? { tokensToday: (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0) } : { tokensToday: 0 };
+	} catch {
+		return { tokensToday: 0 };
 	}
 });
 

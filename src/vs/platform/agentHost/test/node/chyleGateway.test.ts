@@ -114,6 +114,14 @@ suite('chyleGateway', () => {
 		assert.deepStrictEqual({ askedBeforeReady, finish: JSON.parse((await answer).text).choices[0].finish_reason }, { askedBeforeReady: 0, finish: 'tool_calls' });
 	});
 
+	test('reports the tokens each answer used', async () => {
+		await gateway.close();
+		const usages: unknown[] = [];
+		gateway = await startChyleGateway(`http://127.0.0.1:${(upstream.address() as AddressInfo).port}`, 0, { onUsage: usage => usages.push(usage) });
+		await ask('/v1/chat/completions', { model: 'chyle-1-coder', messages: [], tools });
+		assert.deepStrictEqual(usages, [{ promptTokens: 10, completionTokens: 5 }]);
+	});
+
 	test('passes other requests through', async () => {
 		assert.deepStrictEqual(JSON.parse((await ask('/v1/models')).text), { data: [{ id: 'chyle-1-coder' }] });
 	});

@@ -10,6 +10,7 @@ import {
 	IKinguAiAgentAccount,
 	IKinguAiUsage,
 	KINGU_AI_ACCOUNT_STATUS_COMMAND_ID,
+	KINGU_AI_ARKAI_USAGE_COMMAND_ID,
 	KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID,
 	KINGU_AI_PROVIDERS,
 	kinguAiProviderLabel,
@@ -17,15 +18,15 @@ import {
 
 /** One AI on the Signed-in AI list, whatever kind of account it has. */
 export interface IKinguAiAccountRow {
-	/** `claude`, `codex`, `gemini`, or an ACP agent's id. */
+	/** `arkai`, `claude`, `codex`, `gemini`, or an ACP agent's id. */
 	readonly id: string;
 	readonly label: string;
 	readonly signedIn: boolean;
 	readonly email?: string;
 	readonly plan?: string;
 	readonly usage?: IKinguAiUsage;
-	/** How it signs in: through the ADE's login, or the agent CLI's own in a terminal. */
-	readonly signIn: 'provider' | 'terminal';
+	/** How it signs in: through the ADE's login, the agent CLI's own in a terminal, or not at all (Arkai, on its own model). */
+	readonly signIn: 'provider' | 'terminal' | 'none';
 }
 
 function relativeHours(resetsAt: number, now: number): string {
@@ -88,7 +89,10 @@ export async function loadKinguAiAccountRows(commandService: ICommandService): P
 	if (!CommandsRegistry.getCommand(KINGU_AI_ACCOUNT_STATUS_COMMAND_ID)) {
 		return [];
 	}
-	const [providers, agents] = await Promise.all([
+	const [arkai, providers, agents] = await Promise.all([
+		CommandsRegistry.getCommand(KINGU_AI_ARKAI_USAGE_COMMAND_ID)
+			? commandService.executeCommand<IKinguAiUsage>(KINGU_AI_ARKAI_USAGE_COMMAND_ID).then(usage => ({ usage }), () => ({ usage: undefined }))
+			: Promise.resolve(undefined),
 		Promise.all(KINGU_AI_PROVIDERS.map(async provider => {
 			const status = await commandService.executeCommand<IKinguAiAccountStatus>(KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, provider).catch(() => undefined);
 			return status ? { id: provider, label: kinguAiProviderLabel(provider), signedIn: status.signedIn, email: status.email, plan: status.plan, usage: status.usage, signIn: 'provider' as const } : undefined;
@@ -96,6 +100,8 @@ export async function loadKinguAiAccountRows(commandService: ICommandService): P
 		commandService.executeCommand<IKinguAiAgentAccount[]>(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID).catch(() => undefined),
 	]);
 	return [
+		// Arkai first: Kingu's own agent, on Chyle 1 on this computer, with no account or limit.
+		...(arkai ? [{ id: 'arkai', label: localize('kingu.aiAccounts.arkai', "Arkai (Chyle 1)"), signedIn: true, plan: localize('kingu.aiAccounts.arkaiPlan', "On this computer, no limit"), usage: arkai.usage, signIn: 'none' as const }] : []),
 		...providers.filter((row): row is NonNullable<typeof row> => !!row),
 		...(agents ?? []).map(agent => ({ id: agent.id, label: agent.displayName, signedIn: agent.signedIn, usage: agent.usage, signIn: 'terminal' as const })),
 	];

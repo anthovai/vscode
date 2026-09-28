@@ -58,6 +58,8 @@ import {
 import { ensureWorkspacelessScratchDir } from '../workspacelessScratchDir.js';
 import { IJevBridgeRegistry } from '../jevBridgeRegistry.js';
 import { ACP_AUTH_REQUIRED, AcpClient, AcpError, IAcpAuthMethod, IAcpConfigOption, IAcpInitializeResult, IAcpModel, IAcpNewSessionResult, IAcpPermissionRequest, IAcpSpawnCommand, IAcpToolCall, IAcpToolCallContent, AcpSessionUpdate } from './acpClient.js';
+import { createSchema, platformSessionSchema } from '../../common/agentHostSchema.js';
+import { SessionConfigKey } from '../../common/sessionConfigKeys.js';
 
 /**
  * What sets one ACP agent apart from another: its CLI, how its models are
@@ -1075,12 +1077,32 @@ export class AcpAgent extends Disposable implements IAgent {
 
 	respondToUserInputRequest(): void { }
 
+	/**
+	 * The platform's approval level and per-tool lists: every tool the CLI asks
+	 * about reaches the host as a pending confirmation, which the host answers
+	 * by them before asking the user, so the chat's permission picker works for
+	 * an ACP agent as it does for the others.
+	 */
 	async resolveChatConfig(params: IAgentResolveChatConfigParams): Promise<ResolveSessionConfigResult> {
-		return { schema: { type: 'object', properties: {} }, values: params.config ?? {} };
+		const schema = createSchema({
+			[SessionConfigKey.AutoApprove]: platformSessionSchema.definition[SessionConfigKey.AutoApprove],
+			[SessionConfigKey.Permissions]: platformSessionSchema.definition[SessionConfigKey.Permissions],
+		});
+		return {
+			schema: schema.toProtocol(),
+			// Permissions stay unset until the user allows a tool for the session.
+			values: schema.validateOrDefault(params.config, { [SessionConfigKey.AutoApprove]: 'default' }),
+		};
 	}
 
-	getInheritedChatConfig(): Record<string, unknown> | undefined {
-		return undefined;
+	getInheritedChatConfig(config: Readonly<Record<string, unknown>>): Record<string, unknown> | undefined {
+		const inherited: Record<string, unknown> = {};
+		for (const key of [SessionConfigKey.AutoApprove, SessionConfigKey.Permissions]) {
+			if (config[key] !== undefined) {
+				inherited[key] = config[key];
+			}
+		}
+		return Object.keys(inherited).length ? inherited : undefined;
 	}
 
 	async chatConfigCompletions(_params: IAgentChatConfigCompletionsParams): Promise<SessionConfigCompletionsResult> {
