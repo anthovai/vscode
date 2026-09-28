@@ -640,3 +640,37 @@
 		will-change: auto;
 	}
 }
+
+/* Kingu: Arkai works under its own mark, which breathes while it works. */
+
+.chat-working-logo.kingu-arkai-working > .chat-working-logo-face {
+	display: none;
+}
+
+.chat-working-logo.kingu-arkai-working > .kingu-arkai-working-mark {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	font-size: inherit;
+}
+
+.chat-working-logo.kingu-arkai-working.chat-working-logo-active > .kingu-arkai-working-mark {
+	animation: kingu-arkai-working 1.6s ease-in-out infinite;
+}
+
+.chat-working-logo.kingu-arkai-working.chat-working-logo-static > .kingu-arkai-working-mark {
+	animation: none;
+}
+
+@keyframes kingu-arkai-working {
+	0%, 100% { opacity: 0.45; transform: scale(0.88); }
+	50% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chat-working-logo.kingu-arkai-working.chat-working-logo-active > .kingu-arkai-working-mark {
+		animation: none;
+	}
+}

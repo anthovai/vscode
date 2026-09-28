@@ -50,6 +50,7 @@ import { isCompletionsEnabled } from '../../../../../editor/common/services/comp
 import { KINGU_AI_ACCOUNT_STATUS_COMMAND_ID } from '../../../kingu/common/kinguAiAccounts.js';
 import { formatKinguAiReset, formatKinguAiUsage, IKinguAiAccountRow, loadKinguAiAccountRows, summarizeKinguAiAccounts } from '../../../kingu/common/kinguAiAccountSummary.js';
 import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../../kingu/common/kinguOrcaSettingsCommands.js';
+import { KINGU_ARKAI_DAILY_TOKENS_SETTING } from '../../../kingu/common/kinguProductDefaults.js';
 
 const defaultChat = product.defaultChatAgent;
 const completionsConfigurationTargets = [
@@ -673,48 +674,31 @@ export class ChatStatusDashboard extends DomWidget {
 
 	private renderKinguUsageRows(container: HTMLElement, rows: readonly IKinguAiAccountRow[]): void {
 		const now = Date.now();
-		// Arkai leads: Kingu's own agent, on Chyle 1 on this computer, whose use has no limit to near.
+		// Arkai alone leads, as a share of the tokens it is given a day (Chyle 1
+		// has no limit of its own); every other AI is in the list below.
 		const arkai = rows.find(row => row.id === 'arkai');
 		if (arkai) {
 			const tokens = arkai.usage?.tokensToday ?? 0;
-			container.appendChild($('div.quota-indicator', undefined,
-				$('div.quota-title', undefined, $('span', undefined, arkai.label)),
-				$('div.quota-details', undefined,
-					$('div.quota-percentage', undefined,
-						$('span.quota-value', undefined, this.quotaCreditsFormatter.value.format(tokens)),
-						$('span.quota-value-suffix', undefined, localize('kingu.usage.tokensToday', "tokens today")),
-					),
-					$('span.quota-reset', undefined, localize('kingu.usage.noLimit', "No limit, on this computer")),
-				),
-			));
-		}
-		const limited = rows
-			.filter(row => row.signedIn && row.usage?.usedPercent !== undefined)
-			.sort((a, b) => (b.usage?.usedPercent ?? 0) - (a.usage?.usedPercent ?? 0));
-		const top = limited[0];
-		if (top?.usage?.usedPercent !== undefined) {
-			const percent = Math.min(100, Math.max(0, Math.round(top.usage.usedPercent)));
+			const budget = Math.max(1, this.configurationService.getValue<number>(KINGU_ARKAI_DAILY_TOKENS_SETTING) ?? 1_000_000);
+			const percent = Math.min(100, Math.round(tokens / budget * 100));
 			const bit = $('div.quota-bit');
-			bit.style.width = `${percent}%`;
+			bit.style.width = `${Math.min(100, tokens / budget * 100)}%`;
 			bit.classList.toggle('kingu-usage-warning', percent >= 75 && percent < 90);
 			bit.classList.toggle('kingu-usage-error', percent >= 90);
+			const midnight = new Date(now);
+			midnight.setHours(24, 0, 0, 0);
 			container.appendChild($('div.quota-indicator', undefined,
-				$('div.quota-title', undefined,
-					$('span', undefined, limited.length > 1
-						? localize('kingu.usage.closest', "{0} (closest to its limit)", top.label)
-						: top.label),
-				),
+				$('div.quota-title', undefined, $('span', undefined, arkai.label)),
 				$('div.quota-details', undefined,
 					$('div.quota-percentage', undefined,
 						$('span.quota-value', undefined, `${percent}%`),
 						$('span.quota-value-suffix', undefined, localize('kingu.usage.used', "used")),
 					),
-					$('span.quota-reset', undefined, formatKinguAiReset(top.usage, now) ?? ''),
+					$('span.quota-reset', undefined, formatKinguAiReset({ resetsAt: midnight.getTime() }, now) ?? ''),
 				),
 				$('div.quota-bar', undefined, bit),
 			));
-		} else {
-			container.appendChild($('div.kingu-ai-usage-note', undefined, localize('kingu.usage.noLimits', "No other AI account has reported a limit yet.")));
+			container.appendChild($('div.kingu-ai-usage-note', undefined, localize('kingu.usage.arkaiTokens', "{0} of {1} tokens today, on this computer", this.quotaCreditsFormatter.value.format(tokens), this.quotaCreditsFormatter.value.format(budget))));
 		}
 		container.appendChild($('div.kingu-ai-usage-note', undefined, summarizeKinguAiAccounts(rows)));
 

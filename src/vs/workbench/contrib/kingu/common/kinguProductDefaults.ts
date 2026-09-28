@@ -3,6 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
+import { localize } from '../../../../nls.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 
@@ -22,6 +23,8 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
  *   Local answers with the chat's own models, which were Copilot's and are
  *   none until the user adds some, while Arkai brings Chyle 1. Local still
  *   shows while no agent is registered yet, and can be turned back on.
+ * - A chat at work shows its working mark (Arkai's own for Arkai), not only
+ *   a shimmering line of text.
  */
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerDefaultConfigurations([{
 	overrides: {
@@ -34,5 +37,23 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		'workbench.activityBar.compact': true,
 		'chat.titleBar.signIn.enabled': false,
 		'chat.editor.localAgent.enabled': false,
+		'chat.experimental.persistentProgress': 'weave',
 	},
 }]);
+
+/** Setting: how many tokens a day Arkai's own model is given, the whole its usage meter measures. */
+export const KINGU_ARKAI_DAILY_TOKENS_SETTING = 'kingu.arkai.dailyTokens';
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	id: 'kingu.arkai',
+	title: localize('kingu.arkai.configuration', "Arkai"),
+	type: 'object',
+	properties: {
+		[KINGU_ARKAI_DAILY_TOKENS_SETTING]: {
+			type: 'number',
+			default: 1_000_000,
+			minimum: 1,
+			markdownDescription: localize('kingu.arkai.dailyTokens', "How many tokens a day Arkai's own model (Chyle 1, on this computer) is given. The Arkai status shows today's use as a share of it; nothing stops at the limit."),
+		},
+	},
+});

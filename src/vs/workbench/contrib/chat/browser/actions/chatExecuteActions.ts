@@ -543,12 +543,13 @@ export class OpenSessionTargetPickerAction extends Action2 {
 				{
 					id: MenuId.ChatInputSecondary,
 					order: 0,
+					// Kingu: shown once the chat has started too, disabled (the
+					// precondition), so the chat always says which AI it runs on.
 					when: ContextKeyExpr.and(
 						ChatContextKeys.enabled,
 						ChatContextKeys.location.isEqualTo(ChatAgentLocation.Chat),
 						ChatContextKeys.inQuickChat.negate(),
-						IsSessionsWindowContext.negate(),
-						ChatContextKeys.chatSessionIsEmpty),
+						IsSessionsWindowContext.negate()),
 					group: 'navigation',
 				},
 			]

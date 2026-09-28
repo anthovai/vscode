@@ -35,6 +35,10 @@ import { getChatWorkingProgressIcon, getCompactCodicon } from '../../chatIcons.j
 import { ChatWorkingProgressLogo } from '../chatWorkingLogo.js';
 import { autorun, observableFromEvent } from '../../../../../../base/common/observable.js';
 import { Link } from '../../../../../../platform/opener/browser/link.js';
+import { getChatSessionType } from '../../../common/model/chatUri.js';
+
+/** Arkai's agent-host session type; the Copilot codicon draws Arkai's mark in Kingu's icon theme. */
+const KINGU_ARKAI_SESSION_TYPE = 'agent-host-arkai';
 
 export class ChatProgressContentPart extends Disposable implements IChatContentPart {
 	public readonly domNode: HTMLElement;
@@ -452,6 +456,11 @@ export class ChatWorkingProgressContentPart extends ChatProgressContentPart impl
 			this.workingLogo = this._register(instantiationService.createInstance(ChatWorkingProgressLogo, isInsiders ? 'insider' : 'stable'));
 			this.workingLogo.domNode.classList.add('chat-working-logo-compact');
 			this.workingLogo.setActive(isActive);
+			// Kingu: Arkai works under its own mark; the other AIs keep the working logo.
+			if (getChatSessionType(context.element.sessionResource) === KINGU_ARKAI_SESSION_TYPE) {
+				this.workingLogo.domNode.classList.add('kingu-arkai-working');
+				append(this.workingLogo.domNode, $(`span.kingu-arkai-working-mark${ThemeIcon.asCSSSelector(Codicon.copilot)}`));
+			}
 			this.progressIconElement.appendChild(this.workingLogo.domNode);
 		}
 		this.explicitContent = explicitContent;
