@@ -37,6 +37,7 @@ import {
 	type IAgentResolveChatConfigParams,
 } from '../../common/agent.js';
 import { ACP_STALL_EVIDENCE_CHARS, ACP_STALL_QUESTIONS, acpOutputLines, acpRetryHint, AcpStallReason, acpStallReason, acpStallState } from '../../common/acpStall.js';
+import { withAgentModelDefaultMeta } from '../../common/meta/agentModelDefaultMeta.js';
 import { PendingRequestRegistry } from '../../common/pendingRequestRegistry.js';
 import type { ResolveSessionConfigResult, SessionConfigCompletionsResult } from '../../common/state/protocol/commands.js';
 import type { AgentSelection, MessageAttachment, ModelSelection, ProtectedResourceMetadata, ToolDefinition } from '../../common/state/protocol/state.js';
@@ -308,7 +309,7 @@ export class AcpAgent extends Disposable implements IAgent {
 		super();
 		this.id = _profile.id;
 		if (_profile.initialModels?.length) {
-			this._models.set(_profile.initialModels.map(model => this._toModelInfo(model)), undefined);
+			this._models.set(_profile.initialModels.map((model, index) => this._toModelInfo(model, index === 0)), undefined);
 		}
 		queueMicrotask(() => { void this.refreshModels(); });
 	}
@@ -349,7 +350,7 @@ export class AcpAgent extends Disposable implements IAgent {
 			// The CLI's own current model first: the picker takes the first model as the default.
 			const current = session.models?.currentModelId ?? configOption?.currentValue;
 			const listed = [...available, ...extra].sort((a, b) => Number(b.modelId === current) - Number(a.modelId === current));
-			const models = (listed.length ? listed : [{ modelId: defaultModelId(this.id), name: localize('acp.defaultModel', "{0} (configured model)", this._profile.displayName) }]).map(model => this._toModelInfo(model));
+			const models = (listed.length ? listed : [{ modelId: defaultModelId(this.id), name: localize('acp.defaultModel', "{0} (configured model)", this._profile.displayName) }]).map(model => this._toModelInfo(model, model.modelId === current));
 			this._logService.info(`[${this._profile.displayName}] Models refreshed. Count: ${models.length}, ${models.map(model => model.name).join(', ')}`);
 			this._models.set(models, undefined);
 		} catch (error) {
@@ -405,12 +406,14 @@ export class AcpAgent extends Disposable implements IAgent {
 		this._authMethods = result.authMethods ?? [];
 	}
 
-	private _toModelInfo(model: IAcpModel): IAgentModelInfo {
+	/** `isDefault`: the model the CLI starts on, which the picker opens on. */
+	private _toModelInfo(model: IAcpModel, isDefault = false): IAgentModelInfo {
 		return {
 			provider: this.id,
 			id: this._fromAcpModelId(model.modelId),
 			name: this._profile.modelDisplayName?.(model) ?? model.name,
 			supportsVision: true,
+			...(isDefault ? { _meta: withAgentModelDefaultMeta(undefined) } : {}),
 		};
 	}
 

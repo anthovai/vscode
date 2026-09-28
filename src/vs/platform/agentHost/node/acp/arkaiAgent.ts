@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { promises as fs } from 'fs';
 import { homedir } from 'os';
 import { join } from '../../../../base/common/path.js';
 import { localize } from '../../../../nls.js';
@@ -55,6 +56,26 @@ export function arkaiEnginePath(appRoot: string): string {
 	return join(appRoot, 'arkai-engine', process.platform === 'win32' ? 'omp.exe' : 'omp');
 }
 
+/**
+ * Arkai's OMP extensions, beside its engine: goose's features ported to OMP
+ * (the arkai repo's packages/extensions). `security.ts` keeps commands such as
+ * `rm -rf /` or `curl … | sh` from running, whatever the permission mode.
+ * They load under `--no-extensions`, which only turns off discovered ones.
+ */
+const ARKAI_EXTENSIONS = ['security.ts'];
+
+/** `--extension` for each of Arkai's extensions that is there. */
+async function arkaiExtensionArgs(appRoot: string): Promise<string[]> {
+	const args: string[] = [];
+	for (const name of ARKAI_EXTENSIONS) {
+		const file = join(appRoot, 'arkai-engine', 'extensions', name);
+		if (await fs.stat(file).then(stat => stat.isFile(), () => false)) {
+			args.push('--extension', file);
+		}
+	}
+	return args;
+}
+
 function arkaiProfile(logService: ILogService, appRoot: string): IAcpAgentProfile {
 	let reported = false;
 	return {
@@ -64,12 +85,12 @@ function arkaiProfile(logService: ILogService, appRoot: string): IAcpAgentProfil
 		resolveCommand: async () => {
 			// Chyle, Arkai's own model, needs no account: bring up its local server and gateway first.
 			await ensureChyleRuntime(ARKAI_AGENT_DIR, logService).catch(error => logService.warn(`[Chyle] ${error instanceof Error ? error.message : String(error)}`));
-			const args = ['--profile', ARKAI_OMP_PROFILE, '--tools', ARKAI_TOOLS, '--no-skills', '--no-rules', '--no-lsp', '--no-extensions', '--thinking', 'off', '--system-prompt', ARKAI_SYSTEM_PROMPT, 'acp'];
+			const args = ['--profile', ARKAI_OMP_PROFILE, '--tools', ARKAI_TOOLS, '--no-skills', '--no-rules', '--no-lsp', '--no-extensions', ...await arkaiExtensionArgs(appRoot), '--thinking', 'off', '--system-prompt', ARKAI_SYSTEM_PROMPT, 'acp'];
 			// Kingu's own build of the engine first; an OMP the user installed otherwise.
 			const command = await resolveAcpExecutable(arkaiEnginePath(appRoot), args) ?? await resolveAcpCommand('omp', args);
 			if (command && !reported) {
 				reported = true;
-				logService.info(`[Arkai] engine: ${command.command}`);
+				logService.info(`[Arkai] engine: ${command.command}; extensions: ${command.args.filter((_, index) => command.args[index - 1] === '--extension').join(', ') || 'none'}`);
 			}
 			return command;
 		},

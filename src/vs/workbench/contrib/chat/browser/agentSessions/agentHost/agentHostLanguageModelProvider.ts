@@ -13,9 +13,11 @@ import { COPILOT_HYDRA_FUSION_MODEL_ID } from '../../../../../../platform/agentH
 import { ConfigSchema, SessionModelInfo } from '../../../../../../platform/agentHost/common/state/sessionState.js';
 import { readAgentModelPricingMeta } from '../../../../../../platform/agentHost/common/agentModelPricing.js';
 import { readAgentModelByokIdentifier } from '../../../../../../platform/agentHost/common/agentModelByokMeta.js';
+import { readAgentModelDefaultMeta } from '../../../../../../platform/agentHost/common/meta/agentModelDefaultMeta.js';
 import { readAgentModelGroupId, readAgentModelSourceId } from '../../../../../../platform/agentHost/common/agentModelSource.js';
 import { getReasoningEffortDescription, getReasoningEffortLabel } from '../../../../../../platform/agentHost/common/reasoningEffort.js';
 import { nullExtensionDescription } from '../../../../../services/extensions/common/extensions.js';
+import { ChatAgentLocation } from '../../../common/constants.js';
 import { AUTO_RAW_MODEL_ID, COPILOT_VENDOR_ID, ILanguageModelChatMetadata, ILanguageModelChatMetadataAndIdentifier, ILanguageModelChatProvider, ILanguageModelConfigurationSchema, ILanguageModelsService } from '../../../common/languageModels.js';
 
 /**
@@ -129,7 +131,8 @@ export class AgentHostLanguageModelProvider extends Disposable implements ILangu
 						maxInputTokens,
 						maxOutputTokens,
 						maxContextWindowTokens: m.maxContextWindow ?? known?.maxContextWindowTokens,
-						isDefaultForLocation: {},
+						// Kingu: the model the agent starts on (an ACP CLI's current model), so the picker opens on it.
+						isDefaultForLocation: readAgentModelDefaultMeta(m) ? { [ChatAgentLocation.Chat]: true } : {},
 						isUserSelectable: true,
 						statusIcon: notices?.rowWarning ? Codicon.warning : undefined,
 						warningText: notices?.warningText,

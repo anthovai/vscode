@@ -13,6 +13,10 @@
 // The fork is `../arkai-upstream/oh-my-pi` unless ARKAI_OMP_FORK names it. Its
 // build embeds the native addon, so the one file is all Arkai needs; on first
 // run it unpacks the addon under `~/.omp/natives`.
+//
+// Arkai's OMP extensions (goose's features, from the arkai repo's
+// packages/extensions; `../arkai` unless ARKAI_REPO names it) go to
+// `arkai-engine/extensions/`, which the engine runs as TypeScript.
 
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -25,6 +29,7 @@ const cli = path.join(fork, 'packages', 'coding-agent');
 const binary = process.platform === 'win32' ? 'omp.exe' : 'omp';
 const built = path.join(cli, 'dist', binary);
 const target = path.join(root, 'arkai-engine');
+const extensions = path.join(path.resolve(process.env.ARKAI_REPO ?? path.join(root, '..', 'arkai')), 'packages', 'extensions', 'src');
 
 function run(command, args, cwd) {
 	return execFileSync(command, args, { cwd, stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim();
@@ -44,11 +49,23 @@ if (!fs.existsSync(built)) {
 }
 
 fs.mkdirSync(target, { recursive: true });
-fs.copyFileSync(built, path.join(target, binary));
+const copied = path.join(target, binary);
+const same = (a, b) => fs.existsSync(b) && fs.statSync(a).size === fs.statSync(b).size && fs.statSync(a).mtimeMs <= fs.statSync(b).mtimeMs;
+// An unchanged engine is left as it is: it may be running.
+if (!same(built, copied)) {
+	fs.copyFileSync(built, copied);
+}
+fs.rmSync(path.join(target, 'extensions'), { recursive: true, force: true });
+if (fs.existsSync(extensions)) {
+	fs.cpSync(extensions, path.join(target, 'extensions'), { recursive: true, filter: source => fs.statSync(source).isDirectory() || source.endsWith('.ts') });
+} else {
+	console.warn(`[arkai-engine] no Arkai extensions at ${extensions}; set ARKAI_REPO to the arkai checkout.`);
+}
 const engine = {
 	source: 'anthovai/oh-my-pi',
 	commit: run('git', ['rev-parse', 'HEAD'], fork),
 	version: run(path.join(target, binary), ['--version'], target),
+	extensions: fs.existsSync(extensions) ? { commit: run('git', ['rev-parse', 'HEAD'], extensions), files: fs.readdirSync(path.join(target, 'extensions')) } : undefined,
 };
 fs.writeFileSync(path.join(target, 'engine.json'), `${JSON.stringify(engine, undefined, '\t')}\n`);
 console.log(`[arkai-engine] ${engine.version} (${engine.commit.slice(0, 7)}) -> ${path.join(target, binary)}`);

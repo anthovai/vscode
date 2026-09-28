@@ -9,7 +9,9 @@ import { Codicon } from '../../../../../../base/common/codicons.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { upcastPartial } from '../../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
+import { withAgentModelDefaultMeta } from '../../../../../../platform/agentHost/common/meta/agentModelDefaultMeta.js';
 import { SessionModelInfo } from '../../../../../../platform/agentHost/common/state/sessionState.js';
+import { ChatAgentLocation } from '../../../common/constants.js';
 import { ILanguageModelChatMetadata } from '../../../common/languageModels.js';
 import { AgentHostLanguageModelProvider } from '../../../browser/agentSessions/agentHost/agentHostLanguageModelProvider.js';
 
@@ -23,6 +25,16 @@ suite('AgentHostLanguageModelProvider', () => {
 	function createProvider(): AgentHostLanguageModelProvider {
 		return store.add(new AgentHostLanguageModelProvider('agent-host-copilotcli', 'copilotcli'));
 	}
+
+	test('declares the model the agent starts on as the default, not the first by name', async () => {
+		const provider = createProvider();
+		provider.updateModels([makeModel('antigravity-preview'), makeModel('chyle/chyle-1-coder', withAgentModelDefaultMeta(undefined))]);
+		const models = await provider.provideLanguageModelChatInfo({}, CancellationToken.None);
+		assert.deepStrictEqual(models.map(model => [model.metadata.id, model.metadata.isDefaultForLocation]), [
+			['antigravity-preview', {}],
+			['chyle/chyle-1-coder', { [ChatAgentLocation.Chat]: true }],
+		]);
+	});
 
 	test('groups the Auto routing-profile picker where thinking level renders for other models', async () => {
 		const provider = createProvider();
