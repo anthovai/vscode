@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { app, BrowserWindow, session, WebContents, WebContentsView } from 'electron';
-import { promises as fs } from 'fs';
+import { existsSync, promises as fs } from 'fs';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, extname, join, sep } from '../../../base/common/path.js';
@@ -153,8 +153,18 @@ let orcaView: WebContentsView | undefined;
  * paths or the network layer is not.
  */
 function outDirectory(): string {
-	// out/vs/platform/kinguOrca/electron-main → out
-	return join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', 'out-kingu-orca');
+	// Found by walking up: from `out/vs/platform/kinguOrca/electron-main/` in a
+	// dev build, from `out/main.js`, where this module is bundled, in a built
+	// product (`resources/app/`).
+	const start = dirname(fileURLToPath(import.meta.url));
+	for (let directory = start, parent = dirname(directory); ; directory = parent, parent = dirname(directory)) {
+		if (existsSync(join(directory, 'out-kingu-orca'))) {
+			return join(directory, 'out-kingu-orca');
+		}
+		if (parent === directory) {
+			return join(start, '..', '..', '..', '..', '..', 'out-kingu-orca');
+		}
+	}
 }
 
 /** `kingu-orca/`, the vendored stand-in for the ADE's repository root. */

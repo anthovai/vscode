@@ -300,6 +300,17 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				'node_modules/zod/**'
 			], 'node_modules.asar'));
 
+		// Kingu: the vendored ADE (`npm run build-kingu-orca`), found beside `out`
+		// by `kinguOrcaHost`: its main bundle and renderer, and the sidecars and
+		// resources it looks up under its own root, `kingu-orca/`.
+		const kinguOrca = gulp.src([
+			'out-kingu-orca/**',
+			'kingu-orca/out/**',
+			'kingu-orca/resources/**',
+			'kingu-orca/package.json',
+			...(stripSourceMapsInPackagingTasks ? ['!out-kingu-orca/**/*.map', '!kingu-orca/out/**/*.map'] : []),
+		], { base: '.', dot: true });
+
 		const mergeStreams = [
 			packageJsonStream,
 			productJsonStream,
@@ -307,7 +318,8 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			api,
 			telemetry,
 			sources,
-			deps
+			deps,
+			kinguOrca
 		];
 		let all = es.merge(...mergeStreams);
 
@@ -552,6 +564,10 @@ function prepareCopilotRipgrepShimTask(platform: string, arch: string, destinati
 		const appNodeModulesDir = path.join(appBase, 'node_modules.asar.unpacked');
 
 		const builtInCopilotExtensionDir = path.join(appBase, 'extensions', 'copilot');
+		// Kingu: no Copilot extension is shipped (`kinguDisableCopilot`), so it has no shim to prepare.
+		if ((product as { kinguDisableCopilot?: boolean }).kinguDisableCopilot) {
+			return;
+		}
 		prepareBuiltInCopilotRipgrepShim(platform, arch, builtInCopilotExtensionDir, appNodeModulesDir);
 	};
 }

@@ -516,6 +516,7 @@ async function bundle(outDir: string, doMinify: boolean, doNls: boolean, doMangl
 				: { outfile: outPath }),
 			loader: {
 				'.ttf': 'file',
+				'.woff2': 'file', // Kingu: Geist, the Kingu look's font (kinguLook.css)
 				'.svg': 'file',
 				'.png': 'file',
 				'.sh': 'file',

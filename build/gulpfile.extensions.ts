@@ -22,6 +22,7 @@ import * as tsb from './lib/tsb/index.ts';
 import { createTsgoStream, spawnTsgo } from './lib/tsgo.ts';
 import * as util from './lib/util.ts';
 import watcher from './lib/watch/index.ts';
+import product from '../product.json' with { type: 'json' };
 
 const root = path.dirname(import.meta.dirname);
 const commit = getVersion(root);
@@ -286,7 +287,10 @@ task.task(compileNativeExtensionsBuildTask);
  * Compiles the built-in copilot extension for the build.
  * Used by non-CI local builds where copilot is not downloaded as a VSIX.
  */
-export const compileCopilotExtensionBuildTask = task.define('compile-copilot-extension-build', () => ext.packageCopilotExtensionStream().pipe(gulp.dest('.build')));
+// Kingu: a product without Copilot (`kinguDisableCopilot`) neither builds nor ships its extension.
+export const compileCopilotExtensionBuildTask = task.define('compile-copilot-extension-build', () => (product as { kinguDisableCopilot?: boolean }).kinguDisableCopilot
+	? Promise.resolve()
+	: ext.packageCopilotExtensionStream().pipe(gulp.dest('.build')));
 task.task(compileCopilotExtensionBuildTask);
 
 /**
