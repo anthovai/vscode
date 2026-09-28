@@ -16,7 +16,7 @@ import { localize } from '../../../../../../nls.js';
 import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { IActionWidgetService } from '../../../../../../platform/actionWidget/browser/actionWidget.js';
 import { IActionWidgetDropdownAction, IActionWidgetDropdownActionProvider, IActionWidgetDropdownOptions } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
-import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
@@ -41,6 +41,7 @@ import { ChatConfiguration, CopilotHarnessIntroductionMode, getCopilotHarnessInt
 import { ChatInputPickerActionViewItem, IChatInputPickerOptions } from './chatInputPickerActionItem.js';
 import { ISessionTypePickerDelegate } from '../../chat.js';
 import { IActionProvider } from '../../../../../../base/browser/ui/dropdown/dropdown.js';
+import { KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID } from '../../../../kingu/common/kinguAiAccounts.js';
 
 
 export interface ISessionTypeItem {
@@ -319,6 +320,20 @@ export class SessionTypePickerActionItem extends ChatInputPickerActionViewItem {
 	}
 
 	protected _getLearnMore(): IAction {
+		// Kingu: the picker's last item signs in to another AI provider, where
+		// upstream links to its docs on harnesses.
+		if (CommandsRegistry.getCommand(KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID)) {
+			return {
+				id: KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID,
+				label: localize('kingu.signInToAi', "Sign In to Another AI..."),
+				tooltip: localize('kingu.signInToAiTooltip', "Sign in to Claude, ChatGPT, Gemini, an agent CLI, or add a model endpoint"),
+				class: undefined,
+				enabled: true,
+				run: async () => {
+					await this.commandService.executeCommand(KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID);
+				}
+			};
+		}
 		const learnMoreUrl = 'https://aka.ms/vscode-concept-harnesses';
 		return {
 			id: 'workbench.action.chat.agentOverview.learnMore',

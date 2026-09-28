@@ -47,7 +47,7 @@ import { URI } from '../../../base/common/uri.js';
 import { KeyCode } from '../../../base/common/keyCodes.js';
 import { ACTIVITY_BAR_BADGE_BACKGROUND, ACTIVITY_BAR_BADGE_FOREGROUND } from '../../common/theme.js';
 import { IBaseActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
-import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { IDefaultAccountService } from '../../../platform/defaultAccount/common/defaultAccount.js';
 import { WORKBENCH_MENU_MOTION_CLASS, workbenchMenuCloseAnimation } from '../actions/menuMotion.js';
 import { createCodexAccountMenuActions, ICodexAccountService, shouldShowCodexAccount } from '../../services/agentHost/browser/codexAccountService.js';
@@ -580,7 +580,10 @@ export class AccountsActivityActionViewItem extends AbstractGlobalActivityAction
 			}
 		}
 
-		const codexAccountActions = createCodexAccountMenuActions(this.codexAccountService, shouldShowCodexAccount(this.configurationService, false));
+		// Kingu: its own "Sign in to ChatGPT..." (`kingu.ai.signIn`, through the ADE's accounts) replaces this one.
+		const kinguSignsIn = !!CommandsRegistry.getCommand('kingu.ai.signIn');
+		const codexAccountActions = createCodexAccountMenuActions(this.codexAccountService, shouldShowCodexAccount(this.configurationService, false))
+			.filter(action => !(kinguSignsIn && action.id === 'codex.signInToChatGPT'));
 		if (codexAccountActions.length) {
 			if (menus.length) {
 				menus.push(new Separator());

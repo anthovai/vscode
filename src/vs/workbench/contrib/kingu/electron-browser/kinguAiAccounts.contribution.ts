@@ -15,6 +15,7 @@ import { IKinguClaudeAccount, IKinguGeminiStatus, IKinguGeminiUsage, KINGU_AI_CH
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService, ProgressLocation } from '../../../../platform/progress/common/progress.js';
+import { IQuickInputService, IQuickPickItem, IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 import { ACP_AGENT_CATALOG, acpAgentCatalogEntry, acpAgentLoginCommand } from '../../../../platform/agentHost/common/acpAgentCatalog.js';
 import { IAgentSdkSetupService } from '../../../services/agentHost/browser/agentSdkSetupService.js';
@@ -22,6 +23,7 @@ import { ITerminalService } from '../../terminal/browser/terminal.js';
 import { agentSdkSetupSessionType } from '../../chat/browser/agentSessions/agentHost/agentHostSdkSetupNotification.js';
 import { hasAnyModelTargetingSessionType } from '../../chat/browser/agentSessions/sessionTypeAvailability.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import { KINGU_SETUP_COMMAND_ID } from '../common/kinguLanguageModels.js';
 import {
 	IKinguAiAccountStatus,
 	IKinguAiAgentAccount,
@@ -29,6 +31,7 @@ import {
 	isKinguAiProvider,
 	KINGU_AI_ACCOUNT_STATUS_COMMAND_ID,
 	KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID,
+	KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID,
 	KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID,
 	KINGU_AI_PROVIDERS,
 	KINGU_AI_SIGN_IN_COMMAND_ID,
@@ -279,6 +282,62 @@ CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, async 
 	}
 });
 
+interface IKinguSignInPick extends IQuickPickItem {
+	readonly run: () => Promise<unknown>;
+}
+
+/**
+ * Every AI this machine can use, in one list: the accounts Kingu signs in to
+ * itself (Claude, ChatGPT, Gemini), the agent CLIs it runs (each signs in in
+ * its own terminal), and a model endpoint of the user's own. Signed-in ones
+ * stay listed, to add another account.
+ */
+CommandsRegistry.registerCommand(KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID, async (accessor: ServicesAccessor): Promise<void> => {
+	const quickInputService = accessor.get(IQuickInputService);
+	const commandService = accessor.get(ICommandService);
+	const mainProcessService = accessor.get(IMainProcessService);
+	const languageModelsService = accessor.get(ILanguageModelsService);
+	const signedInAs = (email: string | undefined) => email
+		? localize('kingu.ai.pick.signedInAs', "Signed in as {0}", email)
+		: localize('kingu.ai.pick.signedIn', "Signed in");
+	const notSignedIn = localize('kingu.ai.pick.notSignedIn', "Not signed in");
+
+	const picks = (async (): Promise<(IKinguSignInPick | IQuickPickSeparator)[]> => {
+		const [statuses, agents] = await Promise.all([
+			Promise.all(KINGU_AI_PROVIDERS.map(provider => readStatus(mainProcessService, languageModelsService, provider).catch((): IKinguAiAccountStatus => ({ signedIn: false })))),
+			commandService.executeCommand<IKinguAiAgentAccount[]>(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID).catch(() => undefined),
+		]);
+		const accounts: IKinguSignInPick[] = KINGU_AI_PROVIDERS.map((provider, index) => ({
+			label: kinguAiProviderLabel(provider),
+			description: statuses[index].signedIn ? signedInAs(statuses[index].email) : notSignedIn,
+			run: () => commandService.executeCommand(KINGU_AI_SIGN_IN_COMMAND_ID, provider),
+		}));
+		const agentPicks: IKinguSignInPick[] = (agents ?? []).map(agent => ({
+			label: agent.displayName,
+			description: agent.signedIn ? signedInAs(undefined) : notSignedIn,
+			detail: localize('kingu.ai.pick.inTerminal', "Signs in with its own CLI, in a terminal"),
+			run: () => commandService.executeCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, agent.id),
+		}));
+		return [
+			{ type: 'separator', label: localize('kingu.ai.pick.accounts', "AI accounts") },
+			...accounts,
+			...(agentPicks.length ? [{ type: 'separator', label: localize('kingu.ai.pick.agents', "Agents on this computer") } satisfies IQuickPickSeparator, ...agentPicks] : []),
+			{ type: 'separator', label: localize('kingu.ai.pick.other', "Other") },
+			{
+				label: localize('kingu.ai.pick.endpoint', "Add a Model Endpoint..."),
+				detail: localize('kingu.ai.pick.endpointDetail', "Any OpenAI- or Anthropic-compatible API, with your own key, or a model running on this computer"),
+				run: () => commandService.executeCommand(KINGU_SETUP_COMMAND_ID),
+			},
+		];
+	})();
+	const picked = await quickInputService.pick(picks, {
+		title: localize('kingu.ai.pick.title', "Sign In to an AI"),
+		placeHolder: localize('kingu.ai.pick.placeholder', "Pick an AI provider to sign in to"),
+		matchOnDescription: true,
+	});
+	await picked?.run();
+});
+
 /** The editor window's Accounts menu offers the AI sign-ins while they are missing. */
 for (const provider of KINGU_AI_PROVIDERS) {
 	registerAction2(class extends Action2 {
@@ -303,3 +362,22 @@ for (const provider of KINGU_AI_PROVIDERS) {
 		}
 	});
 }
+
+/** The Accounts menu's way to every other AI: more accounts, agent CLIs, an endpoint. */
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: `${KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID}.menu`,
+			title: localize2('kingu.ai.signInToAi', "Sign In to Another AI..."),
+			f1: true,
+			menu: {
+				id: MenuId.AccountsContext,
+				group: '1_kingu_ai',
+				order: KINGU_AI_PROVIDERS.length + 1,
+			},
+		});
+	}
+	run(accessor: ServicesAccessor): Promise<unknown> {
+		return accessor.get(ICommandService).executeCommand(KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID);
+	}
+});

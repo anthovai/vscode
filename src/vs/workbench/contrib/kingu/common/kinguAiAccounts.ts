@@ -29,6 +29,12 @@ export const KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID = 'kingu.ai.agentAccounts';
  */
 export const KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID = 'kingu.ai.signInInTerminal';
 
+/**
+ * `kingu.ai.chooseSignIn()`: lists every AI provider this machine can use (the
+ * accounts, the agent CLIs, a model endpoint) and signs in to the one picked.
+ */
+export const KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID = 'kingu.ai.chooseSignIn';
+
 /** An ACP agent this machine runs, as the account panel shows it. */
 export interface IKinguAiAgentAccount {
 	readonly id: string;
