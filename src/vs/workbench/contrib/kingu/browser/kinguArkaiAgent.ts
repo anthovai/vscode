@@ -81,7 +81,11 @@ export class KinguArkaiAgentContribution extends Disposable {
 			modes: [ChatModeKind.Ask, ChatModeKind.Edit, ChatModeKind.Agent],
 			disambiguation: [],
 		};
-		this._register(chatAgentService.registerDynamicAgent(data, {
+		// Registered as an agent plus its implementation, not as a dynamic agent:
+		// only this path marks chat as enabled (`chatIsEnabled`), which the chat
+		// input's mode and session-target pickers need to show at all.
+		this._register(chatAgentService.registerAgent(data.id, data));
+		this._register(chatAgentService.registerAgentImplementation(data.id, {
 			invoke: (request, progress, history, token) => this._answer(request, progress, history, token),
 		}));
 	}

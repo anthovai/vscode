@@ -18,6 +18,10 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
  * - The activity bar is compact (16px icons), its Accounts and Manage actions in
  *   the title bar (workbench/browser/parts/kinguGlobalActions.ts), and signing in
  *   is in the Accounts menu rather than a separate title-bar button.
+ * - The IDE's chat starts on an agent (Arkai first), not the Local harness:
+ *   Local answers with the chat's own models, which were Copilot's and are
+ *   none until the user adds some, while Arkai brings Chyle 1. Local still
+ *   shows while no agent is registered yet, and can be turned back on.
  */
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerDefaultConfigurations([{
 	overrides: {
@@ -29,5 +33,6 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		'workbench.productIconTheme': 'kingu-lucide',
 		'workbench.activityBar.compact': true,
 		'chat.titleBar.signIn.enabled': false,
+		'chat.editor.localAgent.enabled': false,
 	},
 }]);
