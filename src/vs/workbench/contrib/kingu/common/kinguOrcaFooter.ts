@@ -61,6 +61,19 @@ export const ORCA_FOOTER_PROVIDERS: readonly { readonly slot: string; readonly n
 	{ slot: 'grok', name: 'Grok' },
 ];
 
+/** The ADE's `DEFAULT_STATUS_BAR_ITEMS`: every footer item it shows until the user hides one. */
+export const ORCA_STATUS_BAR_ITEMS: readonly string[] = ['claude', 'codex', 'gemini', 'antigravity', 'opencode-go', 'kimi', 'minimax', 'grok', 'cursor', 'ssh', 'resource-usage', 'ports'];
+
+/** The `statusBarItems` entry that shows a usage slot: its slot name, except OpenCode Go's. */
+export function statusBarItemForSlot(slot: string): string {
+	return slot === 'opencodeGo' ? 'opencode-go' : slot;
+}
+
+/** The footer items the ADE's UI state shows; its defaults when it has none saved. */
+export function shownStatusBarItems(value: unknown): ReadonlySet<string> {
+	return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : ORCA_STATUS_BAR_ITEMS);
+}
+
 function hasUsageData(provider: IOrcaProviderRateLimits): boolean {
 	return Boolean(provider.session || provider.weekly || provider.fableWeekly || provider.monthly || (provider.buckets && provider.buckets.length > 0));
 }

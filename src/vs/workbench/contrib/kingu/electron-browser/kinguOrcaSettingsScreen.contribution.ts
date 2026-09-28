@@ -29,6 +29,7 @@ import { orcaKeyForSettingId, orcaSettingIdForKey } from '../common/kinguOrcaSet
 import { IKinguOpenSettingsTarget, KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
 import { IOrcaSettingsPane, IOrcaSettingsRow, IOrcaSettingsSection, ORCA_SETTINGS_NAV, ORCA_SETTINGS_PANES } from '../common/kinguOrcaSettingsScreen.js';
 import { KINGU_CONNECT_CLOUD_COMMAND_ID, KINGU_SHOW_SKILLS_COMMAND_ID } from '../common/kinguSkillSharing.js';
+import { shownStatusBarItems } from '../common/kinguOrcaFooter.js';
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 import { KinguAiAccountsSection } from './kinguAiAccountsSection.js';
 import { OrcaAccountsPane } from './kinguOrcaSettingsAccounts.js';
@@ -46,10 +47,15 @@ import './kinguOrcaService.js';
  * configuration service, so the settings bridge carries it down (and a key
  * bound to a VS Code equivalent stays bound); any other key goes straight to
  * the ADE's `settings:set`.
+ *
+ * A key starting `ui:` is the ADE's UI state instead (`ui:get`, `ui:set`),
+ * where it keeps choices such as the footer's items; `ui:statusBarItems:<item>`
+ * is whether that one item is in its `statusBarItems`.
  */
 class OrcaSettingsValues extends Disposable {
 
 	private _values: Record<string, unknown> = {};
+	private _ui: Record<string, unknown> = {};
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	readonly onDidChange = this._onDidChange.event;
 
@@ -61,6 +67,10 @@ class OrcaSettingsValues extends Disposable {
 		super();
 		this._register(this._orca.onPush('settings:changed')(([updates]) => {
 			this._values = { ...this._values, ...(updates as Record<string, unknown>) };
+			this._onDidChange.fire();
+		}));
+		this._register(this._orca.onPush('ui:stateChanged')(([ui]) => {
+			this._ui = (ui ?? {}) as Record<string, unknown>;
 			this._onDidChange.fire();
 		}));
 		// A key this window also offers changes here first; the ADE follows through
@@ -82,7 +92,12 @@ class OrcaSettingsValues extends Disposable {
 
 	async load(): Promise<void> {
 		try {
-			this._values = await this._orca.invoke<Record<string, unknown>>('settings:get') ?? {};
+			const [values, ui] = await Promise.all([
+				this._orca.invoke<Record<string, unknown>>('settings:get'),
+				this._orca.invoke<Record<string, unknown>>('ui:get').catch(() => undefined),
+			]);
+			this._values = values ?? {};
+			this._ui = ui ?? this._ui;
 			this._onDidChange.fire();
 		} catch (error) {
 			this._logService.warn('[kingu-settings] settings:get failed', error);
@@ -90,6 +105,10 @@ class OrcaSettingsValues extends Disposable {
 	}
 
 	get(key: string): unknown {
+		if (key.startsWith(UI_KEY_PREFIX)) {
+			const [name, item] = key.slice(UI_KEY_PREFIX.length).split(':');
+			return item === undefined ? this._ui[name] : shownStatusBarItems(this._ui[name]).has(item);
+		}
 		let value: unknown = this._values;
 		for (const part of key.split('.')) {
 			value = value !== null && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined;
@@ -98,6 +117,9 @@ class OrcaSettingsValues extends Disposable {
 	}
 
 	async set(key: string, value: unknown): Promise<void> {
+		if (key.startsWith(UI_KEY_PREFIX)) {
+			return this._setUi(key.slice(UI_KEY_PREFIX.length), value);
+		}
 		const [top, ...rest] = key.split('.');
 		let next: unknown = value;
 		if (rest.length > 0) {
@@ -124,7 +146,39 @@ class OrcaSettingsValues extends Disposable {
 			await this.load();
 		}
 	}
+
+	private async _setUi(key: string, value: unknown): Promise<void> {
+		const [name, item] = key.split(':');
+		let next = value;
+		if (item !== undefined) {
+			// As the ADE's `toggleStatusBarItem`: the item added at the end, or taken out.
+			const current = [...shownStatusBarItems(this._ui[name])];
+			next = value === true ? (current.includes(item) ? current : [...current, item]) : current.filter(entry => entry !== item);
+		}
+		this._ui = { ...this._ui, [name]: next };
+		this._onDidChange.fire();
+		try {
+			await this._orca.invoke('ui:set', { [name]: next });
+		} catch (error) {
+			this._logService.error(`[kingu-settings] could not save ${name}`, error);
+			await this.load();
+		}
+	}
 }
+
+const UI_KEY_PREFIX = 'ui:';
+
+/**
+ * The keys of rows the ADE binds to its UI state rather than its settings, by
+ * section and row position: the Status Bar section's percentage display, then
+ * its items in the ADE's order.
+ */
+const UI_ROW_KEYS: Readonly<Record<string, readonly string[]>> = {
+	'appearance-9': [
+		'ui:usagePercentageDisplay',
+		...['claude', 'codex', 'gemini', 'antigravity', 'opencode-go', 'kimi', 'minimax', 'grok', 'ssh', 'resource-usage', 'ports'].map(item => `ui:statusBarItems:${item}`),
+	],
+};
 
 /** The Agents pane's sections for its detected-agent lists: their states, the installed and the installable agents. */
 const AGENT_LIST_SECTIONS: ReadonlySet<string> = new Set(['agents-7', 'agents-8', 'agents-9', 'agents-10']);
@@ -566,7 +620,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 			button.addEventListener('click', () => void this._commandService.executeCommand(action.command));
 			return;
 		}
-		const key = row.keys[0];
+		const key = row.keys[0] ?? (sectionId ? this._uiRowKey(sectionId, row) : undefined);
 		switch (row.control) {
 			case 'toggle':
 				if (key) {
@@ -611,6 +665,12 @@ class KinguOrcaSettingsScreen extends Disposable {
 				break;
 		}
 		this._otherRow(parent, row, store);
+	}
+
+	private _uiRowKey(sectionId: string, row: IOrcaSettingsRow): string | undefined {
+		const section = ORCA_SETTINGS_PANES.flatMap(pane => pane.sections).find(candidate => candidate.id === sectionId);
+		const index = section ? section.rows.indexOf(row) : -1;
+		return index >= 0 ? UI_ROW_KEYS[sectionId]?.[index] : undefined;
 	}
 
 	private _isScalar(key: string): boolean {

@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { formatFooterWindow, formatOrcaMemory, formatOrcaWindowLabel, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, providerFooterWindows, summarizeSshStatuses, tightestFooterWindow } from '../../common/kinguOrcaFooter.js';
+import { formatFooterWindow, formatOrcaMemory, formatOrcaWindowLabel, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_STATUS_BAR_ITEMS, providerFooterWindows, shownStatusBarItems, statusBarItemForSlot, summarizeSshStatuses, tightestFooterWindow } from '../../common/kinguOrcaFooter.js';
 
 const NOW = 1_000_000_000_000;
 const HOUR = 3_600_000;
@@ -90,5 +90,17 @@ suite('kinguOrcaFooter', () => {
 			{ overall: 'connecting', connected: 1, dot: 'yellow' },
 			{ overall: 'disconnected', connected: 0, dot: 'muted' },
 		]);
+	});
+
+	test('shows the footer items the ADE UI state keeps, its defaults when it has none', () => {
+		assert.deepStrictEqual({
+			saved: [...shownStatusBarItems(['codex', 'ports', 3])],
+			none: [...shownStatusBarItems(undefined)],
+			slots: ['claude', 'opencodeGo'].map(statusBarItemForSlot),
+		}, {
+			saved: ['codex', 'ports'],
+			none: ORCA_STATUS_BAR_ITEMS,
+			slots: ['claude', 'opencode-go'],
+		});
 	});
 });

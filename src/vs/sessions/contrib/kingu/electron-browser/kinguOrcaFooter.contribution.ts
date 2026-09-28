@@ -33,7 +33,7 @@ import { IKinguAdvertisedUrlService } from '../browser/kinguAdvertisedUrlService
 import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
 import { KINGU_SHOW_USAGE_COMMAND_ID } from '../browser/kinguUsagePage.contribution.js';
 import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
-import { formatFooterWindow, formatOrcaMemory, OrcaSshStatus, sshHostStatus, summarizeSshStatuses, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, tightestFooterWindow } from '../../../../workbench/contrib/kingu/common/kinguOrcaFooter.js';
+import { formatFooterWindow, formatOrcaMemory, OrcaSshStatus, sshHostStatus, summarizeSshStatuses, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, shownStatusBarItems, statusBarItemForSlot, tightestFooterWindow } from '../../../../workbench/contrib/kingu/common/kinguOrcaFooter.js';
 import { orcaSettingIdForKey } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettings.js';
 import { displayedUsagePercent, KinguUsageDisplay, nextResetTickDelay } from '../../../../workbench/contrib/kingu/common/kinguStatusBar.js';
 import { OrcaUsageMode } from '../common/kinguOrcaUsage.js';
@@ -273,6 +273,8 @@ class KinguOrcaFooterContribution extends Disposable {
 	/** The ADE's UI state: Detailed or Compact, and whether percentages count what is used or what is left. */
 	private _usageMode: OrcaUsageMode = 'verbose';
 	private _usageDisplay: KinguUsageDisplay = 'used';
+	/** The ADE's `statusBarItems`: the footer items the user has not hidden. */
+	private _statusBarItems = shownStatusBarItems(undefined);
 	private _resourceSort: ResourceSort = 'memory';
 	private _appCollapsed = true;
 	private readonly _collapsedWorktrees = new Set<string>();
@@ -377,6 +379,7 @@ class KinguOrcaFooterContribution extends Disposable {
 			}
 		}));
 		this._register(this._orca.onPush('ssh:state-changed')(() => void this._readSsh()));
+		this._register(this._orca.onPush('ui:stateChanged')(([ui]) => this._applyUiState(ui)));
 		this._register(this._orca.onPush('updater:status')(([status]) => this._renderUpdate(status as IOrcaUpdateStatus)));
 		this._register(this._terminalService.onDidChangeInstances(() => this._renderResources()));
 
@@ -450,6 +453,9 @@ class KinguOrcaFooterContribution extends Disposable {
 		const labels: string[] = [];
 		let anyFetching = false;
 		for (const { slot, name } of ORCA_FOOTER_PROVIDERS) {
+			if (!this._statusBarItems.has(statusBarItemForSlot(slot))) {
+				continue;
+			}
 			const provider = state?.[slot];
 			if (!isProviderShown(provider)) {
 				if (slot === 'gemini' && this._geminiMeter) {
@@ -569,14 +575,21 @@ class KinguOrcaFooterContribution extends Disposable {
 		});
 	}
 
-	/** Reads the ADE's usage mode and percentage display, as its footer hydrates them from `ui:get`. */
+	/** Reads the ADE's usage mode, percentage display and shown items, as its footer hydrates them from `ui:get`. */
 	private async _readUsageUiState(): Promise<void> {
-		await this._read('ui:get', value => {
-			const ui = value as { readonly statusBarUsageMode?: unknown; readonly usagePercentageDisplay?: unknown } | undefined;
-			this._usageMode = ui?.statusBarUsageMode === 'compact' ? 'compact' : 'verbose';
-			this._usageDisplay = ui?.usagePercentageDisplay === 'remaining' ? 'remaining' : 'used';
-			this._renderUsage(this._rateLimits);
-		});
+		await this._read('ui:get', value => this._applyUiState(value));
+	}
+
+	/** The footer as the ADE's UI state (`ui:get`, `ui:stateChanged`) has it. */
+	private _applyUiState(value: unknown): void {
+		const ui = value as { readonly statusBarUsageMode?: unknown; readonly usagePercentageDisplay?: unknown; readonly statusBarItems?: unknown } | undefined;
+		this._usageMode = ui?.statusBarUsageMode === 'compact' ? 'compact' : 'verbose';
+		this._usageDisplay = ui?.usagePercentageDisplay === 'remaining' ? 'remaining' : 'used';
+		this._statusBarItems = shownStatusBarItems(ui?.statusBarItems);
+		this._renderUsage(this._rateLimits);
+		this._renderResources();
+		this._renderPorts();
+		this._renderSsh();
 	}
 
 	/** `setStatusBarUsageMode`: persisted in the ADE's UI state, and the pill redrawn in the new mode. */
@@ -802,6 +815,11 @@ class KinguOrcaFooterContribution extends Disposable {
 
 	/** `renderResourceUsageStatusTrigger`: memory, a middot, terminals. */
 	private _renderResources(): void {
+		if (!this._statusBarItems.has('resource-usage')) {
+			this._resourcePopover.close();
+			this._resources.clear();
+			return;
+		}
 		const snapshot = this._memory;
 		const memory = snapshot ? formatOrcaMemory(snapshot.totalMemory) : '—';
 		const count = this._terminalService.instances.length;
@@ -1185,6 +1203,11 @@ class KinguOrcaFooterContribution extends Disposable {
 
 	/** `PortsStatusSegment`'s trigger: a plug (a spinner while scanning) and the workspace port count. */
 	private _renderPorts(): void {
+		if (!this._statusBarItems.has('ports')) {
+			this._portsPopover.close();
+			this._ports.clear();
+			return;
+		}
 		const count = this._portScan.workspace.length;
 		const aria = localize('kingu.footer.ports.aria', "Ports, {0} workspace {1}", count, count === 1 ? 'port' : 'ports');
 		this._portsChip.set([
@@ -1343,7 +1366,7 @@ class KinguOrcaFooterContribution extends Disposable {
 	 */
 	private _renderSsh(): void {
 		const targets = this._sshTargets;
-		if (targets.length === 0) {
+		if (targets.length === 0 || !this._statusBarItems.has('ssh')) {
 			this._sshPopover.close();
 			this._ssh.clear();
 			return;
