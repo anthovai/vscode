@@ -627,6 +627,46 @@
 	font-size: 11px;
 }
 
+/* The Agents pane's lists: a heading with Re-detect, then each agent's mark, name, command and actions. */
+.kingu-orca-agents-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.kingu-orca-agent-row .kingu-orca-settings-list-text {
+	flex: 1;
+}
+
+.kingu-orca-agent-name {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.kingu-orca-agent-row.disabled .kingu-orca-agent-name {
+	color: var(--kingu-orca-muted);
+}
+
+.kingu-orca-agent-command.kingu-orca-input {
+	max-width: 320px;
+	margin-top: 4px;
+	font-family: var(--monaco-monospace-font);
+	font-size: 11px;
+}
+
+.kingu-orca-agent-row.missing {
+	padding-block: 6px;
+}
+
+.kingu-orca-agent-actions {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 8px;
+}
+
 /* #endregion */
 
 /* #region AI Provider Accounts (accounts-pane-*-section) */

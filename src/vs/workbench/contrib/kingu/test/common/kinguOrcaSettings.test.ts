@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { orcaKeyForSettingId, orcaSettingIdForKey, orcaSettingsById, orcaSettingsPatch } from '../../common/kinguOrcaSettings.js';
+import { agentAvailabilityUpdate, orcaKeyForSettingId, orcaSettingIdForKey, orcaSettingsById, orcaSettingsPatch } from '../../common/kinguOrcaSettings.js';
 import { KINGU_ORCA_SETTINGS, KINGU_ORCA_SETTINGS_PAGES } from '../../common/kinguOrcaSettingsSchema.js';
 
 suite('kinguOrcaSettings', () => {
@@ -47,5 +47,19 @@ suite('kinguOrcaSettings', () => {
 		assert.deepStrictEqual(
 			[orcaSettingsPatch({ [awake]: 'off' }), orcaSettingsPatch({ [awake]: 'auto', 'kingu.nothing.here': 1 })],
 			[{ computerAwakeMode: 'off', keepComputerAwakeWhileAgentsRun: false }, { computerAwakeMode: 'auto', keepComputerAwakeWhileAgentsRun: true }]);
+	});
+
+	test('an agent switched off stops being the default, as in the ADE', () => {
+		assert.deepStrictEqual({
+			offDefault: agentAvailabilityUpdate('codex', [], 'codex', false),
+			offOther: agentAvailabilityUpdate('claude', ['aider'], 'codex', false),
+			offAgain: agentAvailabilityUpdate(null, ['codex'], 'codex', false),
+			on: agentAvailabilityUpdate(null, ['aider', 'codex'], 'codex', true),
+		}, {
+			offDefault: { disabledTuiAgents: ['codex'], defaultTuiAgent: null },
+			offOther: { disabledTuiAgents: ['aider', 'codex'] },
+			offAgain: { disabledTuiAgents: ['codex'] },
+			on: { disabledTuiAgents: ['aider'] },
+		});
 	});
 });

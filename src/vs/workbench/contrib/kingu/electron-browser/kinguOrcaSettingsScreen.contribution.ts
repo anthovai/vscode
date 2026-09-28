@@ -32,6 +32,7 @@ import { KINGU_CONNECT_CLOUD_COMMAND_ID, KINGU_SHOW_SKILLS_COMMAND_ID } from '..
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 import { KinguAiAccountsSection } from './kinguAiAccountsSection.js';
 import { OrcaAccountsPane } from './kinguOrcaSettingsAccounts.js';
+import { OrcaAgentsList } from './kinguOrcaSettingsAgents.js';
 import './kinguOrcaService.js';
 
 // #region Values
@@ -125,6 +126,9 @@ class OrcaSettingsValues extends Disposable {
 	}
 }
 
+/** The Agents pane's sections for its detected-agent lists: their states, the installed and the installable agents. */
+const AGENT_LIST_SECTIONS: ReadonlySet<string> = new Set(['agents-7', 'agents-8', 'agents-9', 'agents-10']);
+
 /** What the ADE's button rows do here, by the section they sit in (one button each). */
 const BUTTON_COMMANDS: Readonly<Record<string, { readonly command: string; readonly label: string }>> = {
 	'artifacts-1': { command: KINGU_CONNECT_CLOUD_COMMAND_ID, label: localize('kingu.settings.connect', "Connect") },
@@ -192,6 +196,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 	private readonly _values: OrcaSettingsValues;
 	private readonly _accounts: OrcaAccountsPane;
 	private readonly _aiAccounts: KinguAiAccountsSection;
+	private readonly _agents: OrcaAgentsList;
 	private readonly _shown = this._register(new MutableDisposable<DisposableStore>());
 	private readonly _drawing = this._register(new MutableDisposable<DisposableStore>());
 	private _root: HTMLElement | undefined;
@@ -226,6 +231,17 @@ class KinguOrcaSettingsScreen extends Disposable {
 			openExternal: url => void this._openerService.open(URI.parse(url), { openExternal: true }),
 		});
 		this._aiAccounts = new KinguAiAccountsSection(this._commandService, () => this._redrawContent());
+		this._agents = new OrcaAgentsList({
+			invoke: (channel, ...args) => orca.invoke(channel, ...args),
+			value: key => this._values.get(key),
+			update: async values => {
+				for (const [key, value] of Object.entries(values)) {
+					await this._values.set(key, value);
+				}
+			},
+			openExternal: url => void this._openerService.open(URI.parse(url), { openExternal: true }),
+			redraw: () => this._redrawContent(),
+		});
 		this._register(this._values.onDidChange(() => this._redrawContent()));
 		KinguOrcaSettingsScreen._instance = this;
 		this._register(toDisposable(() => {
@@ -440,6 +456,20 @@ class KinguOrcaSettingsScreen extends Disposable {
 		const card = append(section, $('.kingu-orca-settings-card'));
 		let first = true;
 		for (const subsection of pane.sections) {
+			if (pane.id === 'agents' && AGENT_LIST_SECTIONS.has(subsection.id)) {
+				// Kingu: the ADE's detected-agent lists, drawn once where the first of their sections sits.
+				if (subsection.id === 'agents-7' && !this._query.trim()) {
+					this._agents.load();
+					if (!first) {
+						append(card, $('.kingu-orca-settings-separator'));
+					}
+					first = false;
+					const block = append(card, $('section.kingu-orca-settings-subsection'));
+					this._sectionElements.set(subsection.id, block);
+					this._agents.render(block);
+				}
+				continue;
+			}
 			const rows = subsection.rows.filter(row => !row.dynamic && rowMatches(this._query, pane, subsection, row) && this._isShown(row));
 			if (rows.length === 0 || (pane.id === 'accounts' && this._accounts.isHidden(subsection.title))) {
 				continue;
@@ -774,6 +804,13 @@ class KinguOrcaSettingsScreen extends Disposable {
 	 * description; a key this window offers as a VS Code setting opens there.
 	 */
 	private _otherRow(parent: HTMLElement, row: IOrcaSettingsRow, store: DisposableStore): void {
+		if (row.control === 'status' && row.keys.length === 0) {
+			// Text the ADE shows, not a control: a step, a note. A status the ADE
+			// words by its state has each wording joined by " | "; its label
+			// stands alone rather than show every state at once.
+			this._row(parent, row.description?.includes(' | ') ? { ...row, description: undefined } : row);
+			return;
+		}
 		const { control } = this._row(parent, row);
 		const id = row.keys.map(key => orcaSettingIdForKey(key.split('.')[0])).find((candidate): candidate is string => !!candidate);
 		if (id) {

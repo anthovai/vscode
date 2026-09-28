@@ -75,3 +75,13 @@ export function orcaSettingsPatch(updatesById: Readonly<Record<string, unknown>>
 	}
 	return patch;
 }
+
+/**
+ * The `disabledTuiAgents` and `defaultTuiAgent` an availability switch writes,
+ * as the ADE's `buildAgentAvailabilitySettingsUpdate` does: turning off the
+ * default agent also clears the default.
+ */
+export function agentAvailabilityUpdate(defaultAgent: unknown, disabled: readonly string[], id: string, enabled: boolean): Record<string, unknown> {
+	const next = enabled ? disabled.filter(agent => agent !== id) : disabled.includes(id) ? [...disabled] : [...disabled, id];
+	return { disabledTuiAgents: next, ...(defaultAgent === id && !enabled ? { defaultTuiAgent: null } : {}) };
+}
