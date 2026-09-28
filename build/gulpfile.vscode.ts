@@ -481,7 +481,9 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 function hasAuthenticodeSignature(filePath: string): Promise<boolean> {
 	return new Promise((resolve, reject) => {
 		const proc = cp.spawn('signtool.exe', ['verify', '/pa', filePath]);
-		proc.on('error', reject);
+		// Kingu: a local build on a machine without the Windows SDK has no
+		// signtool; it signs nothing, so there is no signature to find.
+		proc.on('error', error => (error as NodeJS.ErrnoException).code === 'ENOENT' ? resolve(false) : reject(error));
 		proc.on('exit', code => resolve(code === 0));
 	});
 }
