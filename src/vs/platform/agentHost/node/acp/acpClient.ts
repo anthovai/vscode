@@ -336,6 +336,11 @@ function pathDirs(env: NodeJS.ProcessEnv): string[] {
 	return pathValue.split(delimiter).filter(Boolean);
 }
 
+/** The agent at `executable`, a file Kingu ships rather than one found on the PATH; undefined when it is not there. */
+export async function resolveAcpExecutable(executable: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): Promise<IAcpSpawnCommand | undefined> {
+	return await isFile(executable) ? { command: executable, args: [...args], env: agentEnv(env) } : undefined;
+}
+
 /**
  * How to start an agent CLI found on PATH with `args`, or `undefined` when it
  * is not installed. On Windows an npm install is a `.cmd` shim; its script is

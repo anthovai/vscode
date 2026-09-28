@@ -14,6 +14,8 @@ src/vs/base/browser/ui/codicons/codicon/codicon.ttf
 # The vendored ADE's sidecar entries, written by build/kingu-orca/build.mjs to
 # where the ADE's own path resolvers expect them
 /kingu-orca/out/
+# Arkai's engine, the oh-my-pi fork's CLI copied by build/kingu-arkai/engine.mjs
+/arkai-engine/
 /extensions/**/out/
 build/node_modules
 build/darwin/.dmgbuild

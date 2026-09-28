@@ -11,7 +11,7 @@ import { ILogService } from '../../../log/common/log.js';
 import type { AgentProvider } from '../../common/agent.js';
 import { IJevBridgeRegistry } from '../jevBridgeRegistry.js';
 import { AcpAgent, IAcpAgentProfile } from './acpAgent.js';
-import { resolveAcpCommand } from './acpClient.js';
+import { resolveAcpCommand, resolveAcpExecutable } from './acpClient.js';
 import { CHYLE_MODEL_ID, ensureChyleRuntime } from './chyleRuntime.js';
 
 export const ARKAI_AGENT_PROVIDER_ID: AgentProvider = 'arkai';
@@ -46,7 +46,17 @@ const ARKAI_SYSTEM_PROMPT = [
 /** Where Arkai's OMP profile keeps its settings and provider file (`models.yml`). */
 const ARKAI_AGENT_DIR = join(homedir(), '.omp', 'profiles', ARKAI_OMP_PROFILE, 'agent');
 
-function arkaiProfile(logService: ILogService): IAcpAgentProfile {
+/**
+ * Arkai's own engine: OMP built from Kingu's fork (anthovai/oh-my-pi) by
+ * `npm run build-kingu-arkai`, in `arkai-engine/` under the app root, where the
+ * build packages it.
+ */
+export function arkaiEnginePath(appRoot: string): string {
+	return join(appRoot, 'arkai-engine', process.platform === 'win32' ? 'omp.exe' : 'omp');
+}
+
+function arkaiProfile(logService: ILogService, appRoot: string): IAcpAgentProfile {
+	let reported = false;
 	return {
 		id: ARKAI_AGENT_PROVIDER_ID,
 		displayName: localize('arkai.displayName', "Arkai"),
@@ -54,9 +64,16 @@ function arkaiProfile(logService: ILogService): IAcpAgentProfile {
 		resolveCommand: async () => {
 			// Chyle, Arkai's own model, needs no account: bring up its local server and gateway first.
 			await ensureChyleRuntime(ARKAI_AGENT_DIR, logService).catch(error => logService.warn(`[Chyle] ${error instanceof Error ? error.message : String(error)}`));
-			return resolveAcpCommand('omp', ['--profile', ARKAI_OMP_PROFILE, '--tools', ARKAI_TOOLS, '--no-skills', '--no-rules', '--no-lsp', '--no-extensions', '--thinking', 'off', '--system-prompt', ARKAI_SYSTEM_PROMPT, 'acp']);
+			const args = ['--profile', ARKAI_OMP_PROFILE, '--tools', ARKAI_TOOLS, '--no-skills', '--no-rules', '--no-lsp', '--no-extensions', '--thinking', 'off', '--system-prompt', ARKAI_SYSTEM_PROMPT, 'acp'];
+			// Kingu's own build of the engine first; an OMP the user installed otherwise.
+			const command = await resolveAcpExecutable(arkaiEnginePath(appRoot), args) ?? await resolveAcpCommand('omp', args);
+			if (command && !reported) {
+				reported = true;
+				logService.info(`[Arkai] engine: ${command.command}`);
+			}
+			return command;
 		},
-		notInstalledMessage: localize('arkai.notInstalled', "Arkai's engine (OMP) is not installed. Install it with `bun install -g @oh-my-pi/pi-coding-agent`, then restart Kingu."),
+		notInstalledMessage: localize('arkai.notInstalled', "Arkai's engine (OMP) is not installed. Reinstall Kingu, or install OMP with `bun install -g @oh-my-pi/pi-coding-agent`, then restart Kingu."),
 		// OMP signs in to each provider on its own, from keys in the environment or a login; Chyle needs neither.
 		signedOutMessage: async () => undefined,
 		logDirectory: join(homedir(), '.omp', 'profiles', ARKAI_OMP_PROFILE, 'logs'),
@@ -77,6 +94,6 @@ export class ArkaiAgent extends AcpAgent {
 		@INativeEnvironmentService environmentService: INativeEnvironmentService,
 		@IJevBridgeRegistry jev: IJevBridgeRegistry,
 	) {
-		super(arkaiProfile(logService), logService, environmentService, jev);
+		super(arkaiProfile(logService, environmentService.appRoot), logService, environmentService, jev);
 	}
 }

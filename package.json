@@ -95,7 +95,8 @@
     "install-latest-component-explorer": "npm install @vscode/component-explorer@next @vscode/component-explorer-cli@next && cd build/rspack && npm install @vscode/component-explorer-webpack-plugin@next @vscode/component-explorer@next && cd ../vite && npm install @vscode/component-explorer-vite-plugin@next @vscode/component-explorer@next",
     "setup-feed": "npm install --global @microsoft/artifacts-npm-credprovider --registry https://pkgs.dev.azure.com/artifacts-public/PublicTools/_packaging/AzureArtifacts/npm/registry/ && npm config set registry https://pkgs.dev.azure.com/monacotools/Monaco/_packaging/vscode/npm/registry/",
     "reauth-feed": "artifacts-npm-credprovider --force",
-    "build-kingu-orca": "node build/kingu-orca/build.mjs"
+    "build-kingu-orca": "node build/kingu-orca/build.mjs",
+    "build-kingu-arkai": "node build/kingu-arkai/engine.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

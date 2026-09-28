@@ -311,6 +311,10 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			...(stripSourceMapsInPackagingTasks ? ['!out-kingu-orca/**/*.map', '!kingu-orca/out/**/*.map'] : []),
 		], { base: '.', dot: true });
 
+		// Kingu: Arkai's engine (`npm run build-kingu-arkai`), found beside `out`
+		// by `arkaiAgent`; without it Arkai runs the `omp` on the PATH.
+		const kinguArkai = gulp.src(['arkai-engine/**'], { base: '.', dot: true, allowEmpty: true });
+
 		const mergeStreams = [
 			packageJsonStream,
 			productJsonStream,
@@ -319,7 +323,8 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			telemetry,
 			sources,
 			deps,
-			kinguOrca
+			kinguOrca,
+			kinguArkai
 		];
 		let all = es.merge(...mergeStreams);
 
