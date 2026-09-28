@@ -747,6 +747,23 @@ async function bringUpEngine(): Promise<BrowserWindow | undefined> {
 	};
 	// The windows the user actually looks at: every window but this hidden one.
 	const userWindows = () => BrowserWindow.getAllWindows().filter(candidate => candidate !== window && !candidate.isDestroyed());
+	// Closing the last of them closes this one too. While it stays open Electron
+	// never reports that every window closed, which is what quits the app off
+	// macOS, and Kingu would keep running with no window at all.
+	if (process.platform !== 'darwin') {
+		const closeWhenLast = () => {
+			if (!window.isDestroyed() && userWindows().length === 0) {
+				window.destroy();
+			}
+		};
+		const watch = (candidate: BrowserWindow) => {
+			if (candidate !== window) {
+				candidate.once('closed', closeWhenLast);
+			}
+		};
+		BrowserWindow.getAllWindows().forEach(watch);
+		app.on('browser-window-created', (_event, created) => watch(created));
+	}
 	// Window events the ADE uses to mean "the user is back": it refreshes quotas
 	// on them. Electron raises focus app-wide and has no app-wide show or
 	// restore, and a window that is shown or restored takes focus, so all three
