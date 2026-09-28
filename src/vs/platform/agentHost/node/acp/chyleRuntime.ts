@@ -108,7 +108,9 @@ async function ensureOllama(log: ILogService): Promise<boolean> {
 		delete env.OLLAMA_MODELS;
 	}
 	log.info(`[Chyle] starting Ollama: ${executable} serve${env.OLLAMA_MODELS ? ` (models in ${env.OLLAMA_MODELS})` : ''}`);
-	const child = spawn(executable, ['serve'], { env, detached: true, stdio: 'ignore', windowsHide: true });
+	// Started in its own directory: it outlives Kingu, and a working directory
+	// inside Kingu's install would keep that folder from being replaced.
+	const child = spawn(executable, ['serve'], { cwd: dirname(executable), env, detached: true, stdio: 'ignore', windowsHide: true });
 	child.on('error', error => log.warn(`[Chyle] could not start Ollama: ${error.message}`));
 	child.unref();
 	// It can take a minute to answer, with its models on a slow (external) drive.
