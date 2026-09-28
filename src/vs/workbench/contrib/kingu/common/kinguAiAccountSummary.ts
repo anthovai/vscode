@@ -39,6 +39,11 @@ function relativeHours(resetsAt: number, now: number): string {
 	return localize('kingu.aiAccounts.days', "{0} days", Math.round(hours / 24));
 }
 
+/** When an account's limit resets, for a meter that shows the share itself. */
+export function formatKinguAiReset(usage: IKinguAiUsage | undefined, now: number): string | undefined {
+	return usage?.resetsAt ? localize('kingu.aiAccounts.resets', "Resets in {0}", relativeHours(usage.resetsAt, now)) : undefined;
+}
+
 /** What an account has used, in one line: a limit's share and when it resets, or today's tokens. */
 export function formatKinguAiUsage(usage: IKinguAiUsage | undefined, now: number): string | undefined {
 	if (!usage) {

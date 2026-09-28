@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { $, append, EventType, addDisposableListener, EventHelper, disposableWindowInterval, getWindow } from '../../../../../base/browser/dom.js';
+import { $, append, clearNode, EventType, addDisposableListener, EventHelper, disposableWindowInterval, getWindow } from '../../../../../base/browser/dom.js';
 import { Gesture, EventType as TouchEventType } from '../../../../../base/browser/touch.js';
 import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
 import { renderLabelWithIcons } from '../../../../../base/browser/ui/iconLabel/iconLabels.js';
@@ -28,7 +28,7 @@ import { ITextResourceConfigurationService } from '../../../../../editor/common/
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { localize } from '../../../../../nls.js';
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, getConfigValueInTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IHoverService, nativeHoverDelegate } from '../../../../../platform/hover/browser/hover.js';
 import { IMarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
@@ -47,6 +47,9 @@ import { IChatStatusItemService, ChatStatusEntry } from './chatStatusItemService
 import { GitHubPaths, IDefaultAccountService } from '../../../../../platform/defaultAccount/common/defaultAccount.js';
 import product from '../../../../../platform/product/common/product.js';
 import { isCompletionsEnabled } from '../../../../../editor/common/services/completionsEnablement.js';
+import { KINGU_AI_ACCOUNT_STATUS_COMMAND_ID } from '../../../kingu/common/kinguAiAccounts.js';
+import { formatKinguAiReset, formatKinguAiUsage, IKinguAiAccountRow, loadKinguAiAccountRows, summarizeKinguAiAccounts } from '../../../kingu/common/kinguAiAccountSummary.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../../kingu/common/kinguOrcaSettingsCommands.js';
 
 const defaultChat = product.defaultChatAgent;
 const completionsConfigurationTargets = [
@@ -580,6 +583,12 @@ export class ChatStatusDashboard extends DomWidget {
 	}
 
 	private renderSetupSection(): void {
+		// Kingu: no Copilot to set up. What the user needs to see instead is how
+		// much of each AI account's limits is used, all of them at a glance.
+		if (CommandsRegistry.getCommand(KINGU_AI_ACCOUNT_STATUS_COMMAND_ID)) {
+			this.renderKinguUsageSection();
+			return;
+		}
 		const hasByokModels = this.chatEntitlementService.hasByokModels;
 		const newUser = isNewUser(this.chatEntitlementService) && !hasByokModels;
 		const anonymousUser = this.chatEntitlementService.anonymous;
@@ -635,6 +644,88 @@ export class ChatStatusDashboard extends DomWidget {
 		const button = this._store.add(new Button(this.element, { ...defaultButtonStyles, hoverDelegate: nativeHoverDelegate }));
 		button.label = buttonLabel;
 		this._store.add(button.onDidClick(() => this.runCommandAndClose(commandId)));
+	}
+
+	/**
+	 * Kingu: every AI account's usage in one place. The account closest to its
+	 * limit leads, as one meter; the rest are a click away, and each account's
+	 * own page is in Kingu Settings.
+	 */
+	private renderKinguUsageSection(): void {
+		this.element.appendChild($('hr'));
+		const section = this.element.appendChild($('div.kingu-ai-usage'));
+		this.renderHeader(section, this._store, localize('kingu.usage.title', "AI Usage"), toAction({
+			id: 'kingu.usage.openAccounts',
+			label: localize('kingu.usage.openAccounts', "Open AI Accounts"),
+			tooltip: localize('kingu.usage.openAccounts', "Open AI Accounts"),
+			class: ThemeIcon.asClassName(Codicon.settings),
+			run: () => this.runCommandAndClose(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, { pane: 'accounts' }),
+		}));
+		const body = section.appendChild($('div.kingu-ai-usage-body', undefined, $('div.kingu-ai-usage-note', undefined, localize('kingu.usage.loading', "Reading usage..."))));
+		const token = cancelOnDispose(this._store);
+		void loadKinguAiAccountRows(this.commandService).then(rows => {
+			if (!token.isCancellationRequested) {
+				clearNode(body);
+				this.renderKinguUsageRows(body, rows);
+			}
+		});
+	}
+
+	private renderKinguUsageRows(container: HTMLElement, rows: readonly IKinguAiAccountRow[]): void {
+		const now = Date.now();
+		const limited = rows
+			.filter(row => row.signedIn && row.usage?.usedPercent !== undefined)
+			.sort((a, b) => (b.usage?.usedPercent ?? 0) - (a.usage?.usedPercent ?? 0));
+		const top = limited[0];
+		if (top?.usage?.usedPercent !== undefined) {
+			const percent = Math.min(100, Math.max(0, Math.round(top.usage.usedPercent)));
+			const bit = $('div.quota-bit');
+			bit.style.width = `${percent}%`;
+			bit.classList.toggle('kingu-usage-warning', percent >= 75 && percent < 90);
+			bit.classList.toggle('kingu-usage-error', percent >= 90);
+			container.appendChild($('div.quota-indicator', undefined,
+				$('div.quota-title', undefined,
+					$('span', undefined, limited.length > 1
+						? localize('kingu.usage.closest', "{0} (closest to its limit)", top.label)
+						: top.label),
+				),
+				$('div.quota-details', undefined,
+					$('div.quota-percentage', undefined,
+						$('span.quota-value', undefined, `${percent}%`),
+						$('span.quota-value-suffix', undefined, localize('kingu.usage.used', "used")),
+					),
+					$('span.quota-reset', undefined, formatKinguAiReset(top.usage, now) ?? ''),
+				),
+				$('div.quota-bar', undefined, bit),
+			));
+		} else {
+			container.appendChild($('div.kingu-ai-usage-note', undefined, localize('kingu.usage.noLimits', "No AI account has reported a limit yet.")));
+		}
+		container.appendChild($('div.kingu-ai-usage-note', undefined, summarizeKinguAiAccounts(rows)));
+
+		if (rows.length === 0) {
+			return;
+		}
+		const list = $('div.kingu-ai-usage-list');
+		list.style.display = 'none';
+		for (const row of rows) {
+			const detail = row.signedIn
+				? formatKinguAiUsage(row.usage, now) ?? row.email ?? localize('kingu.usage.signedIn', "Signed in")
+				: localize('kingu.usage.notSignedIn', "Not signed in");
+			list.appendChild($('div.kingu-ai-usage-row', undefined,
+				$('span.kingu-ai-usage-label', undefined, row.label),
+				$('span.kingu-ai-usage-detail', undefined, detail),
+			));
+		}
+		const toggle = this._store.add(new Button(container, { ...defaultButtonStyles, hoverDelegate: nativeHoverDelegate, secondary: true }));
+		const showLabel = localize('kingu.usage.showEach', "Show Each AI ({0})", rows.length);
+		toggle.label = showLabel;
+		this._store.add(toggle.onDidClick(() => {
+			const shown = list.style.display !== 'none';
+			list.style.display = shown ? 'none' : '';
+			toggle.label = shown ? showLabel : localize('kingu.usage.hideEach', "Hide Each AI");
+		}));
+		container.appendChild(list);
 	}
 
 	private renderInlineSuggestionsContent(container: HTMLElement): void {

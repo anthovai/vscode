@@ -24,6 +24,7 @@ import { agentSdkSetupSessionType } from '../../chat/browser/agentSessions/agent
 import { hasAnyModelTargetingSessionType } from '../../chat/browser/agentSessions/sessionTypeAvailability.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import { KINGU_SETUP_COMMAND_ID } from '../common/kinguLanguageModels.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
 import {
 	IKinguAiAccountStatus,
 	IKinguAiAgentAccount,
@@ -338,7 +339,7 @@ CommandsRegistry.registerCommand(KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID, async (acce
 	await picked?.run();
 });
 
-/** The editor window's Accounts menu offers the AI sign-ins while they are missing. */
+/** The provider sign-ins, for the command palette; the Accounts menu reaches them through "Sign In to Another AI...". */
 for (const provider of KINGU_AI_PROVIDERS) {
 	registerAction2(class extends Action2 {
 		constructor() {
@@ -349,12 +350,8 @@ for (const provider of KINGU_AI_PROVIDERS) {
 					: provider === 'codex'
 						? localize2('kingu.ai.signInChatGPT', "Sign in to ChatGPT...")
 						: localize2('kingu.ai.signInGemini', "Sign in to Gemini..."),
-				menu: {
-					id: MenuId.AccountsContext,
-					group: '1_kingu_ai',
-					order: KINGU_AI_PROVIDERS.indexOf(provider) + 1,
-					when: ContextKeyExpr.not(KinguAiSignedInContext[provider].key),
-				},
+				f1: true,
+				precondition: ContextKeyExpr.not(KinguAiSignedInContext[provider].key),
 			});
 		}
 		run(accessor: ServicesAccessor): Promise<unknown> {
@@ -362,6 +359,25 @@ for (const provider of KINGU_AI_PROVIDERS) {
 		}
 	});
 }
+
+/** The Accounts menu's first entry: the Kingu account Arkai runs on, in Kingu Settings. */
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'kingu.arkai.signIn',
+			title: localize2('kingu.arkai.signIn', "Sign in to Arkai..."),
+			f1: true,
+			menu: {
+				id: MenuId.AccountsContext,
+				group: '1_kingu_ai',
+				order: 0,
+			},
+		});
+	}
+	run(accessor: ServicesAccessor): Promise<unknown> {
+		return accessor.get(ICommandService).executeCommand(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, { pane: 'kingu-account' });
+	}
+});
 
 /** The Accounts menu's way to every other AI: more accounts, agent CLIs, an endpoint. */
 registerAction2(class extends Action2 {

@@ -550,3 +550,45 @@
 	opacity: 0.6;
 	padding: 0 2px;
 }
+
+/* Kingu: AI Usage, every AI account's usage */
+
+.chat-status-bar-entry-tooltip .quota-indicator .quota-bar .quota-bit.kingu-usage-warning {
+	background-color: var(--vscode-editorWarning-foreground);
+}
+
+.chat-status-bar-entry-tooltip .quota-indicator .quota-bar .quota-bit.kingu-usage-error {
+	background-color: var(--vscode-errorForeground);
+}
+
+.chat-status-bar-entry-tooltip .kingu-ai-usage .monaco-button {
+	margin-top: 6px;
+}
+
+.chat-status-bar-entry-tooltip .kingu-ai-usage-list {
+	margin-top: 6px;
+}
+
+.chat-status-bar-entry-tooltip .kingu-ai-usage-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 2px 0;
+	font-size: 12px;
+}
+
+.chat-status-bar-entry-tooltip .kingu-ai-usage-row .kingu-ai-usage-detail {
+	color: var(--vscode-descriptionForeground);
+	text-align: end;
+}
+
+.chat-status-bar-entry-tooltip .kingu-ai-usage-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.chat-status-bar-entry-tooltip .kingu-ai-usage-note {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
