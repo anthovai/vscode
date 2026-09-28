@@ -24,6 +24,8 @@ export const CHYLE_MODEL_ID = 'chyle-1-coder';
 export const OLLAMA_URL = 'http://127.0.0.1:11434';
 /** The gateway's port; Arkai's provider file names it. */
 export const CHYLE_GATEWAY_PORT = 11435;
+/** How long Ollama keeps Chyle loaded after its last use; its own default is five minutes. */
+const CHYLE_KEEP_ALIVE = '30m';
 
 /**
  * This machine's Chyle settings, `~/.arkai/chyle.json`:
@@ -107,6 +109,8 @@ async function ensureOllama(log: ILogService): Promise<boolean> {
 		// A models directory that does not exist makes `ollama serve` exit at once.
 		delete env.OLLAMA_MODELS;
 	}
+	// Keep Chyle loaded between questions (Ollama's default is five minutes), unless the user chose otherwise.
+	env.OLLAMA_KEEP_ALIVE ??= CHYLE_KEEP_ALIVE;
 	log.info(`[Chyle] starting Ollama: ${executable} serve${env.OLLAMA_MODELS ? ` (models in ${env.OLLAMA_MODELS})` : ''}`);
 	// Started in its own directory: it outlives Kingu, and a working directory
 	// inside Kingu's install would keep that folder from being replaced.
@@ -209,6 +213,28 @@ async function ensureProviderFile(agentDir: string, log: ILogService): Promise<v
 	log.info(`[Chyle] wrote ${file}`);
 }
 
+/**
+ * Loads Chyle before the first question: loading a 20 GB model from disk is
+ * most of the wait on the first answer. An empty generate request loads it
+ * and answers nothing; the keep-alive holds it there between questions.
+ */
+async function warmChyle(log: ILogService): Promise<void> {
+	const started = Date.now();
+	try {
+		const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ model: CHYLE_MODEL_ID, keep_alive: CHYLE_KEEP_ALIVE }),
+		});
+		await response.text();
+		log.info(response.ok
+			? `[Chyle] ${CHYLE_MODEL_ID} loaded in ${Math.round((Date.now() - started) / 1000)}s; kept for ${CHYLE_KEEP_ALIVE}`
+			: `[Chyle] could not load ${CHYLE_MODEL_ID}: HTTP ${response.status}`);
+	} catch (error) {
+		log.warn(`[Chyle] could not load ${CHYLE_MODEL_ID}: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+
 let running: Promise<IChyleGateway | undefined> | undefined;
 
 /**
@@ -224,6 +250,7 @@ export function ensureChyleRuntime(agentDir: string, log: ILogService): Promise<
 			log.warn(`[Chyle] could not start Ollama: ${error instanceof Error ? error.message : String(error)}`);
 			return false;
 		});
+		void ollama.then(up => up ? warmChyle(log) : undefined);
 		return ensureGateway(ollama, log);
 	})();
 	return running;

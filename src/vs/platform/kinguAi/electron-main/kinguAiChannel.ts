@@ -9,6 +9,7 @@ import { resolveGeminiCommand } from '../../agentHost/node/acp/acpClient.js';
 import { readGeminiAuthStatus } from '../../agentHost/node/acp/geminiAuth.js';
 import { getOrcaCodexHome } from '../../kinguOrca/electron-main/kinguOrcaHost.js';
 import { IKinguGeminiStatus } from '../common/kinguAi.js';
+import { readAgentAccount } from '../node/agentAccounts.js';
 import { readClaudeAccount } from '../node/claudeAccount.js';
 import { readGeminiUsageToday } from '../node/geminiUsage.js';
 
@@ -17,7 +18,7 @@ import { readGeminiUsageToday } from '../node/geminiUsage.js';
  * the CLI's own record in `~/.gemini` (the selected method, a Google login's
  * credentials and account, or an API key in the environment or
  * `~/.gemini/.env`), and its usage today; and the Codex home of the account the
- * ADE has selected.
+ * ADE has selected; and each agent CLI's own sign-in.
  */
 export class KinguAiChannel implements IServerChannel {
 
@@ -25,11 +26,13 @@ export class KinguAiChannel implements IServerChannel {
 		throw new Error(`No such event: ${event}`);
 	}
 
-	async call<T>(_context: unknown, command: string): Promise<T> {
+	async call<T>(_context: unknown, command: string, arg?: unknown): Promise<T> {
 		switch (command) {
 			case 'geminiStatus': return await this._geminiStatus() as T;
 			case 'geminiUsageToday': return await readGeminiUsageToday() as T;
 			case 'claudeAccount': return await readClaudeAccount() as T;
+			// An agent CLI's own sign-in (Cursor, Qwen Code, OpenCode); `undefined` where there is none to read.
+			case 'agentAccount': return await readAgentAccount(typeof arg === 'string' ? arg : '') as T;
 			// After the ADE selects another Codex account: record its home for the next app-server launch.
 			case 'refreshCodexHome': return await getOrcaCodexHome() as T;
 		}

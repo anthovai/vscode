@@ -36,3 +36,15 @@ export interface IKinguClaudeAccount {
 	readonly plan?: string;
 	readonly organization?: string;
 }
+
+/** An agent CLI's sign-in, as the CLI itself reports it (`agentAccount`). */
+export interface IKinguAgentAccount {
+	readonly signedIn: boolean;
+	readonly email?: string;
+	/** The plan, as the CLI names it (Cursor's `Pro+`). */
+	readonly plan?: string;
+	/** How it signs in, where there is no account to name: `API key`, `Google, OpenAI`. */
+	readonly method?: string;
+	/** Tokens since local midnight, where the CLI records them. */
+	readonly tokensToday?: number;
+}

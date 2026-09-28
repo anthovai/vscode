@@ -295,6 +295,9 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 			name: agentId,
 			displayName: agent.displayName,
 			description: agent.description,
+			// Kingu: an empty chat names its agent as the user knows it, not by its session type (`@agent-host-arkai`).
+			welcomeTitle: localize('kingu.agentHost.welcomeTitle', "Chat with {0}", agent.displayName),
+			welcomeMessage: agent.description,
 			// Kingu: Arkai (Kingu's own agent) serves the terminal and inline chat that Copilot served.
 			locations: agent.provider === 'copilotcli' || agent.provider === 'arkai' ? [ChatAgentLocation.Chat, ChatAgentLocation.Terminal, ChatAgentLocation.EditorInline] : undefined,
 			customAgentTarget: this._isSessionsWindow ? undefined : Target.GitHubCopilot,

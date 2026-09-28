@@ -10,28 +10,25 @@
  * (#2a2a2a dark, #f5f5f5 light), `card` (#171717 / #fff), `input`
  * (white 15% / #e5e5e5), `border` (white 7% / #e5e5e5).
  */
+/*
+ * The screen's tokens, taken from the workbench theme rather than the ADE's
+ * fixed palette, so it follows every theme: the navigation as the side bar,
+ * cards as widgets, inputs and switches as the workbench's own controls.
+ */
 .monaco-workbench {
 	--kingu-orca-settings-bg: var(--vscode-editor-background);
-	--kingu-orca-settings-sidebar: #f5f5f5;
-	--kingu-orca-settings-sidebar-accent: #eaeaea;
-	--kingu-orca-settings-sidebar-border: #e5e5e5;
-	--kingu-orca-settings-card: rgba(255, 255, 255, 0.5);
-	--kingu-orca-settings-input: #e5e5e5;
-	--kingu-orca-settings-input-bg: transparent;
-	--kingu-orca-settings-border: #e5e5e5;
-	--kingu-orca-settings-muted-track: rgba(115, 115, 115, 0.3);
-}
-
-.monaco-workbench.vs-dark,
-.monaco-workbench.hc-black {
-	--kingu-orca-settings-sidebar: #2a2a2a;
-	--kingu-orca-settings-sidebar-accent: #353535;
-	--kingu-orca-settings-sidebar-border: rgb(255 255 255 / 0.07);
-	--kingu-orca-settings-card: rgba(23, 23, 23, 0.5);
-	--kingu-orca-settings-input: rgb(255 255 255 / 0.15);
-	--kingu-orca-settings-input-bg: rgb(255 255 255 / 0.045);
-	--kingu-orca-settings-border: rgb(255 255 255 / 0.07);
-	--kingu-orca-settings-muted-track: rgba(161, 161, 161, 0.3);
+	--kingu-orca-settings-sidebar: var(--vscode-sideBar-background, var(--vscode-editor-background));
+	--kingu-orca-settings-sidebar-accent: var(--vscode-list-hoverBackground);
+	--kingu-orca-settings-sidebar-selected: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
+	--kingu-orca-settings-sidebar-selected-foreground: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+	--kingu-orca-settings-sidebar-border: var(--vscode-sideBar-border, var(--vscode-widget-border, transparent));
+	--kingu-orca-settings-card: var(--vscode-editorWidget-background);
+	--kingu-orca-settings-input: var(--vscode-input-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.35)));
+	--kingu-orca-settings-input-bg: var(--vscode-input-background);
+	--kingu-orca-settings-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+	--kingu-orca-settings-muted-track: var(--vscode-checkbox-border, rgba(128, 128, 128, 0.45));
+	--kingu-orca-settings-accent: var(--vscode-button-background);
+	--kingu-orca-settings-accent-foreground: var(--vscode-button-foreground);
 }
 
 /* `settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background`, over the workbench. */
@@ -937,4 +934,95 @@ button.kingu-orca-account-card {
 .kingu-orca-settings-nav::-webkit-scrollbar-thumb:active,
 .kingu-orca-settings-scroll::-webkit-scrollbar-thumb:active {
 	background-color: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/*
+ * Controls in the workbench's own colors (the ADE draws them in its palette):
+ * the selected page as a selected list item, switches and the chosen segment
+ * in the button color, outline buttons as secondary buttons, inputs as inputs,
+ * and a focus ring from the theme wherever the keyboard lands.
+ */
+.kingu-orca-settings .kingu-orca-settings-nav-item.active {
+	background-color: var(--kingu-orca-settings-sidebar-selected);
+	box-shadow: none;
+	color: var(--kingu-orca-settings-sidebar-selected-foreground);
+}
+
+.kingu-orca-settings .kingu-orca-switch {
+	border-color: var(--kingu-orca-settings-muted-track);
+	background-color: transparent;
+}
+
+.kingu-orca-settings .kingu-orca-switch .kingu-orca-switch-thumb {
+	background-color: var(--kingu-orca-muted);
+	box-shadow: none;
+}
+
+.kingu-orca-settings .kingu-orca-switch.checked {
+	border-color: var(--kingu-orca-settings-accent);
+	background-color: var(--kingu-orca-settings-accent);
+}
+
+.kingu-orca-settings .kingu-orca-switch.checked .kingu-orca-switch-thumb {
+	background-color: var(--kingu-orca-settings-accent-foreground);
+}
+
+.kingu-orca-settings .kingu-orca-button.outline,
+.kingu-orca-settings .kingu-orca-xs-button.outline {
+	border: 1px solid var(--vscode-button-border, transparent);
+	background-color: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	box-shadow: none;
+}
+
+.kingu-orca-settings .kingu-orca-button.outline:hover,
+.kingu-orca-settings .kingu-orca-xs-button.outline:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.kingu-orca-settings .kingu-orca-segmented {
+	border-color: var(--kingu-orca-settings-input);
+	background-color: var(--kingu-orca-settings-input-bg);
+}
+
+.kingu-orca-settings .kingu-orca-segment-option.active {
+	background-color: var(--kingu-orca-settings-accent);
+	color: var(--kingu-orca-settings-accent-foreground);
+}
+
+.kingu-orca-settings .kingu-orca-input,
+.kingu-orca-settings .kingu-orca-textarea,
+.kingu-orca-settings .kingu-orca-number,
+.kingu-orca-settings .kingu-orca-select select {
+	border-color: var(--kingu-orca-settings-input);
+	background-color: var(--kingu-orca-settings-input-bg);
+	color: var(--vscode-input-foreground);
+	box-shadow: none;
+}
+
+.kingu-orca-settings .kingu-orca-input::placeholder,
+.kingu-orca-settings .kingu-orca-textarea::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.kingu-orca-settings .kingu-orca-slider {
+	accent-color: var(--kingu-orca-settings-accent);
+}
+
+.monaco-workbench .kingu-orca-settings .kingu-orca-switch:focus-visible,
+.monaco-workbench .kingu-orca-settings .kingu-orca-segment-option:focus-visible,
+.monaco-workbench .kingu-orca-settings .kingu-orca-button:focus-visible,
+.monaco-workbench .kingu-orca-settings .kingu-orca-xs-button:focus-visible,
+.monaco-workbench .kingu-orca-settings .kingu-orca-settings-nav-item:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+	box-shadow: none;
+}
+
+.monaco-workbench .kingu-orca-settings .kingu-orca-input:focus,
+.monaco-workbench .kingu-orca-settings .kingu-orca-textarea:focus,
+.monaco-workbench .kingu-orca-settings .kingu-orca-number:focus,
+.monaco-workbench .kingu-orca-settings .kingu-orca-select select:focus {
+	border-color: var(--vscode-focusBorder);
+	outline: none;
 }

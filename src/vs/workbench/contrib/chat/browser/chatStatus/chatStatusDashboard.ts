@@ -709,7 +709,7 @@ export class ChatStatusDashboard extends DomWidget {
 		list.style.display = 'none';
 		for (const row of rows) {
 			const detail = row.signedIn
-				? formatKinguAiUsage(row.usage, now) ?? row.email ?? localize('kingu.usage.signedIn', "Signed in")
+				? formatKinguAiUsage(row.usage, now) ?? ([row.email, row.plan].filter(Boolean).join(' · ') || localize('kingu.usage.signedIn', "Signed in"))
 				: localize('kingu.usage.notSignedIn', "Not signed in");
 			list.appendChild($('div.kingu-ai-usage-row', undefined,
 				$('span.kingu-ai-usage-label', undefined, row.label),

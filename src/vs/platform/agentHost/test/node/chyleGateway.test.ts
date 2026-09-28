@@ -7,7 +7,7 @@ import assert from 'assert';
 import type * as http from 'http';
 import type { AddressInfo } from 'net';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { IChyleGateway, startChyleGateway } from '../../node/acp/chyleGateway.js';
+import { IChyleGateway, lastUsage, startChyleGateway } from '../../node/acp/chyleGateway.js';
 
 suite('chyleGateway', () => {
 
@@ -120,6 +120,18 @@ suite('chyleGateway', () => {
 		gateway = await startChyleGateway(`http://127.0.0.1:${(upstream.address() as AddressInfo).port}`, 0, { onUsage: usage => usages.push(usage) });
 		await ask('/v1/chat/completions', { model: 'chyle-1-coder', messages: [], tools });
 		assert.deepStrictEqual(usages, [{ promptTokens: 10, completionTokens: 5 }]);
+	});
+
+	test('reads the tokens off a reply it passes through, as JSON or as a stream', () => {
+		assert.deepStrictEqual({
+			json: lastUsage('{"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":4,"total_tokens":16}}'),
+			stream: lastUsage('data: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: {"choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2}}\n\ndata: [DONE]\n\n'),
+			none: lastUsage('data: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n\n'),
+		}, {
+			json: { promptTokens: 12, completionTokens: 4 },
+			stream: { promptTokens: 7, completionTokens: 2 },
+			none: undefined,
+		});
 	});
 
 	test('passes other requests through', async () => {

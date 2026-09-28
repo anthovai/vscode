@@ -32,6 +32,7 @@ import './media/terminalInitialHint.css';
 import { TerminalSuggestCommandId } from '../../suggest/common/terminal.suggest.js';
 import { TerminalSuggestSettingId } from '../../suggest/common/terminalSuggestConfiguration.js';
 import { IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
+import product from '../../../../../platform/product/common/product.js';
 
 const $ = dom.$;
 
@@ -270,8 +271,25 @@ class TerminalInitialHintWidget extends Disposable {
 
 		const aiFeaturesHidden = this._chatEntitlementService.sentiment.hidden;
 
+		// Kingu: no Copilot CLI to type; the hint asks Arkai, in the terminal's own chat.
+		if (!aiFeaturesHidden && product.kinguDisableCopilot) {
+			const arkaiHint = localize({
+				key: 'kingu.arkaiTerminalHint',
+				comment: [
+					'Preserve double-square brackets and their order',
+				]
+			}, "Ask [[Arkai]] about this terminal (Ctrl+I).");
+			hintElement.appendChild(renderFormattedText(arkaiHint, {
+				actionHandler: {
+					callback: () => void this._commandService.executeCommand('workbench.action.terminal.chat.start'),
+					disposables: this._toDispose,
+				}
+			}));
+			ariaLabelParts.push(localize('kingu.arkaiTerminalHintAriaLabel', "Ask Arkai about this terminal with Control plus I."));
+		}
+
 		// Copilot CLI hint (only shown when AI features are enabled)
-		if (!aiFeaturesHidden) {
+		if (!aiFeaturesHidden && !product.kinguDisableCopilot) {
 			const handleCopilotCliClick = () => {
 				this._telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', {
 					id: 'terminalCopilotCli.hintAction',

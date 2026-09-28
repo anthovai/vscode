@@ -12,6 +12,7 @@ import { Codicon } from '../../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { KINGU_LUCIDE_ICONS } from '../common/kinguLucideIcons.js';
 import { IKinguProviderLogo, KINGU_PROVIDER_LOGOS } from '../common/kinguProviderLogos.js';
+import './media/kinguOrcaParts.css';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

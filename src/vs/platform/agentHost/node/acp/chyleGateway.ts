@@ -129,6 +129,20 @@ export interface IChyleUsage {
 	readonly completionTokens: number;
 }
 
+/**
+ * The last `usage` in a completion's reply: its JSON body, or the final chunk
+ * of a server-sent stream (sent when the client asked for usage).
+ */
+export function lastUsage(reply: string): IChyleUsage | undefined {
+	const matches = [...reply.matchAll(/"usage"\s*:\s*\{(?<body>[^{}]*)\}/g)];
+	const body = matches.at(-1)?.groups?.body;
+	if (!body) {
+		return undefined;
+	}
+	const count = (name: string) => Number(new RegExp(`"${name}"\\s*:\\s*(\\d+)`).exec(body)?.[1] ?? 0);
+	return { promptTokens: count('prompt_tokens'), completionTokens: count('completion_tokens') };
+}
+
 /** Starts the gateway on 127.0.0.1:`port` (0 for any free port), in front of `upstream`. */
 export async function startChyleGateway(upstream: string, port: number, options: IChyleGatewayOptions = {}): Promise<IChyleGateway> {
 	const httpModule = await import('http');
@@ -150,6 +164,17 @@ export async function startChyleGateway(upstream: string, port: number, options:
 			if (!json || tools.length === 0) {
 				const passed = await askUpstream(httpModule, `${base}${url}`, request.method ?? 'GET', forwardHeaders(request.headers), request.method === 'GET' || request.method === 'HEAD' ? undefined : body);
 				response.writeHead(passed.statusCode ?? 502, { 'content-type': passed.headers['content-type'] ?? 'application/json' });
+				if (json && options.onUsage) {
+					// A completion without tools (a title, a summary) uses tokens too: read them off the reply as it passes.
+					let tail = '';
+					passed.on('data', (chunk: Buffer) => { tail = `${tail}${chunk.toString('utf8')}`.slice(-16_000); });
+					passed.on('end', () => {
+						const usage = lastUsage(tail);
+						if (usage) {
+							options.onUsage?.(usage);
+						}
+					});
+				}
 				passed.pipe(response);
 				return;
 			}

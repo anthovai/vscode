@@ -103,6 +103,6 @@ export async function loadKinguAiAccountRows(commandService: ICommandService): P
 		// Arkai first: Kingu's own agent, on Chyle 1 on this computer, with no account or limit.
 		...(arkai ? [{ id: 'arkai', label: localize('kingu.aiAccounts.arkai', "Arkai (Chyle 1)"), signedIn: true, plan: localize('kingu.aiAccounts.arkaiPlan', "On this computer, no limit"), usage: arkai.usage, signIn: 'none' as const }] : []),
 		...providers.filter((row): row is NonNullable<typeof row> => !!row),
-		...(agents ?? []).map(agent => ({ id: agent.id, label: agent.displayName, signedIn: agent.signedIn, usage: agent.usage, signIn: 'terminal' as const })),
+		...(agents ?? []).map(agent => ({ id: agent.id, label: agent.displayName, signedIn: agent.signedIn, email: agent.email, plan: agent.plan, usage: agent.usage, signIn: 'terminal' as const })),
 	];
 }

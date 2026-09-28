@@ -11,7 +11,7 @@ import { ContextKeyExpr, IContextKey, IContextKeyService } from '../../../../pla
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { KINGU_ORCA_CHANNEL_NAME } from '../../../../platform/kinguOrca/common/kinguOrca.js';
-import { IKinguClaudeAccount, IKinguGeminiStatus, IKinguGeminiUsage, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
+import { IKinguAgentAccount, IKinguClaudeAccount, IKinguGeminiStatus, IKinguGeminiUsage, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -271,13 +271,28 @@ CommandsRegistry.registerCommand(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, async (acce
 		if (!own.length) {
 			return [];
 		}
+		// A guess, for an agent whose CLI Kingu cannot ask: signed out, it offers only its configured model.
 		const signedIn = !(own.length === 1 && own[0]?.id === `${entry.id}-default`);
-		return [{ id: entry.id, displayName: entry.displayName, signedIn, modelCount: signedIn ? own.length : 0 }];
+		return [{ id: entry.id, displayName: entry.displayName, signedIn, modelCount: own.length }];
 	});
-	// The ADE reads OpenCode's usage from OpenCode's own database; the other agents have no source it reads.
-	return Promise.all(accounts.map(async account => account.id === 'opencode' || account.id === 'opencode2'
-		? { ...account, usage: await readOpenCodeUsage(mainProcessService) }
-		: account));
+	const channel = mainProcessService.getChannel(KINGU_AI_CHANNEL_NAME);
+	return Promise.all(accounts.map(async (account): Promise<IKinguAiAgentAccount> => {
+		// The CLI's own answer, where it gives one (Cursor, Qwen Code, OpenCode), over the guess.
+		const own = await channel.call<IKinguAgentAccount | undefined>('agentAccount', account.id).catch(() => undefined);
+		const signedIn = own?.signedIn ?? account.signedIn;
+		// The ADE reads OpenCode's usage from OpenCode's own database; Qwen Code records its own.
+		const usage = account.id === 'opencode' || account.id === 'opencode2'
+			? await readOpenCodeUsage(mainProcessService)
+			: own?.tokensToday !== undefined ? { tokensToday: own.tokensToday } : undefined;
+		return {
+			...account,
+			signedIn,
+			modelCount: signedIn ? account.modelCount : 0,
+			email: own?.email,
+			plan: own?.plan ?? own?.method,
+			usage,
+		};
+	}));
 });
 
 CommandsRegistry.registerCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, async (accessor: ServicesAccessor, agentId: unknown): Promise<void> => {
@@ -338,7 +353,7 @@ CommandsRegistry.registerCommand(KINGU_AI_CHOOSE_SIGN_IN_COMMAND_ID, async (acce
 		}));
 		const agentPicks: IKinguSignInPick[] = (agents ?? []).map(agent => ({
 			label: agent.displayName,
-			description: agent.signedIn ? signedInAs(undefined) : notSignedIn,
+			description: agent.signedIn ? [signedInAs(agent.email), agent.plan].filter(Boolean).join(' · ') : notSignedIn,
 			detail: localize('kingu.ai.pick.inTerminal', "Signs in with its own CLI, in a terminal"),
 			run: () => commandService.executeCommand(KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID, agent.id),
 		}));

@@ -48,6 +48,9 @@ export interface IKinguAiAgentAccount {
 	/** Whether the agent offers models of its own, rather than only its configured one (which it does while signed out). */
 	readonly signedIn: boolean;
 	readonly modelCount: number;
+	/** The account, and its plan or how it signs in, where its CLI says. */
+	readonly email?: string;
+	readonly plan?: string;
 	readonly usage?: IKinguAiUsage;
 }
 
