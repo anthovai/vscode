@@ -12,7 +12,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import { IKinguTaskActions } from '../common/kinguTasksDetail.js';
 import {
 	getJiraLoadError,
@@ -31,7 +31,7 @@ import {
 	nextJiraSort,
 	sortJiraIssues,
 } from '../common/kinguTasksJira.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { bindTaskRow } from './kinguTasksRow.js';
 
 /** The ADE's `TASK_SEARCH_DEBOUNCE_MS`. */

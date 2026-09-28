@@ -11,11 +11,11 @@ import { Extensions as ConfigurationExtensions, IConfigurationDefaults, IConfigu
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import { IKinguSettingEquivalent, KINGU_SETTING_EQUIVALENTS, orcaValueFor, vscodeValueFor } from '../common/kinguOrcaSettingEquivalents.js';
-import { orcaSettingId, orcaSettingIdForKey, orcaSettingsById, orcaSettingsPatch } from '../common/kinguOrcaSettings.js';
-import { KINGU_ORCA_SETTINGS, KINGU_ORCA_SETTINGS_PAGES } from '../common/kinguOrcaSettingsSchema.js';
-import './kinguOrcaService.js';
+import { orcaSettingId, orcaSettingIdForKey, orcaSettingsById, orcaSettingsPatch } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettings.js';
+import { KINGU_ORCA_SETTINGS, KINGU_ORCA_SETTINGS_PAGES } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettingsSchema.js';
+import '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaService.js';
 
 const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 

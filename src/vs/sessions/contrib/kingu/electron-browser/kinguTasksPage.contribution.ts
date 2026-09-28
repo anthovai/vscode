@@ -25,7 +25,7 @@ import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../work
 import { AbstractCustomView } from '../../../services/customView/browser/customView.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { ISessionsRecentWorkspacesService } from '../../../services/sessions/browser/sessionsRecentWorkspacesService.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import {
 	getLocalHostLabel,
 	getRepoBackedProviderReason,
@@ -47,9 +47,9 @@ import {
 	resolveVisibleTaskProvider,
 } from '../common/kinguTasks.js';
 import { getRepoBackedSummary, getRepoGitHubSlug, getRepoHostId, IKinguGitHubSlug, IKinguRepo, isTaskEligibleRepo, resolveRepoSelection } from '../common/kinguTasksGitHub.js';
-import { KINGU_PROVIDER_LOGOS, IKinguProviderLogo } from '../common/kinguProviderLogos.js';
+import { KINGU_PROVIDER_LOGOS, IKinguProviderLogo } from '../../../../workbench/contrib/kingu/common/kinguProviderLogos.js';
 import { IKinguTaskActions, IKinguTaskRef } from '../common/kinguTasksDetail.js';
-import { lucideIcon, logoIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon, logoIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { KinguTasksDetail } from './kinguTasksDetail.js';
 import { KinguTasksGitHubList } from './kinguTasksGitHubList.js';
 import { KinguTasksGitLabList } from './kinguTasksGitLabList.js';

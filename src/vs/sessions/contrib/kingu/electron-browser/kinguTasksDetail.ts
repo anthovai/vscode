@@ -13,7 +13,7 @@ import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import {
 	getAddCommentRequest,
 	getTaskDetailRequests,
@@ -29,7 +29,7 @@ import {
 import { getWorkItemStatus } from '../common/kinguTasksGitHub.js';
 import { formatGitLabTypeState, getGitLabStateTone } from '../common/kinguTasksGitLab.js';
 import { getJiraStatusTone } from '../common/kinguTasksJira.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 import { renderLinearStatePill } from './kinguTasksLinearList.js';
 

@@ -6,10 +6,10 @@
 import { $, addDisposableListener, append, clearNode, EventType, getWindow } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import { IKinguGitHubSlug, KinguGitHubTaskKind } from '../common/kinguTasksGitHub.js';
 import { countActiveFilters, IKinguGitHubFilterChange, IKinguGitHubQuery, KinguGitHubQueryState } from '../common/kinguTasksGitHubQuery.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 
 type Section = 'status' | 'author' | 'label' | 'reviewer' | 'assignee';
 

@@ -6,7 +6,7 @@
 import { localize } from '../../../../nls.js';
 import { KINGU_QUOTA_PROVIDER_LABELS, KinguQuotaProvider } from '../../../../platform/kinguHost/common/kinguQuotaProviders.js';
 import { KinguQuotaProblem } from '../../../../platform/kinguHost/common/kinguRateLimits.js';
-import { formatWindow, IKinguRateLimit } from './kinguStatusBar.js';
+import { formatWindow, IKinguRateLimit } from '../../../../workbench/contrib/kingu/common/kinguStatusBar.js';
 
 /**
  * The roster behind the Usage panel: every agent's quota in one reading.

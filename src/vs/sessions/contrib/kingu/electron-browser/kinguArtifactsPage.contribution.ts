@@ -42,9 +42,9 @@ import {
 	KINGU_SHOW_ARTIFACTS_COMMAND_ID,
 	KinguRuntimeResponse,
 	readArtifactOperation,
-} from '../common/kinguArtifacts.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+} from '../../../../workbench/contrib/kingu/common/kinguArtifacts.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 
 /** The ADE's `KinguProfileAuthStatus`, the part the page reads. */

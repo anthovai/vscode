@@ -32,7 +32,7 @@ import { IPathService } from '../../../../workbench/services/path/common/pathSer
 import { ITextFileService } from '../../../../workbench/services/textfile/common/textfiles.js';
 import { KinguAgentTerminalStatus } from '../common/kinguJevTerminal.js';
 import { IKinguJevService } from './kinguJev.contribution.js';
-import { attachFooterTooltip, lucideIcon, providerIcon } from './kinguOrcaFooterParts.js';
+import { attachFooterTooltip, lucideIcon, providerIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 
 /** `floating-terminal-panel-bounds.ts`. */
 const DEFAULT_PANEL_WIDTH = 920;

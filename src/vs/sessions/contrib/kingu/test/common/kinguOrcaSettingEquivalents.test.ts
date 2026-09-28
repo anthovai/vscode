@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IKinguSettingEquivalent, KINGU_SETTING_EQUIVALENTS, orcaValueFor, vscodeValueFor } from '../../common/kinguOrcaSettingEquivalents.js';
-import { orcaSettingIdForKey } from '../../common/kinguOrcaSettings.js';
+import { orcaSettingIdForKey } from '../../../../../workbench/contrib/kingu/common/kinguOrcaSettings.js';
 
 function pair(orcaKey: string): IKinguSettingEquivalent {
 	const found = KINGU_SETTING_EQUIVALENTS.find(equivalent => equivalent.orcaKey === orcaKey);

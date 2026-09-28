@@ -21,9 +21,9 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { IKinguFloatingWorkspaceService } from './kinguFloatingWorkspacePanel.js';
-import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
-import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
-import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
+import { orcaSettingIdForKey } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettings.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettingsCommands.js';
+import { attachFooterTooltip, lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 
 /** Whether the floating-workspace toggle is on, and where the ADE puts it. */
 export const FLOATING_ENABLED_SETTING_ID = orcaSettingIdForKey('floatingTerminalEnabled') ?? 'kingu.floatingWorkspace.floatingTerminalEnabled';

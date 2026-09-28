@@ -8,7 +8,6 @@ import { renderAsPlaintext } from '../../../../../../base/browser/markdownRender
 import { renderLabelWithIcons } from '../../../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { IAction } from '../../../../../../base/common/actions.js';
 import { autorun } from '../../../../../../base/common/observable.js';
-import { Codicon } from '../../../../../../base/common/codicons.js';
 import { IDisposable } from '../../../../../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../../../../../base/common/themables.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -454,7 +453,8 @@ export class SessionTypePickerActionItem extends ChatInputPickerActionViewItem {
 		if (contribution && ThemeIcon.isThemeIcon(contribution.icon)) {
 			return contribution.icon;
 		}
-		return Codicon.extensions;
+		// Kingu: agent-host agents it knows by id (Arkai, Gemini) have a mark of their own.
+		return getAgentSessionProviderIcon(sessionTypeItem.type);
 	}
 
 	override render(container: HTMLElement): void {

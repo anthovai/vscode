@@ -108,7 +108,7 @@ import { IAutomationService } from '../../../../../workbench/contrib/chat/common
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { KINGU_SHOW_TASKS_COMMAND_ID, KINGU_TASKS_VIEW_ID } from '../../../kingu/common/kinguTasks.js';
-import { KINGU_ARTIFACTS_VIEW_ID, KINGU_SHOW_ARTIFACTS_COMMAND_ID } from '../../../kingu/common/kinguArtifacts.js';
+import { KINGU_ARTIFACTS_VIEW_ID, KINGU_SHOW_ARTIFACTS_COMMAND_ID } from '../../../../../workbench/contrib/kingu/common/kinguArtifacts.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
 import { AutomationsNewBadgeState, type AutomationsNewBadgeStyle } from '../automationsNewBadge.js';
 import { OPEN_AI_CUSTOMIZATIONS_COMMAND_ID } from '../customizationsConstants.js';

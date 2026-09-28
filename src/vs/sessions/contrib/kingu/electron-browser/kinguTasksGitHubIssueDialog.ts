@@ -10,9 +10,9 @@ import { isMacintosh } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import { getRepoGitHubSlug, IKinguGitHubSlug, IKinguRepo } from '../common/kinguTasksGitHub.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 
 interface IAssignableUser {

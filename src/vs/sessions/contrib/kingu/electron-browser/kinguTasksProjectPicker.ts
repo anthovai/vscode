@@ -7,7 +7,7 @@ import { $, addDisposableListener, append, clearNode, EventType, getWindow } fro
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IKinguRepo } from '../common/kinguTasksGitHub.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 
 export interface IKinguTasksProjectPickerHost {
 	/** The projects the picker offers: the ADE's eligible repos. */

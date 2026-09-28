@@ -202,7 +202,12 @@ export class AcpClient extends Disposable {
 		return new Promise<void>(resolve => {
 			const timer = setTimeout(() => {
 				if (!this._exited) {
-					this._child.kill();
+					if (process.platform === 'win32' && this._child.pid !== undefined) {
+						// The whole tree: a CLI started through `cmd.exe` runs as its grandchild.
+						spawn('taskkill', ['/pid', String(this._child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).on('error', () => this._child.kill());
+					} else {
+						this._child.kill();
+					}
 				}
 			}, 3000);
 			this._child.once('close', () => {
@@ -336,7 +341,9 @@ function pathDirs(env: NodeJS.ProcessEnv): string[] {
  * is not installed. On Windows an npm install is a `.cmd` shim; its script is
  * run with Node directly (no `cmd.exe` in between, which would mangle
  * arguments and outlive a kill), and a shim that wraps an executable runs that
- * executable. Elsewhere the executable runs as is.
+ * executable. Any other `.cmd` (Cursor's) runs through `cmd.exe` after all,
+ * since only it knows what to start; its arguments must be plain words.
+ * Elsewhere the executable runs as is.
  */
 export async function resolveAcpCommand(executable: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): Promise<IAcpSpawnCommand | undefined> {
 	const dirs = pathDirs(env);
@@ -370,7 +377,9 @@ export async function resolveAcpCommand(executable: string, args: readonly strin
 			.map(match => match.groups)
 			.find(groups => groups && !/(^|\\)node\.exe$/i.test(groups.target));
 		if (!target) {
-			continue;
+			// Kingu: not an npm shim (Cursor's hands over to a PowerShell script that
+			// picks its newest version), so let cmd run it; stdio passes through.
+			return { command: env.ComSpec ?? 'cmd.exe', args: ['/d', '/c', shim, ...args], env: childEnv };
 		}
 		const script = join(dir, target.target);
 		if (!await isFile(script)) {

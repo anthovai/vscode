@@ -12,7 +12,7 @@ import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import {
 	groupProjectRows,
 	IKinguProjectField,
@@ -33,7 +33,7 @@ import {
 	sameProject,
 	sortProjectRows,
 } from '../common/kinguTasksGitHubProjects.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { KinguProjectCellEditors } from './kinguTasksGitHubProjectEditors.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 

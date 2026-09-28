@@ -114,7 +114,7 @@ async function detectCandidate(candidate: IAcpAgentCatalogEntry, logService: ILo
 		if (help === undefined) {
 			continue;
 		}
-		const args = ACP_SPELLINGS.find(spelling => helpOffers(help.output, spelling));
+		const args = candidate.acpArgs ?? ACP_SPELLINGS.find(spelling => helpOffers(help.output, spelling));
 		if (!args) {
 			logService.info(help.timedOut
 				? `[ACP] ${candidate.displayName} is installed but its --help did not finish, twice; left to the terminal until the next start`

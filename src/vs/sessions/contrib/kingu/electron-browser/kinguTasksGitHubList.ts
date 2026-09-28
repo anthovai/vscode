@@ -14,7 +14,7 @@ import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import {
 	getDefaultPreset,
 	getGitHubPresets,
@@ -37,7 +37,7 @@ import {
 } from '../common/kinguTasksGitHub.js';
 import { applyFilterChange, parseTaskQuery } from '../common/kinguTasksGitHubQuery.js';
 import { IKinguTaskActions } from '../common/kinguTasksDetail.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { KinguTasksGitHubFilters } from './kinguTasksGitHubFilters.js';
 import { KinguTasksGitHubIssueDialog } from './kinguTasksGitHubIssueDialog.js';
 import { KinguTasksGitHubProjects } from './kinguTasksGitHubProjects.js';

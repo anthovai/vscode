@@ -12,7 +12,7 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import { IKinguTaskActions } from '../common/kinguTasksDetail.js';
 import {
 	getLinearPriorityBars,
@@ -24,7 +24,7 @@ import {
 	normalizeLinearCollection,
 	sortLinearIssuesByPriority,
 } from '../common/kinguTasksLinear.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 import { openExternalIssue } from './kinguTasksJiraList.js';
 import { bindTaskRow } from './kinguTasksRow.js';
 

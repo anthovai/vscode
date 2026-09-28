@@ -26,7 +26,7 @@ import {
 	sameSkillFile,
 	skillErrorMessage,
 	skillsOfVersion,
-} from '../common/kinguSkillSharing.js';
+} from '../../../../workbench/contrib/kingu/common/kinguSkillSharing.js';
 
 /** Where the ADE does not run: nothing to share through, so the Skills page only reads. */
 export class UnavailableKinguSkillSharingService implements IKinguSkillSharingService {

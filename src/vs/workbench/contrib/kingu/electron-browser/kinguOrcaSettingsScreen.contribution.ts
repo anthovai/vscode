@@ -13,7 +13,7 @@ import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { Action2, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -23,7 +23,6 @@ import { ServicesAccessor } from '../../../../platform/instantiation/common/inst
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
-import { Menus } from '../../../browser/menus.js';
 import { KINGU_SHOW_ARTIFACTS_COMMAND_ID } from '../common/kinguArtifacts.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
 import { orcaKeyForSettingId, orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
@@ -801,15 +800,16 @@ registerAction2(class extends Action2 {
 			id: KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID,
 			title: localize2('kingu.settings.open', "Kingu: Settings"),
 			f1: true,
+			// The editor window's Manage menu, beside its own Settings; the Agents
+			// window has its entry in its account menu (sessions/contrib/kingu).
+			menu: {
+				id: MenuId.GlobalActivity,
+				group: '2_configuration',
+				order: 0,
+			},
 		});
 	}
 	run(_accessor: ServicesAccessor, target?: IKinguOpenSettingsTarget): void {
 		KinguOrcaSettingsScreen.open(target);
 	}
-});
-
-MenuRegistry.appendMenuItem(Menus.AccountMenu, {
-	command: { id: KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, title: localize('kingu.settings.menu', "Kingu Settings") },
-	group: '2_settings',
-	order: 0,
 });

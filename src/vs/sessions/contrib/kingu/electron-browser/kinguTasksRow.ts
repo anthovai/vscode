@@ -9,7 +9,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { getTaskReference, getTaskTitle, IKinguTaskActions, IKinguTaskRef } from '../common/kinguTasksDetail.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 
 /**
  * Makes a list row open its task, as the ADE's rows open its dialog, and adds

@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { KinguQuotaProvider } from '../../../../../platform/kinguHost/common/kinguQuotaProviders.js';
-import { IKinguRateLimit } from '../../common/kinguStatusBar.js';
+import { IKinguRateLimit } from '../../../../../workbench/contrib/kingu/common/kinguStatusBar.js';
 import {
 	clampUsedPercent,
 	displayedPercent,

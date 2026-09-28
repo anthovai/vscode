@@ -8,7 +8,7 @@ import { Disposable, DisposableStore, IDisposable, toDisposable } from '../../..
 import { localize } from '../../../../nls.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import {
 	getProjectFieldEditor,
 	IKinguProjectField,
@@ -20,7 +20,7 @@ import {
 	projectRowRepository,
 	withProjectFieldValue,
 } from '../common/kinguTasksGitHubProjects.js';
-import { lucideIcon } from './kinguOrcaFooterParts.js';
+import { lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
 
 /** The ADE's `GitHubProjectMutationResult`. */
 type MutationResult = { readonly ok: true } | { readonly ok: false; readonly error?: { readonly message?: string } };

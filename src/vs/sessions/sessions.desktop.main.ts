@@ -287,7 +287,8 @@ import './contrib/kingu/electron-browser/kinguFloatingWorkspace.contribution.js'
 import './contrib/kingu/electron-browser/kinguFloatingWorkspacePanel.js';
 import './contrib/kingu/electron-browser/kinguHostService.js';
 import './contrib/kingu/electron-browser/kinguJev.contribution.js';
-import './contrib/kingu/electron-browser/kinguOrcaSettingsScreen.contribution.js';
+import '../workbench/contrib/kingu/electron-browser/kinguOrcaSettingsScreen.contribution.js';
+import './contrib/kingu/electron-browser/kinguOrcaSettingsMenu.contribution.js';
 // Kingu: AI accounts (Claude, ChatGPT) signed in through the ADE, never GitHub
 import '../workbench/contrib/kingu/electron-browser/kinguAiAccounts.contribution.js';
 

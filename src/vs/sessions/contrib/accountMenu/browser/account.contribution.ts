@@ -49,8 +49,8 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { IKinguAiAccountStatus, IKinguAiAgentAccount, IKinguAiUsage, KINGU_AI_ACCOUNT_STATUS_COMMAND_ID, KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID, KINGU_AI_SIGN_IN_COMMAND_ID, KINGU_AI_SIGN_IN_IN_TERMINAL_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
 import { createCodexAccountMenuActions, hasSignedInCodexChatGPTAccount, ICodexAccountService, shouldShowCodexAccount, type ICodexAccountViewInfo } from '../../../../workbench/services/agentHost/browser/codexAccountService.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
-import { loadKinguAiAccountRows, summarizeKinguAiAccounts } from '../../kingu/common/kinguAiAccountSummary.js';
-import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../kingu/common/kinguOrcaSettingsCommands.js';
+import { loadKinguAiAccountRows, summarizeKinguAiAccounts } from '../../../../workbench/contrib/kingu/common/kinguAiAccountSummary.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettingsCommands.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
 import { ILanguageModelsService } from '../../../../workbench/contrib/chat/common/languageModels.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';

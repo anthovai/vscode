@@ -8,7 +8,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import {
 	IKinguDiscoveredSkill,
 	IKinguOwnedSkillShare,
@@ -21,7 +21,7 @@ import {
 	KinguSkillOutcome,
 	readSkillOperation,
 	skillErrorMessage,
-} from '../common/kinguSkillSharing.js';
+} from '../../../../workbench/contrib/kingu/common/kinguSkillSharing.js';
 
 /** The ADE's `KinguProfileAuthStatus`, the part read here. */
 interface IAuthStatus {

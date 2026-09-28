@@ -14,6 +14,11 @@ export interface IAcpAgentCatalogEntry {
 	/** An executable that is itself the ACP server, run with no arguments. */
 	readonly dedicatedExecutable?: string;
 	/**
+	 * How the CLI starts its ACP server, for a CLI whose `--help` does not list
+	 * it; otherwise the spelling is read from `--help`.
+	 */
+	readonly acpArgs?: readonly string[];
+	/**
 	 * Environment variables the CLI reads under another name than the one the
 	 * user set, as `{ [name the CLI reads]: name the user set }`.
 	 */
@@ -64,7 +69,8 @@ export const ACP_AGENT_CATALOG: readonly IAcpAgentCatalogEntry[] = [
 	{ id: 'codebuff', displayName: 'Codebuff', executables: ['codebuff'] },
 	{ id: 'command-code', displayName: 'Command Code', executables: ['command-code'] },
 	{ id: 'continue', displayName: 'Continue', executables: ['cn'] },
-	{ id: 'cursor', displayName: 'Cursor', executables: ['cursor-agent'], loginArgs: ['login'] },
+	// Cursor's CLI installs as `agent` (and the older `cursor-agent`); its `acp` command is left out of `--help`.
+	{ id: 'cursor', displayName: 'Cursor', executables: ['cursor-agent', 'agent'], acpArgs: ['acp'], loginArgs: ['login'] },
 	{ id: 'droid', displayName: 'Droid', executables: ['droid'] },
 	{ id: 'kimi', displayName: 'Kimi', executables: ['kimi', 'kimi-code'] },
 	{ id: 'mistral-vibe', displayName: 'Mistral Vibe', executables: ['vibe', 'mistral-vibe'], dedicatedExecutable: 'vibe-acp' },

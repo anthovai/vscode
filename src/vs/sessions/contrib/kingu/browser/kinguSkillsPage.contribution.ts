@@ -34,7 +34,7 @@ import {
 	kinguSkillOwnerOptions,
 	kinguSkillSourceKindLabel,
 } from '../common/kinguSkillFilter.js';
-import { IKinguSkillSharingService, KINGU_INSTALL_SKILL_LINK_COMMAND_ID, KINGU_SHOW_SKILLS_COMMAND_ID, KINGU_SKILLS_VIEW_ID } from '../common/kinguSkillSharing.js';
+import { IKinguSkillSharingService, KINGU_INSTALL_SKILL_LINK_COMMAND_ID, KINGU_SHOW_SKILLS_COMMAND_ID, KINGU_SKILLS_VIEW_ID } from '../../../../workbench/contrib/kingu/common/kinguSkillSharing.js';
 import { isKinguSkillShareable, KinguSkillsSharingUi, UnavailableKinguSkillSharingService } from './kinguSkillsSharing.js';
 import { KinguSkillsService } from './kinguSkillsService.js';
 
