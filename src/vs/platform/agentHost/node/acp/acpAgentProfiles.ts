@@ -22,13 +22,13 @@ const ACP_SPELLINGS: readonly (readonly string[])[] = [['acp'], ['--acp'], ['--e
  */
 const HELP_TIMEOUT_MS = 30_000;
 
-/** What `<cli> --help` prints, both streams, or `undefined` when it cannot run; `timedOut` when it was cut short. */
-async function readHelpOnce(executable: string, env: NodeJS.ProcessEnv): Promise<{ output: string; timedOut: boolean } | undefined> {
+/** What `<cli> --help` prints, both streams, or `undefined` when it is not installed; `timedOut` when it was cut short, `failed` when it could not start. */
+async function readHelpOnce(executable: string, env: NodeJS.ProcessEnv): Promise<{ output: string; timedOut: boolean; failed?: string } | undefined> {
 	const command = await resolveAcpCommand(executable, ['--help'], env);
 	if (!command) {
 		return undefined;
 	}
-	return new Promise<{ output: string; timedOut: boolean } | undefined>(resolve => {
+	return new Promise<{ output: string; timedOut: boolean; failed?: string } | undefined>(resolve => {
 		let output = '';
 		let timedOut = false;
 		const child = spawn(command.command, [...command.args], { env: command.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
@@ -41,9 +41,9 @@ async function readHelpOnce(executable: string, env: NodeJS.ProcessEnv): Promise
 		};
 		child.stdout.on('data', append);
 		child.stderr.on('data', append);
-		child.on('error', () => {
+		child.on('error', error => {
 			clearTimeout(timer);
-			resolve(undefined);
+			resolve({ output, timedOut, failed: error.message });
 		});
 		child.on('close', () => {
 			clearTimeout(timer);
@@ -53,7 +53,7 @@ async function readHelpOnce(executable: string, env: NodeJS.ProcessEnv): Promise
 }
 
 /** `--help`, asked a second time when the first was cut short. */
-async function readHelp(executable: string, env: NodeJS.ProcessEnv, logService: ILogService): Promise<{ output: string; timedOut: boolean } | undefined> {
+async function readHelp(executable: string, env: NodeJS.ProcessEnv, logService: ILogService): Promise<{ output: string; timedOut: boolean; failed?: string } | undefined> {
 	const first = await readHelpOnce(executable, env);
 	if (!first?.timedOut) {
 		return first;
@@ -123,6 +123,10 @@ async function detectCandidate(candidate: IAcpAgentCatalogEntry, logService: ILo
 	for (const executable of candidate.executables) {
 		const help = await readHelp(executable, candidateEnv(candidate), logService);
 		if (help === undefined) {
+			continue;
+		}
+		if (help.failed) {
+			logService.warn(`[ACP] ${candidate.displayName} is installed, but \`${executable} --help\` could not start: ${help.failed}`);
 			continue;
 		}
 		const args = candidate.acpArgs ?? ACP_SPELLINGS.find(spelling => helpOffers(help.output, spelling));

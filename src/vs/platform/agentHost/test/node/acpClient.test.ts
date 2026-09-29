@@ -46,6 +46,20 @@ import { resolveAcpCommand } from '../../node/acp/acpClient.js';
 		});
 	});
 
+	test('runs the newest version of a Cursor-style launcher with its own Node', async () => {
+		for (const version of ['2026.9.1-aaa111', '2026.09.26-dd393fe', 'not-a-version']) {
+			await fs.mkdir(join(dir, 'versions', version), { recursive: true });
+			await fs.writeFile(join(dir, 'versions', version, 'node.exe'), '');
+			await fs.writeFile(join(dir, 'versions', version, 'index.js'), '');
+		}
+		const command = await resolveAcpCommand('othertool', ['acp'], { PATH: dir });
+		assert.deepStrictEqual(command && { command: command.command, args: command.args, invokedAs: command.env.CURSOR_INVOKED_AS }, {
+			command: join(dir, 'versions', '2026.09.26-dd393fe', 'node.exe'),
+			args: [join(dir, 'versions', '2026.09.26-dd393fe', 'index.js'), 'acp'],
+			invokedAs: 'othertool.cmd',
+		});
+	});
+
 	test('finds Cursor in its install folder when PATH does not name it', async () => {
 		await fs.mkdir(join(dir, 'cursor-agent'));
 		await fs.writeFile(join(dir, 'cursor-agent', 'cursor-agent.cmd'), '@echo off\r\n');

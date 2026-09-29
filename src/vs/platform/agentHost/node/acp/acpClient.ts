@@ -342,6 +342,32 @@ export async function resolveAcpExecutable(executable: string, args: readonly st
 }
 
 /**
+ * The newest `versions/<YYYY.MM.DD[-HH-MM-SS]-commit>` beside a launcher that
+ * has its own `node.exe` and `index.js`, the layout Cursor's CLI installs; the
+ * version its PowerShell launcher would pick.
+ */
+async function newestVersionedLaunch(dir: string): Promise<{ readonly node: string; readonly script: string } | undefined> {
+	let names: string[];
+	try {
+		names = await fs.readdir(join(dir, 'versions'));
+	} catch {
+		return undefined;
+	}
+	const versions = names.flatMap(name => {
+		const match = /^(?<year>\d{4})\.(?<month>\d{1,2})\.(?<day>\d{1,2})(?<time>-\d{2}-\d{2}-\d{2})?-[a-f0-9]+$/.exec(name);
+		return match?.groups ? [{ name, key: `${match.groups.year}${match.groups.month.padStart(2, '0')}${match.groups.day.padStart(2, '0')}${match.groups.time ?? ''}` }] : [];
+	}).sort((a, b) => b.key.localeCompare(a.key));
+	for (const { name } of versions) {
+		const node = join(dir, 'versions', name, 'node.exe');
+		const script = join(dir, 'versions', name, 'index.js');
+		if (await isFile(node) && await isFile(script)) {
+			return { node, script };
+		}
+	}
+	return undefined;
+}
+
+/**
  * How to start an agent CLI found on PATH with `args`, or `undefined` when it
  * is not installed. On Windows an npm install is a `.cmd` shim; its script is
  * run with Node directly (no `cmd.exe` in between, which would mangle
@@ -382,8 +408,14 @@ export async function resolveAcpCommand(executable: string, args: readonly strin
 			.map(match => match.groups)
 			.find(groups => groups && !/(^|\\)node\.exe$/i.test(groups.target));
 		if (!target) {
-			// Kingu: not an npm shim (Cursor's hands over to a PowerShell script that
-			// picks its newest version), so let cmd run it; stdio passes through.
+			// Kingu: not an npm shim. Cursor's hands over to a PowerShell script that
+			// runs its newest version; run that version's Node directly, as the
+			// script does, since cmd and PowerShell started from a Kingu with no
+			// console lose the CLI. Any other shim still runs through cmd.
+			const versioned = await newestVersionedLaunch(dir);
+			if (versioned) {
+				return { command: versioned.node, args: [versioned.script, ...args], env: { ...childEnv, CURSOR_INVOKED_AS: `${executable}.cmd` } };
+			}
 			return { command: env.ComSpec ?? 'cmd.exe', args: ['/d', '/c', shim, ...args], env: childEnv };
 		}
 		const script = join(dir, target.target);
