@@ -15,6 +15,7 @@ import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/
 import { ILanguageModelsService, IUserFriendlyLanguageModel } from '../../chat/common/languageModels.js';
 import { KINGU_SETUP_COMMAND_ID, KINGU_VENDOR_ID, kinguVendorConfigurationSchema } from '../common/kinguLanguageModels.js';
 import { KinguArkaiAgentContribution } from './kinguArkaiAgent.js';
+import './kinguChatHistory.js';
 import { KinguDefaultChatSessionContribution } from './kinguDefaultChatSession.js';
 import { KinguLanguageModelProvider } from './kinguLanguageModelProvider.js';
 import { runKinguSetupFlow } from './kinguSetupFlow.js';
