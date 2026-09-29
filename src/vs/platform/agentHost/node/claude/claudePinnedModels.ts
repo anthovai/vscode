@@ -34,6 +34,8 @@ const PINNED_CLAUDE_MODELS: readonly IPinnedClaudeModel[] = [
 	{ id: 'claude-opus-4-7', name: 'Opus 4.7', family: 'opus' },
 	{ id: 'claude-opus-4-6', name: 'Opus 4.6', family: 'opus' },
 	{ id: 'claude-opus-4-5-20251101', name: 'Opus 4.5' },
+	{ id: 'claude-sonnet-5-5[1m]', name: 'Sonnet 5.5', family: 'sonnet', oneMillionContext: true },
+	{ id: 'claude-sonnet-5-5', name: 'Sonnet 5.5', family: 'sonnet' },
 	{ id: 'claude-sonnet-5[1m]', name: 'Sonnet 5', family: 'sonnet', oneMillionContext: true },
 	{ id: 'claude-sonnet-4-6[1m]', name: 'Sonnet 4.6', family: 'sonnet', oneMillionContext: true },
 	{ id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', family: 'sonnet' },
