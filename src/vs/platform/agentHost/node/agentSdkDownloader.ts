@@ -289,8 +289,18 @@ export class AgentSdkDownloader extends Disposable implements IAgentSdkDownloade
 		super();
 	}
 
+	/**
+	 * Kingu: the SDK root shipped with the build (`agent-sdks/<id>` under the
+	 * app root, from `npm run build-kingu-agent-sdks`), as Kingu has no CDN of
+	 * its own to download one from. Complete once its `.complete` sentinel is there.
+	 */
+	private _bundledRoot(pkg: IAgentSdkPackage): string | undefined {
+		const root = path.join(this._environmentService.appRoot, 'agent-sdks', pkg.id);
+		return fs.existsSync(path.join(root, '.complete')) ? root : undefined;
+	}
+
 	isAvailable(pkg: IAgentSdkPackage): boolean {
-		if (process.env[pkg.devOverrideEnvVar]) {
+		if (process.env[pkg.devOverrideEnvVar] || this._bundledRoot(pkg)) {
 			return true;
 		}
 		return !!this._productService.agentSdks?.[pkg.id] && resolveSdkTarget(pkg) !== undefined;
@@ -325,7 +335,7 @@ export class AgentSdkDownloader extends Disposable implements IAgentSdkDownloade
 	}
 
 	async isSdkResolvableWithoutDownload(pkg: IAgentSdkPackage): Promise<boolean> {
-		if (process.env[pkg.devOverrideEnvVar]) {
+		if (process.env[pkg.devOverrideEnvVar] || this._bundledRoot(pkg)) {
 			return true;
 		}
 		const config = this._productService.agentSdks?.[pkg.id];
@@ -346,6 +356,10 @@ export class AgentSdkDownloader extends Disposable implements IAgentSdkDownloade
 		if (override) {
 			this._logService.info(`[AgentSdkDownloader] ${pkg.id}: using dev override at ${override}`);
 			return override;
+		}
+		const bundled = this._bundledRoot(pkg);
+		if (bundled) {
+			return bundled;
 		}
 
 		// 2. Negative cache: a recent failure short-circuits without I/O. Not for a

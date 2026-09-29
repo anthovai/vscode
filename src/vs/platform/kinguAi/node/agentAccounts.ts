@@ -7,6 +7,8 @@ import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import { homedir } from 'os';
 import { join } from '../../../base/common/path.js';
+import { ACP_AGENT_CATALOG } from '../../agentHost/common/acpAgentCatalog.js';
+import { candidateEnv } from '../../agentHost/node/acp/acpAgentProfiles.js';
 import { resolveAcpCommand } from '../../agentHost/node/acp/acpClient.js';
 import { IKinguAgentAccount } from '../common/kinguAi.js';
 
@@ -28,8 +30,8 @@ export async function readAgentAccount(id: string): Promise<IKinguAgentAccount |
 const COMMAND_TIMEOUT_MS = 20_000;
 
 /** The output of `<executable> <args>`, or `undefined` when it is not installed or does not finish. */
-async function runCli(executable: string, args: readonly string[]): Promise<string | undefined> {
-	const command = await resolveAcpCommand(executable, args);
+async function runCli(executable: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+	const command = await resolveAcpCommand(executable, args, env);
 	if (!command) {
 		return undefined;
 	}
@@ -67,7 +69,9 @@ export function parseCursorAbout(output: string): IKinguAgentAccount {
 }
 
 async function readCursorAccount(): Promise<IKinguAgentAccount | undefined> {
-	const output = await runCli('cursor-agent', ['about']) ?? await runCli('agent', ['about']);
+	const cursor = ACP_AGENT_CATALOG.find(entry => entry.id === 'cursor');
+	const env = cursor ? candidateEnv(cursor) : process.env;
+	const output = await runCli('cursor-agent', ['about'], env) ?? await runCli('agent', ['about'], env);
 	return output === undefined ? undefined : parseCursorAbout(output);
 }
 

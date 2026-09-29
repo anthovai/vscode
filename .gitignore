@@ -16,6 +16,8 @@ src/vs/base/browser/ui/codicons/codicon/codicon.ttf
 /kingu-orca/out/
 # Arkai's engine, the oh-my-pi fork's CLI copied by build/kingu-arkai/engine.mjs
 /arkai-engine/
+# The Claude and Codex agent SDKs, copied by build/kingu-agent-sdks/copy.mjs
+/agent-sdks/
 /extensions/**/out/
 build/node_modules
 build/darwin/.dmgbuild

@@ -1,14 +1,14 @@
 /*---------------------------------------------------------------------------------------------
- *  Kingu Intelligence
- *  Licensed under the MIT License.
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
 // Arkai's engine: the standalone `omp` CLI built from Kingu's oh-my-pi fork
 // (anthovai/oh-my-pi), copied to `arkai-engine/` where Arkai looks for it
 // (in a build as in the packaged app, where the gulp build carries it along).
 //
-//   node build/kingu-arkai/engine.mjs            copy the fork's last build
-//   node build/kingu-arkai/engine.mjs --build    build it first (`bun run build`)
+//   node build/kingu-arkai/engine.ts            copy the fork's last build
+//   node build/kingu-arkai/engine.ts --build    build it first (`bun run build`)
 //
 // The fork is `../arkai-upstream/oh-my-pi` unless ARKAI_OMP_FORK names it. Its
 // build embeds the native addon, so the one file is all Arkai needs; on first
@@ -31,7 +31,7 @@ const built = path.join(cli, 'dist', binary);
 const target = path.join(root, 'arkai-engine');
 const extensions = path.join(path.resolve(process.env.ARKAI_REPO ?? path.join(root, '..', 'arkai')), 'packages', 'extensions', 'src');
 
-function run(command, args, cwd) {
+function run(command: string, args: string[], cwd: string): string {
 	return execFileSync(command, args, { cwd, stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim();
 }
 
@@ -50,7 +50,7 @@ if (!fs.existsSync(built)) {
 
 fs.mkdirSync(target, { recursive: true });
 const copied = path.join(target, binary);
-const same = (a, b) => fs.existsSync(b) && fs.statSync(a).size === fs.statSync(b).size && fs.statSync(a).mtimeMs <= fs.statSync(b).mtimeMs;
+const same = (a: string, b: string) => fs.existsSync(b) && fs.statSync(a).size === fs.statSync(b).size && fs.statSync(a).mtimeMs <= fs.statSync(b).mtimeMs;
 // An unchanged engine is left as it is: it may be running.
 if (!same(built, copied)) {
 	fs.copyFileSync(built, copied);

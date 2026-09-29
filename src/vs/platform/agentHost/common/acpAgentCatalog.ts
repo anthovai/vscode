@@ -24,6 +24,11 @@ export interface IAcpAgentCatalogEntry {
 	 */
 	readonly envAliases?: Readonly<Record<string, string>>;
 	/**
+	 * Where the CLI's Windows installer puts it, under `%LOCALAPPDATA%`; looked
+	 * in after PATH, for a Kingu started before the installer changed PATH.
+	 */
+	readonly windowsInstallDirs?: readonly string[];
+	/**
 	 * Arguments that run the CLI's own sign-in; without them the CLI itself is
 	 * run, and signs in from its first screen.
 	 */
@@ -70,7 +75,7 @@ export const ACP_AGENT_CATALOG: readonly IAcpAgentCatalogEntry[] = [
 	{ id: 'command-code', displayName: 'Command Code', executables: ['command-code'] },
 	{ id: 'continue', displayName: 'Continue', executables: ['cn'] },
 	// Cursor's CLI installs as `agent` (and the older `cursor-agent`); its `acp` command is left out of `--help`.
-	{ id: 'cursor', displayName: 'Cursor', executables: ['cursor-agent', 'agent'], acpArgs: ['acp'], loginArgs: ['login'] },
+	{ id: 'cursor', displayName: 'Cursor', executables: ['cursor-agent', 'agent'], acpArgs: ['acp'], loginArgs: ['login'], windowsInstallDirs: ['cursor-agent'] },
 	{ id: 'droid', displayName: 'Droid', executables: ['droid'] },
 	{ id: 'kimi', displayName: 'Kimi', executables: ['kimi', 'kimi-code'] },
 	{ id: 'mistral-vibe', displayName: 'Mistral Vibe', executables: ['vibe', 'mistral-vibe'], dedicatedExecutable: 'vibe-acp' },

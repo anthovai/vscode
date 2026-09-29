@@ -9,6 +9,8 @@ import { tmpdir } from 'os';
 import { join } from '../../../../base/common/path.js';
 import { isWindows } from '../../../../base/common/platform.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { ACP_AGENT_CATALOG } from '../../common/acpAgentCatalog.js';
+import { candidateEnv } from '../../node/acp/acpAgentProfiles.js';
 import { resolveAcpCommand } from '../../node/acp/acpClient.js';
 
 (isWindows ? suite : suite.skip)('resolveAcpCommand (Windows shims)', () => {
@@ -41,6 +43,20 @@ import { resolveAcpCommand } from '../../node/acp/acpClient.js';
 			npmScript: [join(dir, 'node_modules\\npmtool\\cli.js'), 'acp'],
 			other: { command: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/c', join(dir, 'othertool.cmd'), 'acp'] },
 			missing: undefined,
+		});
+	});
+
+	test('finds Cursor in its install folder when PATH does not name it', async () => {
+		await fs.mkdir(join(dir, 'cursor-agent'));
+		await fs.writeFile(join(dir, 'cursor-agent', 'cursor-agent.cmd'), '@echo off\r\n');
+		const cursor = ACP_AGENT_CATALOG.find(entry => entry.id === 'cursor')!;
+		const env = { Path: join(dir, 'elsewhere'), LOCALAPPDATA: dir, ComSpec: 'C:\\Windows\\System32\\cmd.exe' };
+		assert.deepStrictEqual({
+			onPath: await resolveAcpCommand('cursor-agent', ['acp'], env),
+			withInstallFolder: (await resolveAcpCommand('cursor-agent', ['acp'], candidateEnv(cursor, env)))?.args,
+		}, {
+			onPath: undefined,
+			withInstallFolder: ['/d', '/c', join(dir, 'cursor-agent', 'cursor-agent.cmd'), 'acp'],
 		});
 	});
 });

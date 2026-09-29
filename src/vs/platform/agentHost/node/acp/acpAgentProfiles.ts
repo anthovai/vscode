@@ -5,7 +5,7 @@
 
 import { spawn } from 'child_process';
 import { homedir } from 'os';
-import { join } from '../../../../base/common/path.js';
+import { delimiter, join } from '../../../../base/common/path.js';
 import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../log/common/log.js';
 import { IAcpAgentProfile } from './acpAgent.js';
@@ -23,8 +23,8 @@ const ACP_SPELLINGS: readonly (readonly string[])[] = [['acp'], ['--acp'], ['--e
 const HELP_TIMEOUT_MS = 30_000;
 
 /** What `<cli> --help` prints, both streams, or `undefined` when it cannot run; `timedOut` when it was cut short. */
-async function readHelpOnce(executable: string): Promise<{ output: string; timedOut: boolean } | undefined> {
-	const command = await resolveAcpCommand(executable, ['--help']);
+async function readHelpOnce(executable: string, env: NodeJS.ProcessEnv): Promise<{ output: string; timedOut: boolean } | undefined> {
+	const command = await resolveAcpCommand(executable, ['--help'], env);
 	if (!command) {
 		return undefined;
 	}
@@ -53,13 +53,13 @@ async function readHelpOnce(executable: string): Promise<{ output: string; timed
 }
 
 /** `--help`, asked a second time when the first was cut short. */
-async function readHelp(executable: string, logService: ILogService): Promise<{ output: string; timedOut: boolean } | undefined> {
-	const first = await readHelpOnce(executable);
+async function readHelp(executable: string, env: NodeJS.ProcessEnv, logService: ILogService): Promise<{ output: string; timedOut: boolean } | undefined> {
+	const first = await readHelpOnce(executable, env);
 	if (!first?.timedOut) {
 		return first;
 	}
 	logService.info(`[ACP] ${executable} --help did not finish in ${HELP_TIMEOUT_MS / 1000}s; asking once more`);
-	return await readHelpOnce(executable) ?? first;
+	return await readHelpOnce(executable, env) ?? first;
 }
 
 /** Whether `help` offers ACP mode spelled as `args`: a `--flag`, or a subcommand listed on a line of its own. */
@@ -74,13 +74,24 @@ function helpOffers(help: string, args: readonly string[]): boolean {
 		: new RegExp(`^\\s*(\\S+\\s+)?${escaped}(\\s|$)`, 'm').test(help);
 }
 
+/** The environment the candidate's CLI is looked up in: PATH, then where its Windows installer puts it. */
+export function candidateEnv(candidate: IAcpAgentCatalogEntry, env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+	const localAppData = env.LOCALAPPDATA;
+	if (process.platform !== 'win32' || !localAppData || !candidate.windowsInstallDirs?.length) {
+		return env;
+	}
+	const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'Path';
+	const extra = candidate.windowsInstallDirs.map(dir => join(localAppData, dir));
+	return { ...env, [pathKey]: [env[pathKey], ...extra].filter(Boolean).join(delimiter) };
+}
+
 function profileFor(candidate: IAcpAgentCatalogEntry, executable: string, args: readonly string[]): IAcpAgentProfile {
 	return {
 		id: candidate.id,
 		displayName: candidate.displayName,
 		description: localize('acp.description', "{0} agent backed by your {0} CLI over the Agent Client Protocol", candidate.displayName),
 		resolveCommand: async () => {
-			const command = await resolveAcpCommand(executable, args);
+			const command = await resolveAcpCommand(executable, args, candidateEnv(candidate));
 			if (!command || !candidate.envAliases) {
 				return command;
 			}
@@ -110,7 +121,7 @@ async function detectCandidate(candidate: IAcpAgentCatalogEntry, logService: ILo
 		return profileFor(candidate, candidate.dedicatedExecutable, []);
 	}
 	for (const executable of candidate.executables) {
-		const help = await readHelp(executable, logService);
+		const help = await readHelp(executable, candidateEnv(candidate), logService);
 		if (help === undefined) {
 			continue;
 		}

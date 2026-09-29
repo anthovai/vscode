@@ -314,6 +314,9 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 		// Kingu: Arkai's engine (`npm run build-kingu-arkai`), found beside `out`
 		// by `arkaiAgent`; without it Arkai runs the `omp` on the PATH.
 		const kinguArkai = gulp.src(['arkai-engine/**'], { base: '.', dot: true, allowEmpty: true });
+		// Kingu: the Claude and Codex agent SDKs (`npm run build-kingu-agent-sdks`), which VS Code
+		// downloads from its CDN; without them the agent host offers neither agent.
+		const kinguAgentSdks = gulp.src(['agent-sdks/**'], { base: '.', dot: true, allowEmpty: true });
 
 		const mergeStreams = [
 			packageJsonStream,
@@ -324,7 +327,8 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			sources,
 			deps,
 			kinguOrca,
-			kinguArkai
+			kinguArkai,
+			kinguAgentSdks
 		];
 		let all = es.merge(...mergeStreams);
 
