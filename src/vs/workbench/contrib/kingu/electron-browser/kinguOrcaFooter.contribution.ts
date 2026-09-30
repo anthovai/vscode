@@ -12,7 +12,7 @@ import { basename } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -25,26 +25,27 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ITerminalInstance, ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../../workbench/contrib/terminal/common/terminal.js';
-import { IKinguFloatingWorkspaceService } from './kinguFloatingWorkspacePanel.js';
 import { IStatusbarEntry, IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment } from '../../../../workbench/services/statusbar/browser/statusbar.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../chat/common/constants.js';
 import { IKinguListeningPort, IKinguPortScan, IKinguProcessUsage } from '../../../../platform/kinguHost/common/kinguHostPorts.js';
 import { IKinguAdvertisedUrlService } from '../browser/kinguAdvertisedUrlService.js';
 import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
-import { KINGU_SHOW_USAGE_COMMAND_ID } from '../browser/kinguUsagePage.contribution.js';
-import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
-import { formatFooterWindow, formatOrcaMemory, OrcaSshStatus, sshHostStatus, summarizeSshStatuses, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, shownStatusBarItems, statusBarItemForSlot, tightestFooterWindow } from '../../../../workbench/contrib/kingu/common/kinguOrcaFooter.js';
-import { orcaSettingIdForKey } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettings.js';
-import { displayedUsagePercent, KinguUsageDisplay, nextResetTickDelay } from '../../../../workbench/contrib/kingu/common/kinguStatusBar.js';
+import { IKinguOrcaService } from '../common/kinguOrca.js';
+import { formatFooterWindow, formatOrcaMemory, OrcaSshStatus, sshHostStatus, summarizeSshStatuses, IOrcaFooterWindow, IOrcaProviderRateLimits, isProviderShown, normalizeOrcaAwakeMode, ORCA_FOOTER_PROVIDERS, OrcaAwakeMode, OrcaRateLimitState, providerFooterWindows, shownStatusBarItems, statusBarItemForSlot, tightestFooterWindow } from '../common/kinguOrcaFooter.js';
+import { orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
+import { displayedUsagePercent, formatTokens, KINGU_SHOW_USAGE_COMMAND_ID, KinguUsageDisplay, nextResetTickDelay } from '../common/kinguStatusBar.js';
 import { OrcaUsageMode } from '../common/kinguOrcaUsage.js';
 import { OrcaUsagePanel } from './kinguOrcaUsagePanel.js';
-import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettingsCommands.js';
-import { attachFooterTooltip, FooterChip, FooterPopover, iconButton, lucideIcon, menuItem, menuLabel, menuRadioItem, menuSeparator, providerIcon, wireMenuKeyboard } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
-import { FLOATING_ENABLED_SETTING_ID, FLOATING_LOCATION_SETTING_ID, KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID, showFloatingWorkspaceMenu } from './kinguFloatingWorkspace.contribution.js';
-import '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaService.js';
+import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../common/kinguOrcaSettingsCommands.js';
+import { attachFooterTooltip, FooterChip, FooterPopover, iconButton, lucideIcon, menuItem, menuLabel, menuRadioItem, menuSeparator, providerIcon, wireMenuKeyboard } from './kinguOrcaFooterParts.js';
+import { FLOATING_ENABLED_SETTING_ID, FLOATING_LOCATION_SETTING_ID, IKinguFloatingWorkspaceService, KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID } from '../common/kinguFloatingWorkspace.js';
+import { showFloatingWorkspaceMenu } from '../browser/kinguFloatingWorkspaceMenu.js';
+import './kinguHostService.js';
+import './kinguOrcaService.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { IKinguGeminiStatus, IKinguGeminiUsage, KINGU_AI_CHANNEL_NAME } from '../../../../platform/kinguAi/common/kinguAi.js';
-import { formatTokens } from '../common/kinguVaultUsage.js';
 
 /**
  * How often the memory reading is retaken while the Resource Manager is closed.
@@ -240,6 +241,7 @@ class KinguOrcaFooterContribution extends Disposable {
 
 	static readonly ID = 'kingu.contrib.orcaFooter';
 
+	private readonly _floating: IKinguFloatingWorkspaceService | undefined;
 	private readonly _usage = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly _startedAt = Date.now();
 	/** Agents whose usage has been read at least once in this window. */
@@ -297,7 +299,7 @@ class KinguOrcaFooterContribution extends Disposable {
 		providerIcon: slot => providerIcon(slot),
 		setMode: mode => void this._setUsageMode(mode),
 		refresh: () => this._refreshUsage(),
-		openUsageDetails: () => void this._commandService.executeCommand(KINGU_SHOW_USAGE_COMMAND_ID),
+		openUsageDetails: () => void this._commandService.executeCommand(CommandsRegistry.getCommand(KINGU_SHOW_USAGE_COMMAND_ID) ? KINGU_SHOW_USAGE_COMMAND_ID : OPEN_AGENTS_WINDOW_COMMAND_ID),
 		openAccounts: sectionId => void this._commandService.executeCommand(KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID, { pane: 'accounts', sectionId }),
 		invoke: (channel, ...args) => this._orca.invoke(channel, ...args),
 		confirm: async (message, detail, primaryButton) => (await this._dialogService.confirm({ type: 'warning', message, detail, primaryButton })).confirmed,
@@ -336,13 +338,21 @@ class KinguOrcaFooterContribution extends Disposable {
 		@IClipboardService private readonly _clipboardService: IClipboardService,
 		@IWorkspaceContextService private readonly _workspaceService: IWorkspaceContextService,
 		@IStorageService private readonly _storageService: IStorageService,
-		@IKinguFloatingWorkspaceService private readonly _floating: IKinguFloatingWorkspaceService,
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
 		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@ILogService private readonly _logService: ILogService,
 		@IMainProcessService private readonly _mainProcessService: IMainProcessService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
+		// The floating workspace is the Agents Window's; the IDE does not register it, and has no toggle for it.
+		this._floating = instantiationService.invokeFunction(accessor => {
+			try {
+				return accessor.get(IKinguFloatingWorkspaceService);
+			} catch {
+				return undefined;
+			}
+		});
 
 		// Only the refresh, keep-awake, resource and port triggers carry a label in
 		// the ADE; its usage pill and remote-hosts trigger have none.
@@ -360,7 +370,9 @@ class KinguOrcaFooterContribution extends Disposable {
 			event.stopPropagation();
 			showFloatingWorkspaceMenu(this._contextMenuService, this._configurationService, this._commandService, event, 'status-bar');
 		}));
-		this._register(this._floating.onDidChangeOpen(() => this._renderPanelToggle()));
+		if (this._floating) {
+			this._register(this._floating.onDidChangeOpen(() => this._renderPanelToggle()));
+		}
 
 		this._register(this._orca.onPush('rateLimits:update')(([state]) => this._renderUsage(state as OrcaRateLimitState)));
 		this._register(this._orca.onPush('agentAwake:changed')(([status]) => {
@@ -1432,7 +1444,8 @@ class KinguOrcaFooterContribution extends Disposable {
 	private _renderPanelToggle(): void {
 		const enabled = this._configurationService.getValue<boolean>(FLOATING_ENABLED_SETTING_ID) !== false;
 		const location = this._configurationService.getValue<string>(FLOATING_LOCATION_SETTING_ID);
-		if (!enabled || location !== 'status-bar') {
+		// No floating workspace outside the Agents Window, so no toggle for it.
+		if (!this._floating || !enabled || location !== 'status-bar') {
 			this._panel.clear();
 			return;
 		}
@@ -1448,7 +1461,7 @@ class KinguOrcaFooterContribution extends Disposable {
 
 	/** `Show Floating Workspace` or `Minimize Floating Workspace`, as the ADE's footer spells them. */
 	private _floatingLabel(): string {
-		return this._floating.isOpen
+		return this._floating?.isOpen
 			? localize('kingu.footer.floating.minimize', "Minimize Floating Workspace")
 			: localize('kingu.footer.floating.show', "Show Floating Workspace");
 	}

@@ -8,6 +8,7 @@ import type {
   CreateCloudLinkedKinguProfileResult,
   FindKinguProfileProjectsByPathArgs,
   FindKinguProfileProjectsByPathResult,
+  KinguProfileAccountResult,
   KinguProfileListResult,
   RefreshCurrentKinguProfileAuthResult,
   SwitchKinguProfileArgs,
@@ -52,6 +53,10 @@ import { registerKinguProfileOrgMemberHandlers } from './kingu-profile-org-membe
 import { onKinguCloudSessionInvalidated } from '../kingu-profiles/profile-cloud-session-invalidation'
 import { broadcastKinguProfileAuthStatusChanged } from './kingu-profile-auth-status-broadcast'
 import { transferProjectArgsFromUnknown } from './kingu-profile-project-transfer-args'
+import {
+  accountRequestArgsFromUnknown,
+  requestKinguProfileAccount
+} from '../kingu-profiles/profile-cloud-account-service'
 
 type RegisterKinguProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -306,6 +311,32 @@ export function registerKinguProfileHandlers(
       const result = await refreshCurrentKinguProfileAuth(getProfileUserDataPath())
       if (result.status === 'refreshed') {
         options.onAuthMutation?.()
+      }
+      return result
+    }
+  )
+
+  // Kingu: the account's plan, or a grant code redeemed, for the IDE's Kingu
+  // Account pane. A redeemed code changes the plan's capability flags, so the
+  // sign-in is refreshed and every window told, as refreshAuth does.
+  ipcMain.handle(
+    'kinguProfiles:accountRequest',
+    async (_event, args?: unknown): Promise<KinguProfileAccountResult> => {
+      const request = accountRequestArgsFromUnknown(args)
+      const result = await requestKinguProfileAccount(getProfileUserDataPath(), request)
+      if (
+        request.redeemCode !== undefined &&
+        result.kind === 'response' &&
+        result.status >= 200 &&
+        result.status < 300
+      ) {
+        const refreshed = await refreshCurrentKinguProfileAuth(getProfileUserDataPath()).catch(
+          () => undefined
+        )
+        if (refreshed?.status === 'refreshed') {
+          options.onAuthMutation?.()
+          broadcastKinguProfileAuthStatusChanged()
+        }
       }
       return result
     }

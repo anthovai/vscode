@@ -68,6 +68,7 @@ import { ChatViewWelcomeController, IViewWelcomeDelegate } from '../../viewsWelc
 import { IChatViewsWelcomeDescriptor } from '../../viewsWelcome/chatViewsWelcome.js';
 import { IWorkbenchLayoutService, LayoutSettings, Position } from '../../../../../services/layout/browser/layoutService.js';
 import { AgentSessionsViewerOrientation, AgentSessionsViewerPosition } from '../../agentSessions/agentSessions.js';
+import { KinguChatTabs } from '../../../../kingu/browser/kinguChatTabs.js';
 import { IProgressService } from '../../../../../../platform/progress/common/progress.js';
 import { CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT, ChatViewId, IChatWidgetService, IChatWidgetViewState, setModelPreservingInputTypedWhileLoading } from '../../chat.js';
 import { IActivityService, ProgressBadge } from '../../../../../services/activity/common/activity.js';
@@ -1108,11 +1109,17 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	}
 
 	private createChatTitleControl(parent: HTMLElement): void {
+		// Kingu: the open chats as agent tabs in the header (kinguChatTabs.ts).
+		const kinguTabs = this._register(this.instantiationService.createInstance(KinguChatTabs, {
+			loadSession: resource => this.loadSession(resource),
+			newChat: () => this.commandService.executeCommand(ACTION_ID_NEW_CHAT, this.getActionsContext()),
+		}));
 		this.titleControl = this._register(this.instantiationService.createInstance(ChatViewTitleControl,
 			parent,
 			{
 				focusChat: () => this._widget.focusInput(),
 				getInputUri: () => this._widget?.inputPart?.inputUri,
+				kinguTabs,
 			},
 			undefined
 		));

@@ -282,10 +282,10 @@ import './contrib/kingu/electron-browser/kinguWorkbench.contribution.js';
 // Kingu: the ADE's settings, offered in this window's Settings editor
 import './contrib/kingu/electron-browser/kinguSettingsBridge.contribution.js';
 // Kingu: the ADE's footer, drawn from the ADE's engine
-import './contrib/kingu/electron-browser/kinguOrcaFooter.contribution.js';
+import '../workbench/contrib/kingu/electron-browser/kinguOrcaFooter.contribution.js';
 import './contrib/kingu/electron-browser/kinguFloatingWorkspace.contribution.js';
 import './contrib/kingu/electron-browser/kinguFloatingWorkspacePanel.js';
-import './contrib/kingu/electron-browser/kinguHostService.js';
+import '../workbench/contrib/kingu/electron-browser/kinguHostService.js';
 import './contrib/kingu/electron-browser/kinguJev.contribution.js';
 import '../workbench/contrib/kingu/electron-browser/kinguOrcaSettingsScreen.contribution.js';
 import './contrib/kingu/electron-browser/kinguOrcaSettingsMenu.contribution.js';

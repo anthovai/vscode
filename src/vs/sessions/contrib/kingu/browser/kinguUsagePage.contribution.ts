@@ -21,6 +21,7 @@ import { ICustomViewService } from '../../../services/customView/browser/customV
 import { formatCostUsd } from '../common/kinguPricing.js';
 import { IKinguVaultService } from '../common/kinguVault.js';
 import { formatTokens } from '../common/kinguVaultUsage.js';
+import { KINGU_SHOW_USAGE_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguStatusBar.js';
 import {
 	formatShare,
 	IKinguProviderOverview,
@@ -30,7 +31,6 @@ import {
 } from '../common/kinguUsageOverview.js';
 
 export const KINGU_USAGE_VIEW_ID = 'kingu.customView.usage';
-export const KINGU_SHOW_USAGE_COMMAND_ID = 'kingu.usage.show';
 
 /**
  * Six weeks, which is what the grid can show without becoming a wall.

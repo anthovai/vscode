@@ -234,18 +234,4 @@ function parse(line: string): IUsageRecord | undefined {
 	}
 }
 
-/** A token count at a glance: `26.3B`, `1.2M`, `34.4k`, `97`. */
-export function formatTokens(value: number): string {
-	// A real vault reaches billions of cached tokens, and `26330.2M` is not a
-	// number anyone reads.
-	if (value >= 1_000_000_000) {
-		return `${(value / 1_000_000_000).toFixed(1)}B`;
-	}
-	if (value >= 1_000_000) {
-		return `${(value / 1_000_000).toFixed(1)}M`;
-	}
-	if (value >= 1_000) {
-		return `${(value / 1_000).toFixed(1)}k`;
-	}
-	return String(value);
-}
+export { formatTokens } from '../../../../workbench/contrib/kingu/common/kinguStatusBar.js';

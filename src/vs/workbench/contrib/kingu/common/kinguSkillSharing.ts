@@ -13,6 +13,7 @@
 
 import { localize } from '../../../../nls.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import { KINGU_CLOUD_ORIGIN } from '../../../../platform/kinguOrca/common/kinguOrca.js';
 
 export const KINGU_SKILLS_VIEW_ID = 'kingu.customView.skills';
 export const KINGU_SHOW_SKILLS_COMMAND_ID = 'kingu.skills.show';
@@ -163,7 +164,8 @@ export function isValidBundleName(value: string): boolean {
 }
 
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
-const SHARE_HOSTS = new Set(['app.kingu.dev', 'share.onkingu.dev', 'kingu.anthovai.com']);
+/** The ADE's share hosts, and Kingu cloud's, which serves `/skills/share/<id>` itself. */
+const SHARE_HOSTS = new Set(['app.kingu.dev', 'share.onkingu.dev', new URL(KINGU_CLOUD_ORIGIN).hostname]);
 
 /** The ADE's `parseSkillShareId`: a bare id, a share page address, or a `kingu://` link. */
 export function parseSkillShareId(value: string): string | undefined {

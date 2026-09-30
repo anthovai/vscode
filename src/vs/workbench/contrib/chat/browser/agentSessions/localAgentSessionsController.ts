@@ -21,6 +21,7 @@ import { chatModelToChatDetail } from '../../common/chatService/chatServiceImpl.
 import { ChatSessionStatus, IChatSessionItem, IChatSessionItemController, IChatSessionItemMetadata, IChatSessionItemsDelta, IChatSessionsService, localChatSessionType } from '../../common/chatSessionsService.js';
 import { IChatModel } from '../../common/model/chatModel.js';
 import { getChatSessionType } from '../../common/model/chatUri.js';
+import { ChatAgentLocation } from '../../common/constants.js';
 import { getInProgressSessionDescription } from '../chatSessions/chatSessionDescription.js';
 import { chatResponseStateToSessionStatus, getSessionStatusForModel } from '../chatSessions/chatSessions.contribution.js';
 import { Schemas } from '../../../../../base/common/network.js';
@@ -106,6 +107,11 @@ export class LocalAgentsSessionsController extends Disposable implements IChatSe
 	private registerListeners(): void {
 		const addModelListeners = async (model: IChatModel) => {
 			if (getChatSessionType(model.sessionResource) !== this.chatSessionType) {
+				return;
+			}
+			// Kingu: inline chat (`Ctrl+I`) and terminal chat are not sessions to
+			// list, as the history already leaves them out.
+			if (model.initialLocation !== ChatAgentLocation.Chat) {
 				return;
 			}
 

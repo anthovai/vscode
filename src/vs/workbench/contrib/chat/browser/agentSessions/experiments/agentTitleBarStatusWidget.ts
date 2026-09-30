@@ -46,6 +46,8 @@ import { IChatEntitlementService } from '../../../../../services/chat/common/cha
 import { IChatWidgetService } from '../../chat.js';
 import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
 import { ITitleService } from '../../../../../services/title/browser/titleService.js';
+import { KinguTitleBarContext } from '../../../../kingu/browser/kinguTitleBarContext.js';
+import { kinguAgentStatusText } from '../../../../kingu/common/kinguTitleBar.js';
 
 // Telemetry types
 type AgentStatusClickAction =
@@ -151,6 +153,8 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 	/** Reusable menu for CommandCenterCenter items (e.g., debug toolbar) */
 	private readonly _commandCenterMenu;
 
+	private readonly _kinguContext: KinguTitleBarContext;
+
 	/** Menu for ChatTitleBarMenu items (same as chat controls dropdown) */
 	private readonly _chatTitleBarMenu;
 
@@ -183,6 +187,10 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 
 		// Create menu for ChatTitleBarMenu to show in sparkle section dropdown
 		this._chatTitleBarMenu = this._register(this.menuService.createMenu(MenuId.ChatTitleBarMenu, this.contextKeyService));
+
+		// Kingu: the project and branch at the front of the pill (kinguTitleBarContext.ts).
+		this._kinguContext = this._register(this.instantiationService.createInstance(KinguTitleBarContext));
+		this._register(this._kinguContext.onDidChange(() => this._render()));
 
 		// Re-render when control mode or session info changes
 		this._register(this.agentTitleBarStatusService.onDidChangeMode(() => {
@@ -358,6 +366,7 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 				statusMode,
 				unifiedAgentsBarEnabled,
 				viewSessionsEnabled,
+				kinguContext: this._kinguContext.stateKey,
 			});
 
 			// Skip re-render if state hasn't changed
@@ -537,13 +546,18 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 		inputArea.setAttribute('role', 'button');
 		inputArea.setAttribute('aria-label', localize('openQuickAccess', "Open Quick Access"));
 		inputArea.tabIndex = 0;
+		// Kingu: the project and branch come first, as buttons of their own, so the
+		// search box no longer has to name the folder.
+		const kinguSegments = this._kinguContext.render(pill, this._windowTitle.workspaceName || undefined, disposables);
+		this._rovingElements.push(...kinguSegments);
 		this._rovingElements.push(inputArea);
 		pill.appendChild(inputArea);
 
 		// Label - always shows workspace name in compact mode
 		const label = $('span.agent-status-label');
 		const { progress: progressText } = this._getSessionNeedingAttention(attentionNeededSessions);
-		const defaultLabel = isCompactMode ? this._getLabel() : (progressText ?? this._getLabel());
+		const workspaceLabel = kinguSegments.length ? localize('kingu.titleBar.search', "Search files and commands") : this._getLabel();
+		const defaultLabel = isCompactMode ? workspaceLabel : (progressText ?? workspaceLabel);
 
 		if (!isCompactMode && progressText) {
 			label.classList.add('has-progress');
@@ -991,7 +1005,8 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 			reset(needsInputIcon, renderIcon(Codicon.report));
 			needsInputSection.appendChild(needsInputIcon);
 			const needsInputCount = $('span.agent-status-text');
-			needsInputCount.textContent = String(attentionNeededSessions.length);
+			// Kingu: in words, "Claude waiting for you" (kinguTitleBar.ts).
+			needsInputCount.textContent = kinguAgentStatusText('waiting', attentionNeededSessions);
 			needsInputSection.appendChild(needsInputCount);
 
 			disposables.add(addDisposableListener(needsInputSection, EventType.CLICK, (e) => {
@@ -1027,7 +1042,8 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 			reset(statusIcon, renderIcon(Codicon.sessionInProgress));
 			activeSection.appendChild(statusIcon);
 			const statusCount = $('span.agent-status-text');
-			statusCount.textContent = String(inProgressOnly.length);
+			// Kingu: in words, "Claude working" (kinguTitleBar.ts).
+			statusCount.textContent = kinguAgentStatusText('working', inProgressOnly);
 			activeSection.appendChild(statusCount);
 
 			disposables.add(addDisposableListener(activeSection, EventType.CLICK, (e) => {

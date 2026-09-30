@@ -6,7 +6,7 @@
 import { $, append, clearNode, h } from '../../../../base/browser/dom.js';
 import { KeybindingLabel } from '../../../../base/browser/ui/keybindingLabel/keybindingLabel.js';
 import { coalesce, shuffle } from '../../../../base/common/arrays.js';
-import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isMacintosh, isWeb, OS } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
@@ -68,6 +68,25 @@ const otherEntries: WatermarkEntry[] = [
 	openSettings,
 ];
 
+/**
+ * Kingu: content a contribution adds to the empty editor area, between the
+ * logo and the shortcuts (Kingu's home, `contrib/kingu/browser/kinguHome.ts`).
+ * The factory runs once per editor group's watermark; what it returns is
+ * disposed with the watermark.
+ */
+type EditorGroupWatermarkContribution = (container: HTMLElement, instantiationService: IInstantiationService) => IDisposable;
+const watermarkContributions: EditorGroupWatermarkContribution[] = [];
+
+export function registerEditorGroupWatermarkContribution(contribution: EditorGroupWatermarkContribution): IDisposable {
+	watermarkContributions.push(contribution);
+	return toDisposable(() => {
+		const index = watermarkContributions.indexOf(contribution);
+		if (index >= 0) {
+			watermarkContributions.splice(index, 1);
+		}
+	});
+}
+
 export class EditorGroupWatermark extends Disposable {
 
 	private static readonly CACHED_WHEN = 'editorGroupWatermark.whenConditions';
@@ -103,6 +122,7 @@ export class EditorGroupWatermark extends Disposable {
 			h('.editor-group-watermark', [
 				h('.watermark-container', [
 					h('.letterpress'),
+					h('.watermark-contributions@contributions'),
 					h('.shortcuts@shortcuts'),
 				])
 			])
@@ -111,6 +131,9 @@ export class EditorGroupWatermark extends Disposable {
 		append(container, elements.root);
 		this.shortcuts = elements.shortcuts;
 		this.toolbarContainer = elements.toolbarContainer;
+		for (const contribution of watermarkContributions) {
+			this._register(contribution(elements.contributions, this.instantiationService));
+		}
 
 		this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, this.toolbarContainer, MenuId.EditorGroupWatermarkToolbar, {
 			hiddenItemStrategy: HiddenItemStrategy.NoHide,

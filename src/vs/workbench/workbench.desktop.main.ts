@@ -217,6 +217,13 @@ import './contrib/keybindings/electron-browser/systemWideKeybindings.contributio
 // Kingu: AI accounts (Claude, ChatGPT) signed in through the ADE, never GitHub
 import './contrib/kingu/electron-browser/kinguAiAccounts.contribution.js';
 import './contrib/kingu/electron-browser/kinguOrcaSettingsScreen.contribution.js';
+// Kingu: the commit box's Generate Commit Message, written by Claude, Codex or Chyle instead of Copilot
+import './contrib/kingu/electron-browser/kinguScmCommitMessage.contribution.js';
+// Kingu: the ADE's footer (AI usage, resources, ports), as in the Agents Window
+import './contrib/kingu/electron-browser/kinguOrcaFooter.contribution.js';
+// Kingu: the Search view's results by meaning, from the user's own Ollama
+import './contrib/kingu/electron-browser/kinguSemanticSearch.contribution.js';
+import './contrib/kingu/electron-browser/kinguLocalModels.contribution.js';
 
 //#endregion
 

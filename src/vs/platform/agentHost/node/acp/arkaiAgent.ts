@@ -60,9 +60,13 @@ export function arkaiEnginePath(appRoot: string): string {
  * Arkai's OMP extensions, beside its engine: goose's features ported to OMP
  * (the arkai repo's packages/extensions). `security.ts` keeps commands such as
  * `rm -rf /` or `curl … | sh` from running, whatever the permission mode.
+ * The others help a small local model use its tools: `repetition.ts` stops the
+ * same call on its third time in a row, `tool-coach.ts` fixes common argument
+ * slips and adds a hint to failed calls, and `leftover-calls.ts` sends the
+ * model back when it wrote a tool call out as text instead of making it.
  * They load under `--no-extensions`, which only turns off discovered ones.
  */
-const ARKAI_EXTENSIONS = ['security.ts'];
+const ARKAI_EXTENSIONS = ['security.ts', 'repetition.ts', 'tool-coach.ts', 'leftover-calls.ts'];
 
 /** `--extension` for each of Arkai's extensions that is there. */
 async function arkaiExtensionArgs(appRoot: string): Promise<string[]> {

@@ -3,11 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import { localize, localize2 } from '../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IKinguOrcaService } from '../../../../workbench/contrib/kingu/common/kinguOrca.js';
 import {
 	IKinguDiscoveredSkill,
@@ -16,11 +12,9 @@ import {
 	IKinguSkillSharePreview,
 	IKinguSkillSharingService,
 	IKinguSkillVersion,
-	KINGU_CONNECT_CLOUD_COMMAND_ID,
 	KinguSkillCloudOperation,
 	KinguSkillOutcome,
 	readSkillOperation,
-	skillErrorMessage,
 } from '../../../../workbench/contrib/kingu/common/kinguSkillSharing.js';
 
 /** The ADE's `KinguProfileAuthStatus`, the part read here. */
@@ -99,21 +93,5 @@ class KinguSkillSharingService implements IKinguSkillSharingService {
 
 registerSingleton(IKinguSkillSharingService, KinguSkillSharingService, InstantiationType.Delayed);
 
-/** The ADE's Settings "Sign in to Kingu": connects this profile to Kingu cloud and says who it is signed in as. */
-registerAction2(class ConnectKinguCloudAction extends Action2 {
-	constructor() {
-		super({ id: KINGU_CONNECT_CLOUD_COMMAND_ID, title: localize2('kingu.connectCloud', "Kingu: Connect to Kingu Cloud"), f1: true });
-	}
-	async run(accessor: ServicesAccessor): Promise<void> {
-		const sharing = accessor.get(IKinguSkillSharingService);
-		const notificationService = accessor.get(INotificationService);
-		try {
-			const email = await sharing.connect();
-			notificationService.info(email
-				? localize('kingu.connectCloud.done', "Connected to Kingu cloud as {0}.", email)
-				: localize('kingu.connectCloud.notYet', "Kingu cloud did not finish signing in."));
-		} catch (error) {
-			notificationService.error(localize('kingu.connectCloud.failed', "Could not connect to Kingu cloud: {0}", skillErrorMessage(error)));
-		}
-	}
-});
+// `kingu.cloud.connect` ("Sign in to Kingu") is registered with the Kingu account, in
+// `workbench/contrib/kingu/electron-browser/kinguAccountService.ts`, so the editor window has it too.

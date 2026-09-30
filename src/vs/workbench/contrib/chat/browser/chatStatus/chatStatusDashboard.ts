@@ -48,7 +48,7 @@ import { GitHubPaths, IDefaultAccountService } from '../../../../../platform/def
 import product from '../../../../../platform/product/common/product.js';
 import { isCompletionsEnabled } from '../../../../../editor/common/services/completionsEnablement.js';
 import { KINGU_AI_ACCOUNT_STATUS_COMMAND_ID } from '../../../kingu/common/kinguAiAccounts.js';
-import { formatKinguAiReset, formatKinguAiUsage, IKinguAiAccountRow, loadKinguAiAccountRows, summarizeKinguAiAccounts } from '../../../kingu/common/kinguAiAccountSummary.js';
+import { formatKinguAiReset, formatKinguAiUsage, IKinguAiAccountRow, loadKinguAiAccountRows, loadKinguPlanSummary, summarizeKinguAiAccounts } from '../../../kingu/common/kinguAiAccountSummary.js';
 import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../../kingu/common/kinguOrcaSettingsCommands.js';
 import { KINGU_ARKAI_DAILY_TOKENS_SETTING } from '../../../kingu/common/kinguProductDefaults.js';
 
@@ -664,15 +664,15 @@ export class ChatStatusDashboard extends DomWidget {
 		}));
 		const body = section.appendChild($('div.kingu-ai-usage-body', undefined, $('div.kingu-ai-usage-note', undefined, localize('kingu.usage.loading', "Reading usage..."))));
 		const token = cancelOnDispose(this._store);
-		void loadKinguAiAccountRows(this.commandService).then(rows => {
+		void Promise.all([loadKinguAiAccountRows(this.commandService), loadKinguPlanSummary(this.commandService)]).then(([rows, planSummary]) => {
 			if (!token.isCancellationRequested) {
 				clearNode(body);
-				this.renderKinguUsageRows(body, rows);
+				this.renderKinguUsageRows(body, rows, planSummary);
 			}
 		});
 	}
 
-	private renderKinguUsageRows(container: HTMLElement, rows: readonly IKinguAiAccountRow[]): void {
+	private renderKinguUsageRows(container: HTMLElement, rows: readonly IKinguAiAccountRow[], planSummary: string | undefined): void {
 		const now = Date.now();
 		// Arkai alone leads, as a share of the tokens it is given a day (Chyle 1
 		// has no limit of its own); every other AI is in the list below.
@@ -698,7 +698,12 @@ export class ChatStatusDashboard extends DomWidget {
 				),
 				$('div.quota-bar', undefined, bit),
 			));
-			container.appendChild($('div.kingu-ai-usage-note', undefined, localize('kingu.usage.arkaiTokens', "{0} of {1} tokens today, on this computer", this.quotaCreditsFormatter.value.format(tokens), this.quotaCreditsFormatter.value.format(budget))));
+			// The budget is this computer's own setting; the Kingu plan, when known, is named beside it rather than implied.
+			const used = this.quotaCreditsFormatter.value.format(tokens);
+			const allowed = this.quotaCreditsFormatter.value.format(budget);
+			container.appendChild($('div.kingu-ai-usage-note', undefined, planSummary
+				? localize('kingu.usage.arkaiTokensWithPlan', "{0} of {1} tokens today, on this computer · Kingu {2}", used, allowed, planSummary)
+				: localize('kingu.usage.arkaiTokens', "{0} of {1} tokens today, on this computer", used, allowed)));
 		}
 		container.appendChild($('div.kingu-ai-usage-note', undefined, summarizeKinguAiAccounts(rows)));
 

@@ -28,7 +28,7 @@ import { IFileService } from '../../../../../../../platform/files/common/files.j
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../../../../platform/log/common/log.js';
-import { IExtensionService, isProposedApiEnabled } from '../../../../../../services/extensions/common/extensions.js';
+import { IExtensionService } from '../../../../../../services/extensions/common/extensions.js';
 import { IChatRequestPasteVariableEntry, IChatRequestVariableEntry, isImageVariableEntry, toPasteVariableEntry, ChatPasteAttachmentMetadata } from '../../../../common/attachments/chatVariableEntries.js';
 import { chatVariableLeader } from '../../../../common/requestParser/chatParserTypes.js';
 import { IDynamicVariable } from '../../../../common/attachments/chatVariables.js';
@@ -66,7 +66,6 @@ export class PasteImageProvider implements DocumentPasteEditProvider {
 
 	constructor(
 		private readonly pasteTargetService: IChatPasteTargetService,
-		private readonly extensionService: IExtensionService,
 		@IFileService private readonly fileService: IFileService,
 		@IEnvironmentService private readonly environmentService: IEnvironmentService,
 		@ILogService private readonly logService: ILogService,
@@ -76,9 +75,9 @@ export class PasteImageProvider implements DocumentPasteEditProvider {
 	}
 
 	async provideDocumentPasteEdits(model: ITextModel, ranges: readonly IRange[], dataTransfer: IReadonlyVSDataTransfer, context: DocumentPasteContext, token: CancellationToken): Promise<DocumentPasteEditsSession | undefined> {
-		if (!this.extensionService.extensions.some(ext => isProposedApiEnabled(ext, 'chatReferenceBinaryData'))) {
-			return;
-		}
+		// Kingu: upstream waits here for an extension that reads binary references
+		// (Copilot's). Kingu ships none, and its agents take a pasted image as they
+		// take one from the attach button.
 
 		const supportedMimeTypes = [
 			'image/png',
@@ -924,7 +923,7 @@ export class ChatPasteProvidersFeature extends Disposable {
 		super();
 		const chatInputProviders: DocumentPasteEditProvider[] = [
 			instaService.createInstance(CopyAttachmentsProvider),
-			new PasteImageProvider(pasteTargetService, extensionService, fileService, environmentService, logService),
+			new PasteImageProvider(pasteTargetService, fileService, environmentService, logService),
 			new PasteTextProvider(pasteTargetService, modelService, logService, configurationService),
 			new PasteHtmlProvider(),
 		];

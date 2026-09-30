@@ -918,7 +918,7 @@ suite('AutomationsCardsWidget', () => {
 			descriptions: 1,
 			buttons: 1,
 			templateSections: 1,
-			templateNames: ['Catch up on main', 'Issue triage', 'Find bugs'],
+			templateNames: ['Daily work summary', 'Test health check', 'TODO sweep', 'Dependency check', 'Draft release notes', 'Catch up on main', 'Find bugs'],
 		});
 	});
 
@@ -974,7 +974,7 @@ suite('AutomationsCardsWidget', () => {
 			},
 			disabledNames,
 		}, {
-			enabledNames: ['Catch up on main', 'Issue triage', 'Find bugs', 'Weekly review'],
+			enabledNames: ['Daily work summary', 'Test health check', 'TODO sweep', 'Dependency check', 'Draft release notes', 'Catch up on main', 'Find bugs', 'Weekly review'],
 			sourceBadge: 'Plugin',
 			sourceLabel: 'From Review plugin',
 			initialValues: {
@@ -994,7 +994,7 @@ suite('AutomationsCardsWidget', () => {
 				open: true,
 				unreadVisible: false,
 			},
-			disabledNames: ['Catch up on main', 'Issue triage', 'Find bugs'],
+			disabledNames: ['Daily work summary', 'Test health check', 'TODO sweep', 'Dependency check', 'Draft release notes', 'Catch up on main', 'Find bugs'],
 		});
 	});
 
@@ -1227,7 +1227,7 @@ suite('AutomationsCardsWidget', () => {
 			dialogOptions: undefined,
 			errors: [{
 				message: 'Unable to import automation.',
-				detail: 'Only .automation.md files can be imported.',
+				detail: 'Only .automation.md files and goose recipes (.yaml, .yml, .json) can be imported.',
 			}],
 		});
 	});

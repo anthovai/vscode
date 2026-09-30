@@ -3,9 +3,8 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import './media/kinguOrcaFooter.css';
+import '../../../../workbench/contrib/kingu/electron-browser/media/kinguOrcaFooter.css';
 import { $, addDisposableListener, EventType, getWindow } from '../../../../base/browser/dom.js';
-import { Action, Separator } from '../../../../base/common/actions.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -20,17 +19,10 @@ import { INotificationService, Severity } from '../../../../platform/notificatio
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
-import { IKinguFloatingWorkspaceService } from './kinguFloatingWorkspacePanel.js';
-import { orcaSettingIdForKey } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettings.js';
+import { FLOATING_ENABLED_SETTING_ID, FLOATING_LOCATION_SETTING_ID, IKinguFloatingWorkspaceService, KINGU_HIDE_FLOATING_WORKSPACE_COMMAND_ID, KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguFloatingWorkspace.js';
+import { showFloatingWorkspaceMenu } from '../../../../workbench/contrib/kingu/browser/kinguFloatingWorkspaceMenu.js';
 import { KINGU_OPEN_ORCA_SETTINGS_COMMAND_ID } from '../../../../workbench/contrib/kingu/common/kinguOrcaSettingsCommands.js';
 import { attachFooterTooltip, lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
-
-/** Whether the floating-workspace toggle is on, and where the ADE puts it. */
-export const FLOATING_ENABLED_SETTING_ID = orcaSettingIdForKey('floatingTerminalEnabled') ?? 'kingu.floatingWorkspace.floatingTerminalEnabled';
-export const FLOATING_LOCATION_SETTING_ID = orcaSettingIdForKey('floatingTerminalTriggerLocation') ?? 'kingu.floatingWorkspace.floatingTerminalTriggerLocation';
-
-/** The ADE's `floatingTerminal.toggle`, bound to Mod+Alt+A as there: shows and hides the floating workspace. */
-export const KINGU_TOGGLE_FLOATING_WORKSPACE_COMMAND_ID = 'kingu.floatingWorkspace.toggle';
 
 registerAction2(class extends Action2 {
 	constructor() {
@@ -47,7 +39,6 @@ registerAction2(class extends Action2 {
 });
 
 /** The ADE's "Hide Floating Workspace": the button and the panel go away until it is turned back on. */
-export const KINGU_HIDE_FLOATING_WORKSPACE_COMMAND_ID = 'kingu.floatingWorkspace.hide';
 
 registerAction2(class extends Action2 {
 	constructor() {
@@ -291,24 +282,6 @@ class KinguFloatingWorkspaceButton extends Disposable {
 		}
 		return DEFAULT_ANCHOR;
 	}
-}
-
-/**
- * The ADE's right-click menu on the floating-workspace toggle, wherever it
- * sits: move it to the other place, or hide the floating workspace.
- */
-export function showFloatingWorkspaceMenu(contextMenuService: IContextMenuService, configurationService: IConfigurationService, commandService: ICommandService, event: MouseEvent, location: 'floating-button' | 'status-bar'): void {
-	const move = location === 'floating-button'
-		? new Action('kingu.floatingWorkspace.moveToStatusBar', localize('kingu.floatingWorkspace.moveToStatusBar', "Move to Status Bar"), undefined, true,
-			() => configurationService.updateValue(FLOATING_LOCATION_SETTING_ID, 'status-bar', ConfigurationTarget.USER))
-		: new Action('kingu.floatingWorkspace.moveToFloatingButton', localize('kingu.floatingWorkspace.moveToFloatingButton', "Move to Floating Button"), undefined, true,
-			() => configurationService.updateValue(FLOATING_LOCATION_SETTING_ID, 'floating-button', ConfigurationTarget.USER));
-	const hide = new Action('kingu.floatingWorkspace.hide', localize('kingu.floatingWorkspace.hide', "Hide Floating Workspace"), undefined, true,
-		() => commandService.executeCommand(KINGU_HIDE_FLOATING_WORKSPACE_COMMAND_ID));
-	contextMenuService.showContextMenu({
-		getAnchor: () => ({ x: event.clientX, y: event.clientY }),
-		getActions: () => [move, new Separator(), hide],
-	});
 }
 
 registerWorkbenchContribution2(KinguFloatingWorkspaceButton.ID, KinguFloatingWorkspaceButton, WorkbenchPhase.AfterRestored);

@@ -7,8 +7,8 @@ import { $, addDisposableListener, append, EventType, getWindow } from '../../..
 import { mainWindow } from '../../../../base/browser/window.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { displayedUsagePercent, KinguUsageDisplay } from '../../../../workbench/contrib/kingu/common/kinguStatusBar.js';
-import { OrcaRateLimitState } from '../../../../workbench/contrib/kingu/common/kinguOrcaFooter.js';
+import { displayedUsagePercent, KinguUsageDisplay } from '../common/kinguStatusBar.js';
+import { OrcaRateLimitState } from '../common/kinguOrcaFooter.js';
 import {
 	accountsSectionFor,
 	clampUsed,
@@ -30,7 +30,7 @@ import {
 	usagePercentLabel,
 	usageTextTone,
 } from '../common/kinguOrcaUsage.js';
-import { attachFooterTooltip, lucideIcon } from '../../../../workbench/contrib/kingu/electron-browser/kinguOrcaFooterParts.js';
+import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 
 /** What the panel needs from the footer that opens it. */
 export interface IOrcaUsagePanelHost {

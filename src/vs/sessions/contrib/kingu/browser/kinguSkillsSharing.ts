@@ -12,6 +12,7 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { KINGU_CLOUD_ORIGIN } from '../../../../platform/kinguOrca/common/kinguOrca.js';
 import { IKinguSkill } from '../common/kinguSkills.js';
 import {
 	derivedBundleName,
@@ -351,7 +352,7 @@ export class KinguSkillsSharingUi extends Disposable {
 	private async _resolve(): Promise<void> {
 		const shareId = parseSkillShareId(this._installLink);
 		if (!shareId) {
-			this._installError = localize('kingu.skills.install.invalid', "Paste a Kingu skill link, such as https://kingu.anthovai.com/skills/share/…");
+			this._installError = localize('kingu.skills.install.invalid', "Paste a Kingu skill link, such as {0}/skills/share/…", KINGU_CLOUD_ORIGIN);
 			this._redraw();
 			return;
 		}

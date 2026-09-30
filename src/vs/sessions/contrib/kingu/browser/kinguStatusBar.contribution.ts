@@ -7,10 +7,9 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IKinguHostService } from '../../../../platform/kinguHost/common/kinguHostService.js';
-import { IKinguAdvertisedUrlService, KinguAdvertisedUrlService } from './kinguAdvertisedUrlService.js';
-import { isLocalhostEquivalent } from '../common/kinguAdvertisedUrls.js';
+import { IKinguAdvertisedUrlService } from '../../../../workbench/contrib/kingu/browser/kinguAdvertisedUrlService.js';
+import { isLocalhostEquivalent } from '../../../../workbench/contrib/kingu/common/kinguAdvertisedUrls.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -28,7 +27,6 @@ import { URI } from '../../../../base/common/uri.js';
 // server prints its address, and a server prints it once. Created lazily when
 // the ports entry first asked, it would have missed every announcement made
 // before that — which is all of them.
-registerSingleton(IKinguAdvertisedUrlService, KinguAdvertisedUrlService, InstantiationType.Eager);
 
 export const KINGU_REFRESH_QUOTAS_COMMAND_ID = 'kingu.status.refreshQuotas';
 export const KINGU_OPEN_PORT_COMMAND_ID = 'kingu.status.openPort';

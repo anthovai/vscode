@@ -15,6 +15,7 @@ import {
 	KINGU_AI_PROVIDERS,
 	kinguAiProviderLabel,
 } from '../../../../workbench/contrib/kingu/common/kinguAiAccounts.js';
+import { KINGU_ACCOUNT_STATE_COMMAND_ID, KinguAccountState, kinguPlanSummary } from './kinguAccount.js';
 
 /** One AI on the Signed-in AI list, whatever kind of account it has. */
 export interface IKinguAiAccountRow {
@@ -81,6 +82,24 @@ export function summarizeKinguAiAccounts(rows: readonly IKinguAiAccountRow[]): s
 }
 
 /**
+ * The Kingu account's plan in a line (`Free plan`, `Arkai Pro plan`);
+ * `undefined` where no one is signed in or the account is not read here.
+ */
+export async function loadKinguPlanSummary(commandService: ICommandService): Promise<string | undefined> {
+	if (!CommandsRegistry.getCommand(KINGU_ACCOUNT_STATE_COMMAND_ID)) {
+		return undefined;
+	}
+	return kinguPlanSummary(await commandService.executeCommand<KinguAccountState>(KINGU_ACCOUNT_STATE_COMMAND_ID).catch(() => undefined));
+}
+
+/** Arkai's plan line: it runs on this computer, and the Kingu plan when one is known (not "no limit": it has a daily budget). */
+export function arkaiPlanLine(planSummary: string | undefined): string {
+	return planSummary
+		? localize('kingu.aiAccounts.arkaiPlanWithKingu', "On this computer · {0}", planSummary)
+		: localize('kingu.aiAccounts.arkaiPlanLocal', "On this computer");
+}
+
+/**
  * Every AI this machine can run and whether it is signed in: Claude, ChatGPT
  * (Codex) and Gemini through the ADE's accounts, and each ACP agent (OpenCode,
  * Qwen Code…) by its own CLI. Empty where the commands are not registered.
@@ -89,7 +108,7 @@ export async function loadKinguAiAccountRows(commandService: ICommandService): P
 	if (!CommandsRegistry.getCommand(KINGU_AI_ACCOUNT_STATUS_COMMAND_ID)) {
 		return [];
 	}
-	const [arkai, providers, agents] = await Promise.all([
+	const [arkai, providers, agents, planSummary] = await Promise.all([
 		CommandsRegistry.getCommand(KINGU_AI_ARKAI_USAGE_COMMAND_ID)
 			? commandService.executeCommand<IKinguAiUsage>(KINGU_AI_ARKAI_USAGE_COMMAND_ID).then(usage => ({ usage }), () => ({ usage: undefined }))
 			: Promise.resolve(undefined),
@@ -98,10 +117,11 @@ export async function loadKinguAiAccountRows(commandService: ICommandService): P
 			return status ? { id: provider, label: kinguAiProviderLabel(provider), signedIn: status.signedIn, email: status.email, plan: status.plan, usage: status.usage, signIn: 'provider' as const } : undefined;
 		})),
 		commandService.executeCommand<IKinguAiAgentAccount[]>(KINGU_AI_AGENT_ACCOUNTS_COMMAND_ID).catch(() => undefined),
+		loadKinguPlanSummary(commandService),
 	]);
 	return [
-		// Arkai first: Kingu's own agent, on Chyle 1 on this computer, with no account or limit.
-		...(arkai ? [{ id: 'arkai', label: localize('kingu.aiAccounts.arkai', "Arkai (Chyle 1)"), signedIn: true, plan: localize('kingu.aiAccounts.arkaiPlan', "On this computer, no limit"), usage: arkai.usage, signIn: 'none' as const }] : []),
+		// Arkai first: Kingu's own agent, on Chyle 1 on this computer, with no sign-in of its own; the Kingu plan beside it when known.
+		...(arkai ? [{ id: 'arkai', label: localize('kingu.aiAccounts.arkai', "Arkai (Chyle 1)"), signedIn: true, plan: arkaiPlanLine(planSummary), usage: arkai.usage, signIn: 'none' as const }] : []),
 		...providers.filter((row): row is NonNullable<typeof row> => !!row),
 		...(agents ?? []).map(agent => ({ id: agent.id, label: agent.displayName, signedIn: agent.signedIn, email: agent.email, plan: agent.plan, usage: agent.usage, signIn: 'terminal' as const })),
 	];

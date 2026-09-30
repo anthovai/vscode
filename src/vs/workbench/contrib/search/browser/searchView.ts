@@ -86,6 +86,7 @@ import { searchMatchComparer } from './searchCompare.js';
 import { AIFolderMatchWorkspaceRootImpl } from './AISearch/aiSearchModel.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { forcedExpandRecursively } from './searchActionsTopBar.js';
+import { KINGU_SMART_SEARCH_SETTING, kinguSmartSearchPattern } from '../../kingu/common/kinguSmartSearch.js';
 
 const $ = dom.$;
 
@@ -1635,9 +1636,16 @@ export class SearchView extends ViewPane {
 			return;
 		}
 
+		// Kingu: a plain query is widened to what it means (kinguSmartSearch.ts); regex,
+		// Match Case, Match Whole Word or a replace keep the search exact.
+		const kinguSmartPattern = !isRegex && !isCaseSensitive && !isWholeWords && !this.searchWidget.isReplaceShown()
+			&& this.configurationService.getValue<boolean>(KINGU_SMART_SEARCH_SETTING) !== false
+			? kinguSmartSearchPattern(contentPattern)
+			: undefined;
+
 		const content: IPatternInfo = {
-			pattern: contentPattern,
-			isRegExp: isRegex,
+			pattern: kinguSmartPattern ?? contentPattern,
+			isRegExp: isRegex || kinguSmartPattern !== undefined,
 			isCaseSensitive: isCaseSensitive,
 			isWordMatch: isWholeWords,
 			notebookInfo: {

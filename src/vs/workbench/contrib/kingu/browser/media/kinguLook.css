@@ -86,3 +86,405 @@ body .monaco-workbench.linux {
 	padding: 0;
 	box-sizing: content-box;
 }
+
+/*
+ * The project and branch at the front of the command center pill
+ * (kinguTitleBarContext.ts): each a button, divided from the search box by a
+ * hairline, so the pill reads "where" before "search".
+ */
+.monaco-workbench .agent-status-pill .kingu-title-context {
+	display: flex;
+	align-items: center;
+	flex-shrink: 1;
+	min-width: 0;
+	gap: 2px;
+	padding-right: 6px;
+	margin-right: 2px;
+	border-right: 1px solid var(--vscode-commandCenter-border, transparent);
+}
+
+.monaco-workbench .agent-status-pill .kingu-title-segment {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 4px;
+	cursor: pointer;
+	color: var(--vscode-commandCenter-foreground);
+	white-space: nowrap;
+}
+
+.monaco-workbench .agent-status-pill .kingu-title-segment:first-child .kingu-title-segment-label {
+	font-weight: 600;
+}
+
+.monaco-workbench .agent-status-pill .kingu-title-segment-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 180px;
+}
+
+.monaco-workbench .agent-status-pill .kingu-title-segment .codicon {
+	font-size: 14px;
+	flex-shrink: 0;
+}
+
+.monaco-workbench .agent-status-pill .kingu-title-segment .kingu-title-segment-chevron {
+	font-size: 12px;
+	opacity: 0.6;
+}
+
+.monaco-workbench .agent-status-pill .kingu-title-segment:hover {
+	color: var(--vscode-commandCenter-activeForeground);
+	background-color: var(--vscode-commandCenter-activeBackground);
+}
+
+.monaco-workbench .agent-status-pill .kingu-title-segment:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+/*
+ * The chat view's agent tabs (kinguChatTabs.ts), in the header's place: one
+ * row, the open chat raised like an editor tab, the rest quiet. The header's
+ * own title and back button are hidden; its actions stay on the right.
+ */
+.chat-viewpane .chat-view-title-container.kingu-chat-tabs-enabled {
+	cursor: default;
+}
+
+.chat-viewpane .chat-view-title-container.kingu-chat-tabs-enabled .chat-view-title-navigation-toolbar {
+	display: none;
+}
+
+.chat-viewpane .kingu-chat-tabs {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.chat-viewpane .kingu-chat-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.chat-viewpane .kingu-chat-tab {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex: 0 1 auto;
+	min-width: 56px;
+	max-width: 180px;
+	height: 24px;
+	padding: 0 4px 0 8px;
+	border-radius: 6px;
+	cursor: pointer;
+	color: var(--vscode-descriptionForeground);
+	white-space: nowrap;
+}
+
+.chat-viewpane .kingu-chat-tab:hover {
+	color: var(--vscode-foreground);
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.chat-viewpane .kingu-chat-tab.active {
+	color: var(--vscode-foreground);
+	background-color: var(--vscode-list-inactiveSelectionBackground);
+}
+
+.chat-viewpane .kingu-chat-tab:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.chat-viewpane .kingu-chat-tab-agent {
+	flex-shrink: 0;
+	font-size: 11px;
+	opacity: 0.7;
+}
+
+.chat-viewpane .kingu-chat-tab-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.chat-viewpane .kingu-chat-tab .codicon {
+	font-size: 12px;
+	flex-shrink: 0;
+}
+
+.chat-viewpane .kingu-chat-tab-status.working {
+	color: var(--vscode-progressBar-background);
+}
+
+.chat-viewpane .kingu-chat-tab-status.waiting {
+	color: var(--vscode-editorWarning-foreground);
+}
+
+.chat-viewpane .kingu-chat-tab-status.failed {
+	color: var(--vscode-errorForeground);
+}
+
+.chat-viewpane .kingu-chat-tab-status.unread {
+	font-size: 8px;
+	color: var(--vscode-textLink-foreground);
+}
+
+/* The close button shows on the open tab and on hover, as an editor tab's does. */
+.chat-viewpane .kingu-chat-tab-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	border-radius: 4px;
+	visibility: hidden;
+}
+
+.chat-viewpane .kingu-chat-tab.active .kingu-chat-tab-close,
+.chat-viewpane .kingu-chat-tab:hover .kingu-chat-tab-close {
+	visibility: visible;
+}
+
+.chat-viewpane .kingu-chat-tab-close:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/*
+ * Kingu's home in the empty editor area (kinguHome.ts): two quiet lists under
+ * the logo, the chats to continue and the recent projects, above the
+ * shortcuts. Rows read like the editor's own lists, not like cards.
+ */
+.monaco-workbench .editor-group-watermark .kingu-home {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	width: min(440px, 90%);
+	margin: 8px auto 20px;
+	text-align: left;
+}
+
+.monaco-workbench .kingu-home-title {
+	margin: 0 0 4px 8px;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+}
+
+.monaco-workbench .kingu-home-rows {
+	display: flex;
+	flex-direction: column;
+}
+
+.monaco-workbench .kingu-home-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	height: 26px;
+	padding: 0 8px;
+	border-radius: 6px;
+	cursor: pointer;
+	color: var(--vscode-foreground);
+}
+
+.monaco-workbench .kingu-home-row:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.monaco-workbench .kingu-home-row:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.monaco-workbench .kingu-home-icon {
+	flex-shrink: 0;
+	font-size: 14px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.monaco-workbench .kingu-home-icon.codicon-report {
+	color: var(--vscode-editorWarning-foreground);
+}
+
+.monaco-workbench .kingu-home-icon.codicon-error {
+	color: var(--vscode-errorForeground);
+}
+
+.monaco-workbench .kingu-home-icon.codicon-circle-filled {
+	font-size: 8px;
+	width: 14px;
+	text-align: center;
+	color: var(--vscode-textLink-foreground);
+}
+
+.monaco-workbench .kingu-home-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.monaco-workbench .kingu-home-detail {
+	flex-shrink: 1;
+	min-width: 0;
+	margin-left: auto;
+	padding-left: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+/*
+ * Snap's front page (kinguSnapPicks.ts): a store rather than a list. A short
+ * hero, then packs as cards in a grid that reflows with the side bar's width;
+ * the ones this project needs carry the accent edge.
+ */
+.monaco-workbench .kingu-snap {
+	overflow-y: auto;
+	box-sizing: border-box;
+	padding: 4px 12px 16px;
+}
+
+.monaco-workbench .kingu-snap-hero {
+	margin: 6px 0 12px;
+}
+
+.monaco-workbench .kingu-snap-hero-subtitle {
+	margin-top: 2px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.monaco-workbench .kingu-snap-section-title {
+	margin: 14px 0 6px;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+}
+
+.monaco-workbench .kingu-snap-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 8px;
+}
+
+.monaco-workbench .kingu-snap-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	padding: 10px;
+	border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+	border-radius: 8px;
+	background-color: var(--vscode-editorWidget-background);
+}
+
+.monaco-workbench .kingu-snap-card.recommended {
+	border-color: var(--vscode-focusBorder);
+}
+
+.monaco-workbench .kingu-snap-card-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.monaco-workbench .kingu-snap-card-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+	font-size: 15px;
+	color: var(--vscode-button-foreground);
+	background-color: var(--vscode-button-background);
+}
+
+.monaco-workbench .kingu-snap-card-name {
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.monaco-workbench .kingu-snap-card-description {
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--vscode-descriptionForeground);
+}
+
+.monaco-workbench .kingu-snap-card-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.monaco-workbench .kingu-snap-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	max-width: 100%;
+	padding: 1px 6px;
+	border-radius: 10px;
+	font-size: 11px;
+	cursor: pointer;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--vscode-badge-foreground);
+	background-color: var(--vscode-badge-background);
+}
+
+.monaco-workbench .kingu-snap-chip.installed {
+	color: var(--vscode-descriptionForeground);
+	background-color: transparent;
+	border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+}
+
+.monaco-workbench .kingu-snap-chip .codicon {
+	font-size: 11px;
+}
+
+.monaco-workbench .kingu-snap-chip:hover {
+	text-decoration: underline;
+}
+
+.monaco-workbench .kingu-snap-card-button {
+	align-self: flex-start;
+	margin-top: 2px;
+	padding: 3px 10px;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--vscode-button-foreground);
+	background-color: var(--vscode-button-background);
+}
+
+.monaco-workbench .kingu-snap-card-button:hover:not(:disabled) {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.monaco-workbench .kingu-snap-card-button:disabled {
+	cursor: default;
+	opacity: 0.7;
+}
+
+.monaco-workbench .kingu-snap-card-button.done {
+	color: var(--vscode-descriptionForeground);
+	background-color: transparent;
+	border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+}

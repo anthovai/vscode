@@ -26,6 +26,7 @@ import { type AutomationCatalogueState, type IAutomationProviderDescriptor, IAut
 import { CHAT_AUTOMATIONS_ENABLED_SETTING, ChatAutomationsEnabledContext } from '../../../../../workbench/contrib/chat/common/automations/automationsEnabled.js';
 import { IAutomationRunner } from '../../../../../workbench/contrib/chat/common/automations/automationRunner.js';
 import { type AutomationDialogCreateInitialValues, IAutomationDialogService } from '../../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
+import { isKinguRecipeFileName, KINGU_RECIPE_FILE_EXTENSIONS, parseKinguRecipe } from '../../../../../workbench/contrib/kingu/common/kinguRecipes.js';
 import { AUTOMATION_BLUEPRINT_FILE_SUFFIX, AutomationBlueprintParseError, automationToBlueprint, createAutomationBlueprintFileName, parseAutomationBlueprint, serializeAutomationBlueprint } from '../../../../../workbench/contrib/chat/common/automations/automationBlueprint.js';
 import { DAYS_OF_WEEK } from '../../../../../workbench/contrib/chat/common/automations/schedule.js';
 import { IAgentPluginService } from '../../../../../workbench/contrib/chat/common/plugins/agentPluginService.js';
@@ -398,7 +399,7 @@ class AutomationCardsSection extends Disposable {
 		if (dropData.kind === 'invalid') {
 			const detail = dropData.reason === 'multiple'
 				? localize('automationDropMultiple', "Drop one Automation blueprint file at a time.")
-				: localize('automationDropUnsupported', "Only .automation.md files can be imported.");
+				: localize('automationDropUnsupported', "Only .automation.md files and goose recipes (.yaml, .yml, .json) can be imported.");
 			void this.dialogService.error(localize('automationDropFailed', "Unable to import automation."), detail);
 			return;
 		}
@@ -407,6 +408,7 @@ class AutomationCardsSection extends Disposable {
 			: async () => VSBuffer.wrap(new Uint8Array(await dropData.file.arrayBuffer())).toString();
 		void importAutomationBlueprint(
 			readContent,
+			dropData.kind === 'resource' ? basename(dropData.resource) : dropData.file.name,
 			this.automationDialogService,
 			this.automationService,
 			this.configurationService,
@@ -1637,7 +1639,8 @@ function normalizeAutomationBlueprintResource(resource: URI): URI {
 }
 
 function isAutomationBlueprintResource(resource: URI): boolean {
-	return resource.path.toLowerCase().endsWith(AUTOMATION_BLUEPRINT_FILE_SUFFIX);
+	// Kingu: goose recipes import as Automations too (`kinguRecipes.ts`).
+	return resource.path.toLowerCase().endsWith(AUTOMATION_BLUEPRINT_FILE_SUFFIX) || isKinguRecipeFileName(resource.path);
 }
 
 function getAutomationDropData(event: DragEvent): AutomationDropData {
@@ -1666,13 +1669,14 @@ function getAutomationDropData(event: DragEvent): AutomationDropData {
 	if (files.length !== 1) {
 		return { kind: 'invalid', reason: 'multiple' };
 	}
-	return files[0].name.toLowerCase().endsWith(AUTOMATION_BLUEPRINT_FILE_SUFFIX)
+	return files[0].name.toLowerCase().endsWith(AUTOMATION_BLUEPRINT_FILE_SUFFIX) || isKinguRecipeFileName(files[0].name)
 		? { kind: 'file', file: files[0] }
 		: { kind: 'invalid', reason: 'unsupported' };
 }
 
 async function importAutomationBlueprint(
 	readContent: () => Promise<string>,
+	fileName: string,
 	automationDialogService: IAutomationDialogService,
 	automationService: IAutomationService,
 	configurationService: IConfigurationService,
@@ -1688,7 +1692,8 @@ async function importAutomationBlueprint(
 
 	let blueprint;
 	try {
-		blueprint = parseAutomationBlueprint(await readContent());
+		const content = await readContent();
+		blueprint = isKinguRecipeFileName(fileName) ? parseKinguRecipe(content) : parseAutomationBlueprint(content);
 	} catch (error) {
 		logService.error('[Automations] Failed to read Automation blueprint', error);
 		await dialogService.error(
@@ -2062,7 +2067,10 @@ registerAction2(class ImportAutomationAction extends Action2 {
 			canSelectFiles: true,
 			canSelectFolders: false,
 			canSelectMany: false,
-			filters: [{ name: localize('automationBlueprintFileFilter', "Automation Blueprint"), extensions: ['automation.md'] }],
+			filters: [
+				{ name: localize('automationBlueprintFileFilter', "Automation Blueprint"), extensions: ['automation.md'] },
+				{ name: localize('automationRecipeFileFilter', "Goose Recipe"), extensions: KINGU_RECIPE_FILE_EXTENSIONS },
+			],
 		});
 		const resource = resources?.[0];
 		if (!resource) {
@@ -2071,13 +2079,14 @@ registerAction2(class ImportAutomationAction extends Action2 {
 		if (!isAutomationBlueprintResource(resource)) {
 			await dialogService.error(
 				localize('automationDropFailed', "Unable to import automation."),
-				localize('automationDropUnsupported', "Only .automation.md files can be imported."),
+				localize('automationDropUnsupported', "Only .automation.md files and goose recipes (.yaml, .yml, .json) can be imported."),
 			);
 			return;
 		}
 
 		await importAutomationBlueprint(
 			async () => (await fileService.readFile(resource)).value.toString(),
+			basename(resource),
 			automationDialogService,
 			automationService,
 			configurationService,

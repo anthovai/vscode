@@ -10,10 +10,14 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
-import { IChatProgress } from '../../chat/common/chatService/chatService.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import { Selection } from '../../../../editor/common/core/selection.js';
+import { IModelService } from '../../../../editor/common/services/model.js';
+import { IChatEditorLocationData, IChatProgress } from '../../chat/common/chatService/chatService.js';
 import { ChatAgentLocation, ChatModeKind } from '../../chat/common/constants.js';
 import { ChatMessageRole, IChatMessage, ILanguageModelsService } from '../../chat/common/languageModels.js';
 import { IChatAgentData, IChatAgentHistoryEntry, IChatAgentRequest, IChatAgentResult, IChatAgentService } from '../../chat/common/participants/chatAgents.js';
+import { kinguInlineEditCode, kinguInlineEditPrompt } from '../common/kinguInlineEdit.js';
 
 /** Arkai's default chat participant, in the place GitHub Copilot's held. */
 export const ARKAI_DEFAULT_AGENT_ID = 'kingu.arkai';
@@ -57,6 +61,7 @@ export class KinguArkaiAgentContribution extends Disposable {
 		@IProductService productService: IProductService,
 		@IChatAgentService chatAgentService: IChatAgentService,
 		@ILanguageModelsService private readonly _languageModelsService: ILanguageModelsService,
+		@IModelService private readonly _modelService: IModelService,
 	) {
 		super();
 		if (!productService.kinguDisableCopilot) {
@@ -95,6 +100,9 @@ export class KinguArkaiAgentContribution extends Disposable {
 		if (!modelId) {
 			return { errorDetails: { message: localize('kingu.arkai.noModel', "Arkai has no model to answer with yet. Set up Chyle 1, or add a model with Manage Models.") } };
 		}
+		if (request.locationData?.type === ChatAgentLocation.EditorInline) {
+			return this._editInline(modelId, request, request.locationData, progress, token);
+		}
 		try {
 			const response = await this._languageModelsService.sendChatRequest(modelId, ARKAI_EXTENSION_ID, arkaiChatMessages(request, history), {}, token);
 			for await (const chunk of response.stream) {
@@ -109,5 +117,57 @@ export class KinguArkaiAgentContribution extends Disposable {
 		} catch (error) {
 			return { errorDetails: { message: error instanceof Error ? error.message : String(error) } };
 		}
+	}
+
+	/**
+	 * Inline chat (`Ctrl+I`) wants an edit, not an answer: the lines selected (or
+	 * the cursor's lines) rewritten as the request asks, sent back as a text edit
+	 * the editor shows as a change to keep or undo.
+	 */
+	private async _editInline(modelId: string, request: IChatAgentRequest, location: IChatEditorLocationData, progress: (parts: IChatProgress[]) => void, token: CancellationToken): Promise<IChatAgentResult> {
+		const model = this._modelService.getModel(location.document);
+		if (!model) {
+			return { errorDetails: { message: localize('kingu.arkai.noDocument', "Arkai could not read this file.") } };
+		}
+		const selection = Selection.liftSelection(location.selection);
+		const region = selection.isEmpty() ? Range.lift(location.wholeRange) : selection;
+		// A selection that ends at the start of a line leaves that line out.
+		const endLineNumber = region.endColumn === 1 && region.endLineNumber > region.startLineNumber ? region.endLineNumber - 1 : region.endLineNumber;
+		const startLineNumber = region.startLineNumber;
+		const editRegion = {
+			languageId: model.getLanguageId(),
+			lines: model.getLinesContent(),
+			startLineNumber,
+			endLineNumber,
+			instruction: request.message,
+		};
+		const prompt = kinguInlineEditPrompt(editRegion);
+		let answer = '';
+		try {
+			const response = await this._languageModelsService.sendChatRequest(modelId, ARKAI_EXTENSION_ID, [
+				{ role: ChatMessageRole.System, content: [{ type: 'text', value: prompt.system }] },
+				{ role: ChatMessageRole.User, content: [{ type: 'text', value: prompt.user }] },
+			], {}, token);
+			for await (const chunk of response.stream) {
+				for (const part of Array.isArray(chunk) ? chunk : [chunk]) {
+					if (part.type === 'text') {
+						answer += part.value;
+					}
+				}
+			}
+			await response.result;
+		} catch (error) {
+			return { errorDetails: { message: error instanceof Error ? error.message : String(error) } };
+		}
+		const code = kinguInlineEditCode(answer, editRegion);
+		if (!code || token.isCancellationRequested) {
+			return { errorDetails: { message: localize('kingu.arkai.noEdit', "Arkai did not suggest a change. Try saying what to change more exactly.") } };
+		}
+		const range = new Range(startLineNumber, 1, endLineNumber, model.getLineMaxColumn(endLineNumber));
+		progress([
+			{ kind: 'textEdit', uri: location.document, edits: [{ range, text: code }] },
+			{ kind: 'textEdit', uri: location.document, edits: [], done: true },
+		]);
+		return {};
 	}
 }

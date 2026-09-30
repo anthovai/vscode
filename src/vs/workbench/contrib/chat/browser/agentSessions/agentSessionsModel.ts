@@ -746,7 +746,10 @@ export class AgentSessionsModel extends Disposable implements IAgentSessionsMode
 					providerLabel = getAgentSessionProviderName(agentSessionProvider);
 					icon = getAgentSessionProviderIcon(agentSessionProvider);
 				} else {
-					providerLabel = mapSessionContributionToType.get(chatSessionType)?.name ?? chatSessionType;
+					// Kingu: its own agents register their type as the name (`agent-host-arkai`)
+					// and what people call them as the display name (Arkai).
+					const contribution = mapSessionContributionToType.get(chatSessionType);
+					providerLabel = (contribution?.name === chatSessionType ? contribution.displayName : contribution?.name) || chatSessionType;
 					icon = session.iconPath ?? Codicon.terminal;
 				}
 

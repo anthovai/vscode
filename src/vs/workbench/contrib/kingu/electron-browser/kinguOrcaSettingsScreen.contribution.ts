@@ -21,8 +21,10 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
+import { describeKinguAccount, describeKinguPlan, IKinguAccountService, IKinguPlan } from '../common/kinguAccount.js';
 import { KINGU_SHOW_ARTIFACTS_COMMAND_ID } from '../common/kinguArtifacts.js';
 import { IKinguOrcaService } from '../common/kinguOrca.js';
 import { orcaKeyForSettingId, orcaSettingIdForKey } from '../common/kinguOrcaSettings.js';
@@ -32,9 +34,10 @@ import { KINGU_CONNECT_CLOUD_COMMAND_ID, KINGU_SHOW_SKILLS_COMMAND_ID } from '..
 import { shownStatusBarItems } from '../common/kinguOrcaFooter.js';
 import { attachFooterTooltip, lucideIcon } from './kinguOrcaFooterParts.js';
 import { KinguAiAccountsSection } from './kinguAiAccountsSection.js';
-import { OrcaAccountsPane } from './kinguOrcaSettingsAccounts.js';
+import { hostLabel, OrcaAccountsPane } from './kinguOrcaSettingsAccounts.js';
 import { OrcaAgentsList } from './kinguOrcaSettingsAgents.js';
 import './kinguOrcaService.js';
+import './kinguAccountService.js';
 
 // #region Values
 
@@ -180,11 +183,15 @@ const UI_ROW_KEYS: Readonly<Record<string, readonly string[]>> = {
 	],
 };
 
+/** The Kingu Account pane's section with the account's status and its sign-in. */
+const KINGU_ACCOUNT_SECTION = 'kingu-account-0';
+
 /** The Agents pane's sections for its detected-agent lists: their states, the installed and the installable agents. */
 const AGENT_LIST_SECTIONS: ReadonlySet<string> = new Set(['agents-7', 'agents-8', 'agents-9', 'agents-10']);
 
 /** What the ADE's button rows do here, by the section they sit in (one button each). */
 const BUTTON_COMMANDS: Readonly<Record<string, { readonly command: string; readonly label: string }>> = {
+	'kingu-account-0': { command: KINGU_CONNECT_CLOUD_COMMAND_ID, label: localize('kingu.settings.signIn', "Sign In") },
 	'artifacts-1': { command: KINGU_CONNECT_CLOUD_COMMAND_ID, label: localize('kingu.settings.connect', "Connect") },
 	'artifacts-2': { command: KINGU_SHOW_ARTIFACTS_COMMAND_ID, label: localize('kingu.settings.openPage', "Open") },
 	'share-skills-2': { command: KINGU_CONNECT_CLOUD_COMMAND_ID, label: localize('kingu.settings.connect', "Connect") },
@@ -260,6 +267,9 @@ class KinguOrcaSettingsScreen extends Disposable {
 	private _query = '';
 	private _pendingSection: string | undefined;
 	private _redrawPending = false;
+	/** Whether the Kingu account was read since the screen last opened. */
+	private _accountRequested = false;
+	private _redeeming = false;
 	/** The current drawing's sections, by id, for a deep link to scroll to. */
 	private readonly _sectionElements = new Map<string, HTMLElement>();
 
@@ -273,6 +283,8 @@ class KinguOrcaSettingsScreen extends Disposable {
 		@IDialogService private readonly _dialogService: IDialogService,
 		@INotificationService private readonly _notificationService: INotificationService,
 		@IOpenerService private readonly _openerService: IOpenerService,
+		@IKinguAccountService private readonly _account: IKinguAccountService,
+		@IQuickInputService private readonly _quickInputService: IQuickInputService,
 	) {
 		super();
 		this._values = this._register(new OrcaSettingsValues(orca, configurationService, logService));
@@ -297,6 +309,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 			redraw: () => this._redrawContent(),
 		});
 		this._register(this._values.onDidChange(() => this._redrawContent()));
+		this._register(this._account.onDidChange(() => this._redrawContent()));
 		KinguOrcaSettingsScreen._instance = this;
 		this._register(toDisposable(() => {
 			if (KinguOrcaSettingsScreen._instance === this) {
@@ -311,6 +324,7 @@ class KinguOrcaSettingsScreen extends Disposable {
 			this._query = '';
 		}
 		this._pendingSection = target?.sectionId;
+		this._accountRequested = false;
 		if (!this._shown.value) {
 			this._shown.value = this._show();
 		}
@@ -497,6 +511,10 @@ class KinguOrcaSettingsScreen extends Disposable {
 			void this._accounts.load();
 			void this._aiAccounts.load();
 		}
+		if (pane.id === 'kingu-account' && !this._accountRequested) {
+			this._accountRequested = true;
+			void this._account.refresh();
+		}
 		const section = append(parent, $('section.kingu-orca-settings-pane'));
 		const header = append(section, $('.kingu-orca-settings-pane-header'));
 		const title = append(header, $('h2.kingu-orca-settings-pane-title'));
@@ -543,12 +561,16 @@ class KinguOrcaSettingsScreen extends Disposable {
 					append(head, $('h3')).textContent = subsection.title;
 				}
 				if (subsection.description) {
-					append(head, $('p')).textContent = subsection.description;
+					append(head, $('p')).textContent = subsection.description.replaceAll('{{runtime}}', hostLabel());
 				}
 			}
 			if (pane.id === 'accounts') {
 				// Kingu: the sign-in status of the AI this section configures (Gemini, OpenCode).
 				this._aiAccounts.renderSectionStatus(block, subsection.title);
+			}
+			if (subsection.id === KINGU_ACCOUNT_SECTION) {
+				this._renderKinguAccount(block, rows, store);
+				continue;
 			}
 			for (const row of rows) {
 				this._renderRow(block, row, store, subsection.id);
@@ -587,7 +609,8 @@ class KinguOrcaSettingsScreen extends Disposable {
 		const text = append(element, $('.kingu-orca-settings-row-text'));
 		append(text, $('label.kingu-orca-settings-label')).textContent = row.label;
 		if (row.description) {
-			append(text, $('p.kingu-orca-settings-description')).textContent = row.description;
+			// The ADE fills `{{runtime}}` in at render time; the generated schema carries it as is.
+			append(text, $('p.kingu-orca-settings-description')).textContent = row.description.replaceAll('{{runtime}}', hostLabel());
 		}
 		const control = append(element, $('.kingu-orca-settings-row-control'));
 		return { element, control };
@@ -665,6 +688,97 @@ class KinguOrcaSettingsScreen extends Disposable {
 				break;
 		}
 		this._otherRow(parent, row, store);
+	}
+
+	/**
+	 * Kingu: the account section by the account's real state. The status row
+	 * says who is signed in (Sign Out beside it); "Sign in to Kingu" shows only
+	 * while there is a sign-in to make; and a signed-in account has its plan,
+	 * with Redeem Code for a grant code.
+	 */
+	private _renderKinguAccount(parent: HTMLElement, rows: readonly IOrcaSettingsRow[], store: DisposableStore): void {
+		const state = this._account.state;
+		for (const row of rows) {
+			if (row.control === 'status') {
+				const { control } = this._row(parent, { ...row, description: describeKinguAccount(state) });
+				if (state.kind === 'signedIn') {
+					this._outlineButton(control, localize('kingu.settings.signOut', "Sign Out"), () => void this._signOut());
+				}
+			} else if (row.control !== 'button' || state.kind === 'signedOut' || state.kind === 'expired') {
+				this._renderRow(parent, row, store, KINGU_ACCOUNT_SECTION);
+			}
+		}
+		if (state.kind === 'signedIn') {
+			this._planRow(parent, state.plan);
+		}
+	}
+
+	private _planRow(parent: HTMLElement, plan: IKinguPlan | undefined): void {
+		const { control } = this._row(parent, {
+			label: localize('kingu.settings.plan', "Plan"),
+			description: plan ? describeKinguPlan(plan) : localize('kingu.settings.planUnknown', "Kingu cloud did not say which plan this account is on."),
+			control: 'button',
+			keys: [],
+		});
+		const button = this._outlineButton(control, this._redeeming ? localize('kingu.settings.redeeming', "Redeeming…") : localize('kingu.settings.redeem', "Redeem Code"), () => void this._redeem());
+		button.disabled = this._redeeming;
+	}
+
+	private _outlineButton(parent: HTMLElement, label: string, run: () => void): HTMLButtonElement {
+		const button = append(parent, $('button.kingu-orca-button.outline.sm')) as HTMLButtonElement;
+		button.type = 'button';
+		button.textContent = label;
+		button.addEventListener('click', run);
+		return button;
+	}
+
+	private async _signOut(): Promise<void> {
+		const { confirmed } = await this._dialogService.confirm({
+			type: 'warning',
+			message: localize('kingu.settings.signOut.confirm', "Sign out of Kingu?"),
+			detail: localize('kingu.settings.signOut.detail', "Cloud features such as Artifacts, Skills sharing and Kingu Relay stop until you sign in again."),
+			primaryButton: localize({ key: 'kingu.settings.signOut.button', comment: ['&& denotes a mnemonic'] }, "&&Sign Out"),
+		});
+		if (!confirmed) {
+			return;
+		}
+		try {
+			await this._account.signOut();
+		} catch (error) {
+			this._notificationService.error(localize('kingu.settings.signOut.failed', "Could not sign out of Kingu: {0}", error instanceof Error ? error.message : String(error)));
+		}
+	}
+
+	private async _redeem(): Promise<void> {
+		const code = await this._quickInputService.input({
+			title: localize('kingu.settings.redeem.title', "Redeem a Kingu Code"),
+			prompt: localize('kingu.settings.redeem.prompt', "Enter the code you were given to change this account's plan."),
+			placeHolder: 'KINGU-XXXX-XXXX-XXXX-XXXX',
+			ignoreFocusLost: true,
+			validateInput: async value => value.trim() ? undefined : localize('kingu.settings.redeem.empty', "Enter a code to redeem."),
+		});
+		if (!code?.trim()) {
+			return;
+		}
+		this._redeeming = true;
+		this._redrawContent();
+		try {
+			const outcome = await this._account.redeem(code.trim());
+			switch (outcome.kind) {
+				case 'ok':
+					this._notificationService.info(localize('kingu.settings.redeem.done', "Code redeemed. This account is now on {0}.", describeKinguPlan(outcome.plan)));
+					break;
+				case 'signIn':
+					this._notificationService.warn(localize('kingu.settings.redeem.signIn', "Sign in to Kingu again, then redeem the code."));
+					break;
+				case 'error':
+					this._notificationService.error(outcome.message);
+					break;
+			}
+		} finally {
+			this._redeeming = false;
+			this._redrawContent();
+		}
 	}
 
 	private _uiRowKey(sectionId: string, row: IOrcaSettingsRow): string | undefined {

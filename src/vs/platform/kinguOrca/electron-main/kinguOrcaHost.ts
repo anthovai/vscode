@@ -8,6 +8,7 @@ import { existsSync, promises as fs } from 'fs';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, extname, join, sep } from '../../../base/common/path.js';
+import { KINGU_CLOUD_ORIGIN } from '../common/kinguOrca.js';
 
 /**
  * Runs the vendored ADE's UI inside the Agents Window.
@@ -501,26 +502,24 @@ function registerHostBridge(orca: IOrcaStartup): void {
 	}
 }
 
-/** Kingu's own cloud (`kingu-intelligence/cloud`, deployed behind Caddy). */
-const KINGU_DEFAULT_CLOUD_URL = 'https://kingu.anthovai.com';
-
 /**
  * Points the ADE's cloud features (Artifacts, Skills sharing, cloud sign-in)
  * at Kingu's own cloud. The ADE reads one variable per service, each
- * defaulting to a host that is not ours; `KINGU_CLOUD_URL` names the one
- * origin our API serves them all from (`kingu-intelligence/cloud/apps/api`).
- * Anything set explicitly is left alone. Without `KINGU_CLOUD_URL` it is
- * our deployed cloud, so nothing falls back to the ADE's hosted services.
+ * defaulting to a host that is not ours (the ADE's own sign-in defaults to
+ * `login.onkingu.dev`, which nothing of Kingu's serves); `KINGU_CLOUD_URL`
+ * names the one origin our API serves them all from
+ * (`kingu-intelligence/cloud/apps/api`), and without it — or an explicit
+ * `KINGU_CLOUD_API_URL` — that origin is {@link KINGU_CLOUD_ORIGIN}, the
+ * deployed cloud. Anything set explicitly is left alone.
  *
  * `isPackaged` is whether this is a built product, not Electron's guess.
  *
- * The API has its own sign-in (`desktop-auth.ts`: PKCE to a loopback
- * redirect). A local cloud in a dev build skips it with the ADE's dev sign-in
- * (`KINGU_CLOUD_DEV_AUTH`), whose tokens the local API accepts as one dev
- * user; set `KINGU_CLOUD_DEV_AUTH=0` to try the real one locally.
+ * Until the API has its own sign-in, a local cloud in a dev build uses the
+ * ADE's dev sign-in (`KINGU_CLOUD_DEV_AUTH`), whose tokens the local API
+ * accepts as one dev user.
  */
 export function applyKinguCloudUrl(env: NodeJS.ProcessEnv, isPackaged: boolean): void {
-	const raw = env.KINGU_CLOUD_URL?.trim() || KINGU_DEFAULT_CLOUD_URL;
+	const raw = env.KINGU_CLOUD_URL?.trim() || env.KINGU_CLOUD_API_URL?.trim() || KINGU_CLOUD_ORIGIN;
 	let origin: string;
 	let loopback: boolean;
 	try {

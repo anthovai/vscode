@@ -111,6 +111,11 @@ async function ensureOllama(log: ILogService): Promise<boolean> {
 	}
 	// Keep Chyle loaded between questions (Ollama's default is five minutes), unless the user chose otherwise.
 	env.OLLAMA_KEEP_ALIVE ??= CHYLE_KEEP_ALIVE;
+	// Flash attention and an 8-bit KV cache halve the context's memory, so more
+	// of Chyle's layers fit on a small GPU (6 GB here) and it answers faster;
+	// unless the user chose otherwise.
+	env.OLLAMA_FLASH_ATTENTION ??= '1';
+	env.OLLAMA_KV_CACHE_TYPE ??= 'q8_0';
 	log.info(`[Chyle] starting Ollama: ${executable} serve${env.OLLAMA_MODELS ? ` (models in ${env.OLLAMA_MODELS})` : ''}`);
 	// Started in its own directory: it outlives Kingu, and a working directory
 	// inside Kingu's install would keep that folder from being replaced.
@@ -236,6 +241,30 @@ async function warmChyle(log: ILogService): Promise<void> {
 }
 
 let running: Promise<IChyleGateway | undefined> | undefined;
+let localChyle: Promise<boolean> | undefined;
+
+/**
+ * Starts Ollama if it is not running and loads Chyle, once per process: the
+ * IDE's own uses of the local models (completions, inline chat, semantic
+ * search) need them as much as an Arkai session does, and would otherwise
+ * find nothing until one had started. Resolves whether Ollama is up; Chyle
+ * goes on loading in the background.
+ */
+export function ensureLocalChyle(log: ILogService): Promise<boolean> {
+	localChyle ??= (async () => {
+		const up = await ensureOllama(log).catch(error => {
+			log.warn(`[Chyle] could not start Ollama: ${error instanceof Error ? error.message : String(error)}`);
+			return false;
+		});
+		if (up) {
+			void warmChyle(log);
+		} else {
+			localChyle = undefined; // Installed or started later: try again next time.
+		}
+		return up;
+	})();
+	return localChyle;
+}
 
 /**
  * Brings Chyle up once per agent host: Arkai's provider file in `agentDir`
@@ -246,12 +275,7 @@ let running: Promise<IChyleGateway | undefined> | undefined;
 export function ensureChyleRuntime(agentDir: string, log: ILogService): Promise<IChyleGateway | undefined> {
 	running ??= (async () => {
 		await ensureProviderFile(agentDir, log).catch(error => log.warn(`[Chyle] could not write the provider file: ${error instanceof Error ? error.message : String(error)}`));
-		const ollama = ensureOllama(log).catch(error => {
-			log.warn(`[Chyle] could not start Ollama: ${error instanceof Error ? error.message : String(error)}`);
-			return false;
-		});
-		void ollama.then(up => up ? warmChyle(log) : undefined);
-		return ensureGateway(ollama, log);
+		return ensureGateway(ensureLocalChyle(log), log);
 	})();
 	return running;
 }

@@ -10,7 +10,7 @@ import { mainWindow } from '../../../../base/browser/window.js';
 import { Action, Separator } from '../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
-import { Emitter, Event } from '../../../../base/common/event.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Disposable, DisposableMap, DisposableStore, IReference, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, joinPath } from '../../../../base/common/resources.js';
@@ -23,7 +23,8 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { createDecorator, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IKinguFloatingWorkspaceService } from '../../../../workbench/contrib/kingu/common/kinguFloatingWorkspace.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ITerminalInstance, ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
@@ -60,20 +61,6 @@ type FloatingTab =
 	| { readonly id: string; readonly kind: 'terminal'; readonly instance: ITerminalInstance; readonly body: HTMLElement }
 	| { readonly id: string; readonly kind: 'markdown'; readonly uri: URI; readonly body: HTMLElement; readonly editor: CodeEditorWidget; readonly model: IReference<IResolvedTextEditorModel> };
 
-export const IKinguFloatingWorkspaceService = createDecorator<IKinguFloatingWorkspaceService>('kinguFloatingWorkspaceService');
-
-/** The ADE's floating workspace: its open state, for the toggles that show and hide it. */
-export interface IKinguFloatingWorkspaceService {
-	readonly _serviceBrand: undefined;
-	readonly isOpen: boolean;
-	readonly onDidChangeOpen: Event<boolean>;
-	/** A tab has something new — an agent waiting, finished or stopped — while the panel is closed: the ADE's amber dot. */
-	readonly needsAttention: boolean;
-	readonly onDidChangeAttention: Event<boolean>;
-	toggle(): void;
-	open(): void;
-	close(): void;
-}
 
 /**
  * The ADE's floating workspace (`FloatingTerminalPanel`): an overlay of its

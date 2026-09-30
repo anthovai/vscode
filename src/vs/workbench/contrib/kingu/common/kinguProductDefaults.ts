@@ -16,15 +16,22 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
  *   stays out of the chat input. On-device dictation is unaffected.
  * - The color themes are Kingu's (extensions/theme-kingu), in the ADE's palette,
  *   and so are the icons: lucide, the ADE's set, over the codicons.
- * - The activity bar is compact (16px icons), its Accounts and Manage actions in
- *   the title bar (workbench/browser/parts/kinguGlobalActions.ts), and signing in
- *   is in the Accounts menu rather than a separate title-bar button.
+ * - The activity bar is compact (16px icons) and sits at the top of the side
+ *   bar, a row of icons above the Explorer rather than a column beside it; its
+ *   Accounts and Manage actions are in the title bar
+ *   (workbench/browser/parts/kinguGlobalActions.ts), and signing in is in the
+ *   Accounts menu rather than a separate title-bar button.
  * - The IDE's chat starts on an agent (Arkai first), not the Local harness:
  *   Local answers with the chat's own models, which were Copilot's and are
  *   none until the user adds some, while Arkai brings Chyle 1. Local still
  *   shows while no agent is registered yet, and can be turned back on.
  * - A chat at work shows its working mark (Arkai's own for Arkai), not only
  *   a shimmering line of text.
+ * - The chat does not offer the open editor's file as context: the Agents
+ *   Window never did, and in the IDE it was one more chip above every input.
+ *   Files are attached on purpose, with the `+`, `#` or a paste.
+ * - The Search view asks for results by meaning with every search (Kingu's
+ *   own provider, on the user's Ollama), not only when asked.
  */
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerDefaultConfigurations([{
 	overrides: {
@@ -35,9 +42,12 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		'workbench.preferredLightColorTheme': 'Kingu Light',
 		'workbench.productIconTheme': 'kingu-lucide',
 		'workbench.activityBar.compact': true,
+		'workbench.activityBar.location': 'top',
 		'chat.titleBar.signIn.enabled': false,
 		'chat.editor.localAgent.enabled': false,
 		'chat.experimental.persistentProgress': 'weave',
+		'chat.implicitContext.enabled': { 'panel': 'never' },
+		'search.searchView.semanticSearchBehavior': 'auto',
 	},
 }]);
 

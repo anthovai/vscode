@@ -3,8 +3,8 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import { displayedUsagePercent, formatResetDuration, KinguUsageDisplay } from '../../../../workbench/contrib/kingu/common/kinguStatusBar.js';
-import { formatOrcaChipLabel, formatOrcaWindowLabel, IOrcaProviderRateLimits, IOrcaRateLimitWindow, ORCA_FOOTER_PROVIDERS, OrcaRateLimitState } from '../../../../workbench/contrib/kingu/common/kinguOrcaFooter.js';
+import { displayedUsagePercent, formatResetDuration, KinguUsageDisplay } from './kinguStatusBar.js';
+import { formatOrcaChipLabel, formatOrcaWindowLabel, IOrcaProviderRateLimits, IOrcaRateLimitWindow, ORCA_FOOTER_PROVIDERS, OrcaRateLimitState } from './kinguOrcaFooter.js';
 
 /**
  * The ADE's usage panel, as a model: `status-bar/UsageRosterPanel.tsx`,

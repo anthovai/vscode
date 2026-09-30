@@ -21,10 +21,13 @@ import { IChatModel } from '../../../common/model/chatModel.js';
 import { ActionViewItem, IActionViewItemOptions } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { IAction } from '../../../../../../base/common/actions.js';
 import { AgentSessionsPicker } from '../../agentSessions/agentSessionsPicker.js';
+import { KinguChatTabs } from '../../../../kingu/browser/kinguChatTabs.js';
 
 export interface IChatViewTitleDelegate {
 	focusChat(): void;
 	getInputUri(): URI | undefined;
+	/** Kingu: agent tabs in place of the single title (kinguChatTabs.ts). */
+	readonly kinguTabs?: KinguChatTabs;
 }
 
 export class ChatViewTitleControl extends Disposable {
@@ -108,6 +111,17 @@ export class ChatViewTitleControl extends Disposable {
 			]),
 		]);
 
+		// Kingu: the agent tabs take the title's place; the actions stay on the right.
+		const kinguTabs = this.delegate.kinguTabs;
+		if (kinguTabs) {
+			elements.navigationToolbar.before(kinguTabs.element);
+			this._register(kinguTabs.onDidChange(() => {
+				elements.root.classList.toggle('kingu-chat-tabs-enabled', kinguTabs.enabled);
+				this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE);
+			}));
+			elements.root.classList.toggle('kingu-chat-tabs-enabled', kinguTabs.enabled);
+		}
+
 		// Toolbar on the left
 		this.navigationToolbar = this._register(this.instantiationService.createInstance(MenuWorkbenchToolBar, elements.navigationToolbar, MenuId.ChatViewSessionTitleNavigationToolbar, {
 			actionViewItemProvider: (action: IAction) => {
@@ -159,6 +173,7 @@ export class ChatViewTitleControl extends Disposable {
 		this.title = renderAsPlaintext(markdownTitle);
 
 		this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE);
+		this.delegate.kinguTabs?.setActive(this.model && { sessionResource: this.model.sessionResource, title: this.title || undefined });
 
 		const context = this.model && {
 			$mid: MarshalledId.ChatViewContext,
@@ -185,6 +200,9 @@ export class ChatViewTitleControl extends Disposable {
 	}
 
 	private shouldRender(): boolean {
+		if (this.delegate.kinguTabs?.enabled) {
+			return this.delegate.kinguTabs.hasTabs; // Kingu: the row of tabs, while there is one
+		}
 		return !!this.model?.title; // we need a chat showing and not being empty
 	}
 

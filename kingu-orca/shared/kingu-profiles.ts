@@ -235,6 +235,21 @@ export type RefreshCurrentKinguProfileAuthResult =
       error: string
     }
 
+// Kingu: the IDE asks the signed-in account's plan (or redeems a grant code)
+// through the ADE, which holds the cloud session; the token never leaves it.
+export type KinguProfileAccountRequestArgs = {
+  /** Redeems this code (`POST /v1/account/redeem`) instead of reading the account. */
+  redeemCode?: string
+}
+
+export type KinguProfileAccountResult =
+  /** The cloud answered: its status and JSON body, as they came. */
+  | { kind: 'response'; status: number; body: unknown }
+  /** No signed-in session, or the cloud rejected it even after a refresh. */
+  | { kind: 'signedOut' }
+  /** No request was made: no cloud configured, dev sign-in, or the request failed. */
+  | { kind: 'unavailable'; reason: string }
+
 // Why: organization roles are a fixed server-side enum; the desktop UI mirrors
 // exactly these three so role selects can't drift from what the API accepts.
 export type KinguOrgRole = 'owner' | 'admin' | 'member'

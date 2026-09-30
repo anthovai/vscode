@@ -5,6 +5,7 @@
 
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { ITerminalInstance, ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IKinguAdvertisedUrl, KinguAdvertisedUrlCache, readAdvertisedUrls } from '../common/kinguAdvertisedUrls.js';
@@ -91,3 +92,5 @@ export class KinguAdvertisedUrlService extends Disposable implements IKinguAdver
 		}
 	}
 }
+
+registerSingleton(IKinguAdvertisedUrlService, KinguAdvertisedUrlService, InstantiationType.Eager);

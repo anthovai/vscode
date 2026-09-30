@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -16,10 +16,17 @@ import { ILanguageModelsService, IUserFriendlyLanguageModel } from '../../chat/c
 import { KINGU_SETUP_COMMAND_ID, KINGU_VENDOR_ID, kinguVendorConfigurationSchema } from '../common/kinguLanguageModels.js';
 import { KinguArkaiAgentContribution } from './kinguArkaiAgent.js';
 import './kinguChatHistory.js';
+import './kinguHome.js';
+import './kinguSnapPicks.js';
+import './kinguInlineCompletions.js';
+import '../common/kinguCompletions.js';
 import { KinguDefaultChatSessionContribution } from './kinguDefaultChatSession.js';
 import { KinguLanguageModelProvider } from './kinguLanguageModelProvider.js';
+import { KINGU_LOCAL_VENDOR_ID, KinguLocalModelProvider } from './kinguLocalModelProvider.js';
+import { KinguStatusBarCleanup } from './kinguStatusBarCleanup.js';
 import { runKinguSetupFlow } from './kinguSetupFlow.js';
 import '../common/kinguProductDefaults.js';
+import '../common/kinguSmartSearch.js';
 import './media/kinguLook.css';
 
 /**
@@ -59,6 +66,20 @@ class KinguLanguageModelContribution extends Disposable {
 
 		const provider = this._register(instantiationService.createInstance(KinguLanguageModelProvider));
 		this._register(languageModelsService.registerLanguageModelProvider(KINGU_VENDOR_ID, provider));
+
+		// Arkai's models on this computer (the user's Ollama), found without setup, for the
+		// places that ask a model directly: inline chat above all.
+		const localVendor = {
+			vendor: KINGU_LOCAL_VENDOR_ID,
+			displayName: localize('kingu.localModels.vendor', "Arkai (on this computer)"),
+			configuration: undefined,
+			managementCommand: undefined,
+			when: undefined,
+		} satisfies IUserFriendlyLanguageModel;
+		languageModelsService.deltaLanguageModelChatProviderDescriptors([localVendor], []);
+		this._register(toDisposable(() => languageModelsService.deltaLanguageModelChatProviderDescriptors([], [localVendor])));
+		const localProvider = this._register(instantiationService.createInstance(KinguLocalModelProvider));
+		this._register(languageModelsService.registerLanguageModelProvider(KINGU_LOCAL_VENDOR_ID, localProvider));
 	}
 }
 
@@ -67,6 +88,8 @@ registerWorkbenchContribution2(KinguLanguageModelContribution.ID, KinguLanguageM
 registerWorkbenchContribution2(KinguArkaiAgentContribution.ID, KinguArkaiAgentContribution, WorkbenchPhase.BlockRestore);
 // The IDE's first chat moves onto Arkai when the agent host registers it.
 registerWorkbenchContribution2(KinguDefaultChatSessionContribution.ID, KinguDefaultChatSessionContribution, WorkbenchPhase.AfterRestored);
+// The branch is in the title bar now, so the status bar's copy of it goes.
+registerWorkbenchContribution2(KinguStatusBarCleanup.ID, KinguStatusBarCleanup, WorkbenchPhase.AfterRestored);
 
 /**
  * Adds a Kingu endpoint.

@@ -52,7 +52,8 @@ interface IMiniMaxStatus {
 type Provider = 'claude' | 'codex';
 
 /** `getHostRuntimeLabel`: the host's name in the ADE's sentences. */
-function hostLabel(): string {
+/** Where the accounts live, as the ADE's `{{runtime}}` placeholder names it: `Windows`, or this device. */
+export function hostLabel(): string {
 	return isWindows ? 'Windows' : localize('kingu.accounts.thisDevice', "this device");
 }
 

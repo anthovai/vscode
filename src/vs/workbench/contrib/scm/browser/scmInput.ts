@@ -847,6 +847,9 @@ registerAction2(class extends Action2 {
 			menu: {
 				id: MenuId.SCMInputBox,
 				when: ContextKeyExpr.and(
+					// Kingu: Copilot is not shipped, so setting it up leads to a command that
+					// does not exist; `kinguScmCommitMessage.contribution.ts` has the sparkle.
+					ContextKeyExpr.false(),
 					ChatContextKeys.Setup.hidden.negate(),
 					ChatContextKeys.Setup.disabledInWorkspace.negate(),
 					ChatContextKeys.Setup.completed.negate(),

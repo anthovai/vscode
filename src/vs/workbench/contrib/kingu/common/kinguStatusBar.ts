@@ -153,3 +153,22 @@ export function formatWindow(minutes: number): string {
 	}
 	return `${Math.round(minutes)}m`;
 }
+
+/** A token count at a glance: `26.3B`, `1.2M`, `34.4k`, `97`. */
+export function formatTokens(value: number): string {
+	// A real vault reaches billions of cached tokens, and `26330.2M` is not a
+	// number anyone reads.
+	if (value >= 1_000_000_000) {
+		return `${(value / 1_000_000_000).toFixed(1)}B`;
+	}
+	if (value >= 1_000_000) {
+		return `${(value / 1_000_000).toFixed(1)}M`;
+	}
+	if (value >= 1_000) {
+		return `${(value / 1_000).toFixed(1)}k`;
+	}
+	return String(value);
+}
+
+/** Opens the Agents Window's Usage page; the footer offers it where it is registered. */
+export const KINGU_SHOW_USAGE_COMMAND_ID = 'kingu.usage.show';

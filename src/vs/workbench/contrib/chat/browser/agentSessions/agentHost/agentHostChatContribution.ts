@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { FileAccess } from '../../../../../../base/common/network.js';
 import { Codicon } from '../../../../../../base/common/codicons.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
 import { Event } from '../../../../../../base/common/event.js';
@@ -46,6 +47,9 @@ import { IAgentHostActiveClientService } from './agentHostActiveClientService.js
 import { IAgentHostCustomizationService } from './agentHostCustomizationService.js';
 import { IAgentHostProtectedResourcesService } from './agentHostProtectedResourcesService.js';
 import { AICustomizationManagementSection } from '../../../common/aiCustomizationWorkspaceService.js';
+
+/** Kingu: Arkai's mark, for its chat's empty state (`contrib/kingu/browser/media`). */
+const KINGU_ARKAI_MARK = FileAccess.asBrowserUri('vs/workbench/contrib/kingu/browser/media/arkai-mark.svg');
 
 const LOCAL_AGENT_HOST_SESSION_TYPE_PREFIX = 'agent-host-';
 
@@ -298,6 +302,8 @@ export class AgentHostContribution extends Disposable implements IWorkbenchContr
 			// Kingu: an empty chat names its agent as the user knows it, not by its session type (`@agent-host-arkai`).
 			welcomeTitle: localize('kingu.agentHost.welcomeTitle', "Chat with {0}", agent.displayName),
 			welcomeMessage: agent.description,
+			// Kingu: Arkai's empty chat shows Arkai's mark, not the "send to remote agent" codicon.
+			icon: agent.provider === 'arkai' ? { light: KINGU_ARKAI_MARK.toString(), dark: KINGU_ARKAI_MARK.toString() } : undefined,
 			// Kingu: Arkai (Kingu's own agent) serves the terminal and inline chat that Copilot served.
 			locations: agent.provider === 'copilotcli' || agent.provider === 'arkai' ? [ChatAgentLocation.Chat, ChatAgentLocation.Terminal, ChatAgentLocation.EditorInline] : undefined,
 			customAgentTarget: this._isSessionsWindow ? undefined : Target.GitHubCopilot,
