@@ -1,4 +1,5 @@
 import { normalizeExternalBrowserUrl } from '../../shared/browser-url'
+import type { UserAgentMetadata } from './browser-tab-identity'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
@@ -45,7 +46,7 @@ export type PopupOwnerContext = {
 }
 
 /**
- * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
+ * What a guest is allowed to be. A browsing guest is the web — popups, link gestures and
  * auth-identity tracking all apply. A workspace-document guest renders one granted document and gets none
  * of that; `host` is the renderer that minted its grant, and the only sink for what it reports.
  */
@@ -60,15 +61,21 @@ export type PendingMainFrameNavigation = {
   supersededUrls: string[]
 }
 
-export type AuthUserAgentOverrideOperation = {
-  sequence: number
+/** An Emulation.setUserAgentOverride payload; an empty userAgent clears the override. */
+export type CdpUserAgentOverride = {
   userAgent: string
+  userAgentMetadata?: UserAgentMetadata
 }
 
-export type AuthUserAgentOverrideState = {
-  confirmed: AuthUserAgentOverrideOperation | null
+export type CdpUserAgentOverrideOperation = {
+  sequence: number
+  override: CdpUserAgentOverride
+}
+
+export type CdpUserAgentOverrideState = {
+  confirmed: CdpUserAgentOverrideOperation | null
   nextSequence: number
-  pending: AuthUserAgentOverrideOperation[]
+  pending: CdpUserAgentOverrideOperation[]
 }
 
 export const SAFE_POPUP_WINDOW_OPTIONS = {

@@ -1,5 +1,7 @@
+import { E2EE_KEYPAIR_FILENAME } from '../../shared/runtime-e2ee-keypair-file'
+
 export const DEVICE_REGISTRY_FILENAME = 'kingu-devices.json'
-export const E2EE_KEYPAIR_FILENAME = 'kingu-e2ee-keypair.json'
+export { E2EE_KEYPAIR_FILENAME }
 
 // Migrate these together so device tokens and E2EE material never split across dirs.
 export const MOBILE_PAIRING_USERDATA_FILES = [

@@ -20,9 +20,6 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { KinguRuntimeService } from './kingu-runtime'
-import { OrchestrationDb } from './orchestration/db'
-import { KinguRuntimeRpcServer } from './runtime-rpc'
 
 // Why: Vitest runs tests with `process.cwd()` pinned to the repo root, so
 // join against it to locate the compiled CLI regardless of where this test
@@ -30,6 +27,14 @@ import { KinguRuntimeRpcServer } from './runtime-rpc'
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
 
 const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
+
+function loadRuntimeModules() {
+  return Promise.all([
+    import('./kingu-runtime'),
+    import('./orchestration/db'),
+    import('./runtime-rpc')
+  ])
+}
 
 async function runBuiltCli(
   userDataPath: string,
@@ -67,10 +72,20 @@ async function runBuiltCli(
 
 describeIfBuilt('kingu orchestration check --wait subprocess (§3.4)', () => {
   it('emits newline-flushed JSON keepalives to stderr while waiting', async () => {
+    const [{ KinguRuntimeService }, { OrchestrationDb }, { KinguRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-cli-sub-'))
     const runtime = new KinguRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    // A consuming inbox check requires a live pane, even when no messages exist.
+    const paneKey = 'tab_keepalive:11111111-1111-4111-8111-111111111111'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_nobody' ? paneKey : null
+    )
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      runtime.getTerminalPaneKey(handle)
+    )
     const server = new KinguRuntimeRpcServer({ runtime, userDataPath })
     await server.start()
 
@@ -120,10 +135,9 @@ describeIfBuilt('kingu orchestration check --wait subprocess (§3.4)', () => {
         child.once('error', rejectExit)
       })
 
-      expect(exitCode).toBe(0)
-
       const stderr = stderrChunks.map((c) => c.data).join('')
       const stdout = stdoutChunks.map((c) => c.data).join('')
+      expect(exitCode, stderr).toBe(0)
 
       const keepaliveLines = stderr
         .split('\n')
@@ -188,12 +202,16 @@ describeIfBuilt('kingu orchestration check --wait subprocess (§3.4)', () => {
     } finally {
       db.close()
       await server.stop()
+      vi.restoreAllMocks()
+      rmSync(userDataPath, { recursive: true, force: true })
     }
   }, 30_000)
 })
 
 describeIfBuilt('kingu orchestration reset subprocess', () => {
   it('validates reset scopes against an isolated runtime through the built CLI', async () => {
+    const [{ KinguRuntimeService }, { OrchestrationDb }, { KinguRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-cli-reset-'))
     const runtime = new KinguRuntimeService()
     const db = new OrchestrationDb(':memory:')
@@ -320,6 +338,8 @@ describeIfBuilt('kingu orchestration reset subprocess', () => {
 
 describeIfBuilt('kingu orchestration task readiness subprocess', () => {
   it('creates a late dependent as ready through the built CLI and runtime', async () => {
+    const [{ KinguRuntimeService }, { OrchestrationDb }, { KinguRuntimeRpcServer }] =
+      await loadRuntimeModules()
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-cli-task-readiness-'))
     const dbPath = join(userDataPath, 'orchestration.db')
     const runtime = new KinguRuntimeService()

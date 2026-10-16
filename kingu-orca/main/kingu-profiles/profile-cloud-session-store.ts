@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { safeStorage } from 'electron'
+import { guardedSafeStorage as safeStorage } from '../host/safe-storage-availability'
 import { isUnreadableError, writeSecureJsonFile } from '../../shared/secure-file'
 import type {
   KinguCloudCapabilities,
@@ -9,13 +9,6 @@ import type {
 } from '../../shared/kingu-profiles'
 import { getKinguProfileDirectory } from './profile-storage-paths'
 import { allowsPlaintextKinguCloudSession } from './profile-cloud-auth-config'
-import type { KinguCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
-import {
-  cloudSessionIdentity,
-  isCloudSessionMutationCurrent,
-  recordSuccessfulCloudSessionLogin,
-  type CloudSessionMutationSnapshot
-} from './profile-cloud-session-mutation'
 
 export type KinguCloudSession = {
   accessToken: string
@@ -69,7 +62,7 @@ function rememberMemorySession(key: string, session: CachedKinguCloudSession): v
   }
 }
 
-function sessionCacheKey(profileId: string, userDataPath: string): string {
+export function kinguCloudSessionKey(profileId: string, userDataPath: string): string {
   return `${userDataPath}\0${profileId}`
 }
 
@@ -118,12 +111,19 @@ export function getKinguCloudSessionPath(profileId: string, userDataPath: string
   return join(getKinguProfileDirectory(profileId, userDataPath), 'account-session.json.enc')
 }
 
-export function saveKinguCloudSession(
+// Rotated sessions whose write failed. The token on disk is already spent, so each is retried
+// on the next read and at quit until it lands or the session changes.
+const unsavedRotations = new Map<
+  string,
+  { profileId: string; userDataPath: string; session: KinguCloudSession }
+>()
+
+function writeKinguCloudSession(
   profileId: string,
   userDataPath: string,
   session: KinguCloudSession
 ): KinguCloudSessionPersistence {
-  const cacheKey = sessionCacheKey(profileId, userDataPath)
+  const cacheKey = kinguCloudSessionKey(profileId, userDataPath)
   if (safeStorage.isEncryptionAvailable()) {
     const encrypted: PersistedEncryptedSession = {
       version: 1,
@@ -154,40 +154,63 @@ export function saveKinguCloudSession(
   return 'memory-only'
 }
 
-export function saveKinguCloudSessionExchange(
-  profileId: string,
-  userDataPath: string,
-  exchange: KinguCloudSessionExchangeResponse
-): KinguCloudSessionPersistence {
-  recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, exchange.cloud), userDataPath)
-  return saveKinguCloudSession(profileId, userDataPath, {
-    accessToken: exchange.accessToken,
-    refreshToken: exchange.refreshToken,
-    expiresAt: exchange.expiresAt,
-    organizations: exchange.organizations,
-    capabilities: exchange.capabilities
-  })
-}
-
-export function saveKinguCloudSessionIfCurrent(
+export function saveKinguCloudSession(
   profileId: string,
   userDataPath: string,
   session: KinguCloudSession,
-  snapshot: CloudSessionMutationSnapshot
-): KinguCloudSessionPersistence | null {
-  // Why: the check and sync save share one main-process turn, so an async
-  // refresh captured before sign-out/org-switch cannot resurrect the session.
-  if (!isCloudSessionMutationCurrent(profileId, userDataPath, snapshot)) {
-    return null
+  options: { spentOnFailure?: boolean } = {}
+): KinguCloudSessionPersistence {
+  const key = kinguCloudSessionKey(profileId, userDataPath)
+  try {
+    const persistence = writeKinguCloudSession(profileId, userDataPath, session)
+    unsavedRotations.delete(key)
+    return persistence
+  } catch (error) {
+    // A failed non-rotating write throws as before and leaves any unsaved rotation pending.
+    if (!options.spentOnFailure) {
+      throw error
+    }
+    // Why: losing a rotated token makes the next refresh resend the spent one, which the
+    // server reads as reuse and revokes the whole family.
+    unsavedRotations.set(key, { profileId, userDataPath, session })
+    try {
+      rmSync(getKinguCloudSessionPath(profileId, userDataPath), { force: true })
+    } catch {
+      // A spent token left on disk costs one sign-in after restart, never a loop.
+    }
+    return 'memory-only'
   }
-  return saveKinguCloudSession(profileId, userDataPath, session)
+}
+
+function retryUnsavedRotation(key: string): void {
+  const unsaved = unsavedRotations.get(key)
+  if (!unsaved) {
+    return
+  }
+  try {
+    writeKinguCloudSession(unsaved.profileId, unsaved.userDataPath, unsaved.session)
+    unsavedRotations.delete(key)
+  } catch {
+    // Still unsaved; the next read or the quit flush tries again.
+  }
+}
+
+export function flushUnsavedKinguCloudSessions(): void {
+  for (const key of unsavedRotations.keys()) {
+    retryUnsavedRotation(key)
+  }
 }
 
 export function readKinguCloudSession(
   profileId: string,
   userDataPath: string
 ): KinguCloudSessionReadResult {
-  const cacheKey = sessionCacheKey(profileId, userDataPath)
+  const cacheKey = kinguCloudSessionKey(profileId, userDataPath)
+  retryUnsavedRotation(cacheKey)
+  const unsaved = unsavedRotations.get(cacheKey)
+  if (unsaved) {
+    return { status: 'found', session: unsaved.session, persistence: 'memory-only' }
+  }
   const memorySession = memorySessions.get(cacheKey)
   if (memorySession) {
     memorySessions.delete(cacheKey)
@@ -252,7 +275,9 @@ export function readKinguCloudSession(
 }
 
 export function clearKinguCloudSession(profileId: string, userDataPath: string): void {
-  memorySessions.delete(sessionCacheKey(profileId, userDataPath))
+  const key = kinguCloudSessionKey(profileId, userDataPath)
+  unsavedRotations.delete(key)
+  memorySessions.delete(key)
   rmSync(getKinguCloudSessionPath(profileId, userDataPath), { force: true })
 }
 

@@ -1,10 +1,10 @@
+import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import type { AppState } from '../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import { resolveAgentStatusLiveEntryStateHistory } from './agent-status-live-entry-state-history'
-import {
-  agentSubagentsEqual,
-  type MigrationUnsupportedPtyEntry,
-  type AgentStatusEntry
+import type {
+  MigrationUnsupportedPtyEntry,
+  AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import {
   agentProviderSessionsEqual,
@@ -29,6 +29,7 @@ import { registryEntryMatchesStatus } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { liveEntryChildFields } from './agent-status-live-entry-children'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
@@ -81,14 +82,19 @@ export function buildAgentStatusLiveEntry(
   const { history, lastCompletedAssistantMessage, stateObservedAt } =
     resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
-    existing: existing
-      ? {
-          agentType: existing.agentType,
-          state: existing.state,
-          updatedAt: existing.updatedAt,
-          restoredUnconfirmed: existing.restoredUnconfirmed
+    existing:
+      existing &&
+      sameAgentStatusTerminalOwner(
+        { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
+        {
+          connectionId:
+            (routing?.connectionId === undefined ? existing.connectionId : routing.connectionId) ??
+            null,
+          worktreeId: routing?.worktreeId ?? existing.worktreeId
         }
-      : undefined,
+      )
+        ? existing
+        : undefined,
     incoming: payload.agentType,
     now: updatedAt
   })
@@ -113,11 +119,15 @@ export function buildAgentStatusLiveEntry(
       : existing && existing.state === payload.state
         ? existing.stateStartedAt
         : updatedAt)
+  // Why: a writer with no turn clock (an OSC repaint) keeps the host's stamp only within one state;
+  // a state change it cannot date must not inherit another turn's start.
+  const turnStartedAt =
+    timing?.turnStartedAt ??
+    (existing && existing.state === payload.state ? existing.turnStartedAt : undefined)
   if (
     existing &&
     shouldSuppressInheritedTerminalStatus({
-      inheritedFromActivePane: identity.inheritedFromActivePane,
-      incomingState: payload.state
+      inheritedFromActivePane: identity.inheritedFromActivePane
     })
   ) {
     return { entry: null, reason: 'suppressed-inherited-terminal' }
@@ -205,6 +215,7 @@ export function buildAgentStatusLiveEntry(
     ...(metadata?.structuredHostOwned === true ? { structuredHostOwned: true as const } : {}),
     stateStartedAt,
     stateObservedAt,
+    ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
     agentType: identity.agentType,
     model:
       payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),
@@ -234,9 +245,7 @@ export function buildAgentStatusLiveEntry(
     ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
     orchestration,
     ...(payload.subagentObservation ? { subagentObservation: payload.subagentObservation } : {}),
-    subagents: agentSubagentsEqual(existing?.subagents, payload.subagents)
-      ? existing?.subagents
-      : payload.subagents,
+    ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(metadata?.terminalResumeEligible === false

@@ -1,11 +1,11 @@
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
-import type { KinguRuntimeService } from '../../../../kingu-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
 
 export function requireHomeAttachment(
-  runtime: KinguRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   dispatchId: string,
   callerFingerprint: string | undefined
 ): RemoteDispatchAttachmentRow {
@@ -20,10 +20,10 @@ export function requireHomeAttachment(
 }
 
 export async function inspectRemoteAttachment(
-  runtime: KinguRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   dispatchId: string
 ): Promise<{
-  terminal: Awaited<ReturnType<KinguRuntimeService['showTerminal']>> | null
+  terminal: Awaited<ReturnType<WorkerTerminalReleaseRuntime['showTerminal']>> | null
   exact: boolean
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */

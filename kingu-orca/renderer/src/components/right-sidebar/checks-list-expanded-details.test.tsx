@@ -88,6 +88,7 @@ function renderChecksList(
     detailsStickySurface: 'sidebar' | 'card'
     checkDetailsContextKey: string
     checks: PRCheckDetail[]
+    checksError: string
     onLoadCheckDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
   }> = {}
 ): void {
@@ -96,6 +97,7 @@ function renderChecksList(
       <TooltipProvider>
         <ChecksList
           checks={props.checks ?? [failingCheck]}
+          checksError={props.checksError}
           checksLoading={false}
           checkDetailsContextKey={props.checkDetailsContextKey ?? 'repo:42'}
           worktreeId={props.worktreeId}
@@ -114,6 +116,14 @@ function renderChecksList(
 }
 
 describe('ChecksList expanded check details', () => {
+  it('shows a failed read as an error instead of "No checks configured"', () => {
+    renderChecksList({ checks: [], checksError: 'Could not load from Build box: 401' })
+
+    expect(container.textContent).toContain('Could not load from Build box: 401')
+    expect(container.textContent).not.toContain('No checks configured')
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+  })
+
   it('pins a contextual full-details action with the correct sticky surface', async () => {
     renderChecksList({ worktreeId: 'wt-child-1', detailsStickySurface: 'card' })
 
@@ -128,18 +138,6 @@ describe('ChecksList expanded check details', () => {
     expect(stickyBar?.textContent).toContain('View full logs')
     expect(container.innerHTML).toContain('lucide-panel-right')
     expect(container.innerHTML).toContain('data-variant="outline"')
-  })
-
-  it('uses the sidebar sticky surface by default in the hosted checks panel', async () => {
-    activeWorktreeState.current = { id: 'wt-active-1' }
-    renderChecksList()
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    const stickyBar = container.querySelector('.sticky.top-0')
-    expect(stickyBar?.className).toContain('bg-sidebar/95')
   })
 
   it('falls back to the active worktree when no worktree override is provided', async () => {

@@ -47,6 +47,14 @@ export function getKinguManagedCodexHomePath(): string {
   return managedHomePath
 }
 
+/** Config files an Kingu-launched local Codex reads trust from, in the hook installer's lock order. */
+export function getLocalCodexTrustConfigFiles(agentHome: string): string[] {
+  return [
+    join(getKinguManagedCodexHomePath(), 'config.toml'),
+    join(agentHome, '.codex', 'config.toml')
+  ]
+}
+
 export function getCodexSessionBackfillStateDirPath(): string {
   return join(getKinguUserDataPath(), 'codex-session-backfill')
 }

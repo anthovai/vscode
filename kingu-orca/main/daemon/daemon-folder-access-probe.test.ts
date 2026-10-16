@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@kingu/process-host', () => ({ runProcess: runProcessMock }))
 
 import { probeFolderAccessForFreshDaemon } from './daemon-folder-access-probe'
 

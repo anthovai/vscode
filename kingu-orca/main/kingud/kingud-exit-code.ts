@@ -1,11 +1,10 @@
 import { KingudBindAddressError } from './kingud-bind-address'
 import { KingudBundledRuntimeError } from './kingud-bundled-runtime'
-import { KingudInstanceLockError } from './kingud-instance-lock'
+import { KingudInstanceLockError } from './kingud-data-root-privacy'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
+import { KINGUD_EXIT_CONFIGURATION } from './kingud-configuration-exit'
 
-export const KINGUD_EXIT_OK = 0
 export const KINGUD_EXIT_FAILED = 1
-export const KINGUD_EXIT_CONFIGURATION = 78
 
 /** Configuration faults cannot be repaired by a supervisor restart. */
 export function resolveKingudExitCode(error: unknown): number {

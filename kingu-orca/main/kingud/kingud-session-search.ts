@@ -8,9 +8,8 @@ import { installInProcessSessionSearchService } from '../ai-vault-search/session
 /**
  * kingud's session search registration.
  *
- * In this process and not a scanner child: kingud ships only the watcher and the
- * daemon entries beside `kingud.js`, so there is no scanner-service child here to
- * own the index — and this process is the sole writer, so nothing can race it.
+ * In this process and not the scanner child: kingud never installs the search data
+ * root, so its scanner child gets no index and this process is the sole writer.
  * Null on a host whose Node has no `node:sqlite`, which is kingud's stated floor.
  */
 export async function installKingudSessionSearchService(args: {

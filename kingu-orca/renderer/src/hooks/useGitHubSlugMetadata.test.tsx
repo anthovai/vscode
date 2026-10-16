@@ -14,13 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   listAssignableUsersBySlug: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn(),
-  getActiveRuntimeTarget: (settings?: { activeRuntimeEnvironmentId?: string | null } | null) =>
-    settings?.activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: settings.activeRuntimeEnvironmentId }
-      : { kind: 'local' }
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 const roots: Root[] = []
 
@@ -76,9 +70,7 @@ describe('useGitHubSlugMetadata', () => {
 
     function LabelsProbe(): null {
       renders += 1
-      const metadata = useRepoLabelsBySlug('anthovai', 'kingu', {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoLabelsBySlug('anthovai', 'kingu', { kind: 'local' })
       labels = metadata.data
       return null
     }
@@ -105,9 +97,7 @@ describe('useGitHubSlugMetadata', () => {
 
     function AssigneesProbe(): null {
       renders += 1
-      const metadata = useRepoAssigneesBySlug('anthovai', 'kingu', ['jinwoo'], {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoAssigneesBySlug('anthovai', 'kingu', ['jinwoo'], { kind: 'local' })
       assigneeLogins = metadata.data.map((user) => user.login)
       return null
     }
@@ -135,9 +125,7 @@ describe('useGitHubSlugMetadata', () => {
 
     function FailingLabelsProbe(): null {
       renders += 1
-      const metadata = useRepoLabelsBySlug('anthovai', 'kingu', {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoLabelsBySlug('anthovai', 'kingu', { kind: 'local' })
       error = metadata.error
       return null
     }
@@ -157,12 +145,7 @@ describe('useGitHubSlugMetadata', () => {
     apiMocks.listLabelsBySlug.mockResolvedValue({ ok: true, labels: ['enterprise'] })
 
     function LabelsProbe(): null {
-      useRepoLabelsBySlug(
-        'anthovai',
-        'kingu',
-        { activeRuntimeEnvironmentId: null },
-        'ghe.example.com'
-      )
+      useRepoLabelsBySlug('anthovai', 'kingu', { kind: 'local' }, 'ghe.example.com')
       return null
     }
 
@@ -183,9 +166,7 @@ describe('useGitHubSlugMetadata', () => {
 
     function FailingAssigneesProbe(): null {
       renders += 1
-      const metadata = useRepoAssigneesBySlug('anthovai', 'kingu', ['jinwoo'], {
-        activeRuntimeEnvironmentId: null
-      })
+      const metadata = useRepoAssigneesBySlug('anthovai', 'kingu', ['jinwoo'], { kind: 'local' })
       error = metadata.error
       return null
     }

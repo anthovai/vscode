@@ -390,7 +390,8 @@ describe('resolveAiVaultSessionResumeActions', () => {
         worktreeInfo: makeWorktreeInfo('active'),
         activeWorktreeId: 'repo-2::/remote/kingu',
         worktrees: [
-          makeWorktree(),
+          // A WSL-stored session's own worktree lives in that distro.
+          makeWorktree({ path: '\\\\wsl$\\Ubuntu\\repo\\kingu' }),
           makeWorktree({
             id: 'repo-2::/remote/kingu',
             repoId: 'repo-2',

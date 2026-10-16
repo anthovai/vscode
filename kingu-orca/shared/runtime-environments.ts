@@ -1,5 +1,15 @@
 import { z } from 'zod'
 import { PAIRING_OFFER_VERSION, type PairingOffer } from './pairing'
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from './paired-runtime-connection'
+import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
+import {
+  KingudWslDeploymentLinkSchema,
+  type KingudWslDeploymentLink
+} from './wsl-host-deployment-link'
 
 export const RuntimeAccessEndpointSchema = z.object({
   id: z.string().min(1),
@@ -20,7 +30,60 @@ export type PublicRuntimeAccessEndpoint = z.infer<typeof PublicRuntimeAccessEndp
 export const RuntimeEnvironmentSourceSchema = z.enum(['manual', 'ephemeral-vm'])
 export type RuntimeEnvironmentSource = z.infer<typeof RuntimeEnvironmentSourceSchema>
 
-export const KnownRuntimeEnvironmentSchema = z.object({
+export const RuntimeSshTunnelLinkSchema = z.object({
+  sshTargetId: z.string().min(1),
+  sshTargetGeneration: z.number().int().positive(),
+  localPort: z.number().int().min(1).max(65_535),
+  remotePort: z.number().int().min(1).max(65_535)
+})
+
+export type RuntimeSshTunnelLink = z.infer<typeof RuntimeSshTunnelLinkSchema>
+
+/** A server Kingu deployed and owns over SSH; unlike sshAccess, it grants lifecycle ownership. */
+export const KingudSshDeploymentLinkSchema = RuntimeSshTunnelLinkSchema.extend({
+  // Absent on disk: the sidecar persists SSH links without it, so older builds read them unchanged.
+  kind: z.literal('ssh').optional()
+})
+export type KingudSshDeploymentLink = z.infer<typeof KingudSshDeploymentLinkSchema>
+
+/** A server Kingu deployed and owns; the WSL kind is persisted only in wsl-host-deployment-store. */
+export const KingudDeploymentLinkSchema = z.union([
+  KingudSshDeploymentLinkSchema,
+  KingudWslDeploymentLinkSchema
+])
+export type KingudDeploymentLink = z.infer<typeof KingudDeploymentLinkSchema>
+
+/** The managed deployment Kingu owns over SSH; undefined for none or a WSL one. */
+export function getKingudSshDeployment(environment: {
+  kingudDeployment?: KingudDeploymentLink | null
+}): KingudSshDeploymentLink | undefined {
+  const deployment = environment.kingudDeployment
+  return deployment && deployment.kind !== 'wsl' ? deployment : undefined
+}
+
+export const RuntimeSshAccessLinkSchema = RuntimeSshTunnelLinkSchema.extend({
+  requestId: z.string().min(1).optional(),
+  targetFingerprint: z.string().min(1).optional(),
+  endpointId: z.string().min(1),
+  previousPreferredEndpointId: z.string().min(1)
+})
+
+export type RuntimeSshAccessLink = z.infer<typeof RuntimeSshAccessLinkSchema>
+
+export const RuntimeSshAccessOperationSchema = RuntimeSshTunnelLinkSchema.omit({ localPort: true })
+  .extend({
+    requestId: z.string().min(1),
+    operation: z.enum(['link', 'unlink']),
+    targetFingerprint: z.string().min(1).optional()
+  })
+  .refine((intent) => intent.operation !== 'link' || !!intent.targetFingerprint, {
+    message: 'Link intent requires a target fingerprint.'
+  })
+
+export type RuntimeSshAccessOperation = z.infer<typeof RuntimeSshAccessOperationSchema>
+
+/** The fields shipped builds read and rewrite in kingu-environments.json. */
+export const PersistedRuntimeEnvironmentSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   createdAt: z.number().finite(),
@@ -35,10 +98,74 @@ export const KnownRuntimeEnvironmentSchema = z.object({
   preferredEndpointId: z.string().min(1)
 })
 
+export type PersistedRuntimeEnvironment = z.infer<typeof PersistedRuntimeEnvironmentSchema>
+
+/**
+ * A persisted environment with its sidecar state overlaid (runtime-environment-sidecar). These
+ * fields never enter kingu-environments.json: shipped builds strip unknown keys when they rewrite it.
+ */
+export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.extend({
+  sshAccess: RuntimeSshAccessLinkSchema.optional(),
+  pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
+  kingudDeployment: KingudDeploymentLinkSchema.optional(),
+  /** When a migration into this managed server began committing; older snapshots predate it. */
+  kingudMigratedAt: z.string().datetime().optional(),
+  reconciliation: RuntimeEnvironmentReconciliationRecordSchema.optional()
+})
+  .refine(
+    ({ pendingSshAccessOperation, sshAccess, kingudDeployment, connectionDependency }) =>
+      !pendingSshAccessOperation || (!sshAccess && !kingudDeployment && !connectionDependency),
+    {
+      message: 'Pending SSH access operations cannot coexist with active SSH access.',
+      path: ['pendingSshAccessOperation']
+    }
+  )
+  .refine(
+    (environment) => {
+      const access = environment.sshAccess
+      return (
+        !access ||
+        (environment.connectionDependency === 'ssh-tunnel' &&
+          environment.preferredEndpointId === access.endpointId &&
+          access.previousPreferredEndpointId !== access.endpointId &&
+          environment.endpoints.some(
+            (endpoint) => endpoint.id === access.previousPreferredEndpointId
+          ) &&
+          getPreferredLoopbackRuntimePort(environment) === access.localPort)
+      )
+    },
+    {
+      message:
+        'Runtime SSH access must preserve its previous endpoint and prefer its loopback endpoint.',
+      path: ['sshAccess']
+    }
+  )
+  .refine(
+    (environment) => {
+      const deployment = environment.kingudDeployment
+      // Why no WSL dependency value: older builds reject any other value in kingu-environments.json;
+      // a WSL link's kind, kept in its own file, is the bridge dependency.
+      const dependency = deployment?.kind === 'wsl' ? undefined : 'ssh-tunnel'
+      return (
+        !deployment ||
+        (!environment.sshAccess &&
+          environment.connectionDependency === dependency &&
+          getPreferredLoopbackRuntimePort(environment) === deployment.localPort)
+      )
+    },
+    {
+      message:
+        'A managed deployment must prefer its own tunnel and exclude independent SSH access.',
+      path: ['kingudDeployment']
+    }
+  )
+
 export type KnownRuntimeEnvironment = z.infer<typeof KnownRuntimeEnvironmentSchema>
 
 export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpoints'> & {
   endpoints: PublicRuntimeAccessEndpoint[]
+  /** Digest of the host's persisted E2EE public key, which its pairing handshake proves. */
+  hostKeyFingerprint?: string
 }
 
 export function redactRuntimeEnvironment(
@@ -52,9 +179,11 @@ export function redactRuntimeEnvironment(
   }
 }
 
+// Why version 1 and the persisted schema: shipped builds accept only this shape, so every
+// T5 field lives in the sidecar and a downgrade rewrite cannot lose or reject it.
 export const RuntimeEnvironmentStoreSchema = z.object({
   version: z.literal(1),
-  environments: z.array(KnownRuntimeEnvironmentSchema)
+  environments: z.array(PersistedRuntimeEnvironmentSchema)
 })
 
 export type RuntimeEnvironmentStore = z.infer<typeof RuntimeEnvironmentStoreSchema>
@@ -106,18 +235,89 @@ export function isUserManagedRuntimeEnvironment(
   return !isEphemeralVmRuntimeEnvironment(environment)
 }
 
-export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): PairingOffer {
+/** A WSL distro added as a host; keyed by its deployment record's kind, never by its name. */
+export function isWslHostRuntimeEnvironment<
+  T extends { kingudDeployment?: KingudDeploymentLink | null }
+>(environment: T): environment is T & { kingudDeployment: KingudWslDeploymentLink } {
+  return environment.kingudDeployment?.kind === 'wsl'
+}
+
+/**
+ * A server the generic remote-server surfaces list (Settings, status bar, server updates):
+ * neither a recipe VM nor a WSL host, which each have their own place.
+ */
+export function isListedRemoteServer(
+  environment: Pick<PublicKnownRuntimeEnvironment, 'source' | 'kingudDeployment'>
+): boolean {
+  return isUserManagedRuntimeEnvironment(environment) && !isWslHostRuntimeEnvironment(environment)
+}
+
+type PreferredEndpointSource = Pick<
+  KnownRuntimeEnvironment,
+  'name' | 'endpoints' | 'preferredEndpointId' | 'pairedDeviceId'
+>
+
+function preferredEndpoint(environment: PreferredEndpointSource) {
   const endpoint =
     environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
     environment.endpoints[0]
   if (!endpoint) {
     throw new Error(`Environment ${environment.name} has no access endpoints`)
   }
+  return endpoint
+}
+
+export function getPreferredPairedRuntimeConnection(
+  environment: PreferredEndpointSource
+): PairedRuntimeConnection {
+  const endpoint = preferredEndpoint(environment)
+  return pairedRuntimeConnectionFromOffer({
+    endpoint: endpoint.endpoint,
+    deviceToken: endpoint.deviceToken,
+    publicKeyB64: endpoint.publicKeyB64,
+    pairedDeviceId: environment.pairedDeviceId
+  })
+}
+
+export function getPreferredPairingOffer(environment: PreferredEndpointSource): PairingOffer {
+  const endpoint = preferredEndpoint(environment)
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: endpoint.endpoint,
     deviceToken: endpoint.deviceToken,
     publicKeyB64: endpoint.publicKeyB64,
     ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
+  }
+}
+
+/** The SSH tunnel a server is reached through; only kingudDeployment also grants lifecycle ownership. */
+export function getRuntimeSshAccess(
+  environment: Pick<KnownRuntimeEnvironment, 'kingudDeployment' | 'sshAccess'>
+): RuntimeSshTunnelLink | undefined {
+  return getKingudSshDeployment(environment) ?? environment.sshAccess
+}
+
+export function getPreferredLoopbackRuntimePort(environment: {
+  endpoints: { id: string; endpoint: string }[]
+  preferredEndpointId: string
+}): number | null {
+  const endpoint = environment.endpoints.find(
+    (entry) => entry.id === environment.preferredEndpointId
+  )
+  if (!endpoint) {
+    return null
+  }
+  try {
+    const url = new URL(endpoint.endpoint)
+    const port = Number(url.port)
+    return (url.protocol === 'ws:' || url.protocol === 'wss:') &&
+      classifyRemotePairingHostname(url.hostname) === 'loopback' &&
+      Number.isInteger(port) &&
+      port >= 1 &&
+      port <= 65_535
+      ? port
+      : null
+  } catch {
+    return null
   }
 }

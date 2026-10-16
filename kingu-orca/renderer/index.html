@@ -2,6 +2,10 @@
 <html class="native-shell">
   <head>
     <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="img-src 'self' data: blob: http: https: file: kingu-media: kingu-preview: kingu-jira-image:"
+    />
     <title>Kingu</title>
     <script>
       // `crypto.randomUUID` exists only in a secure context, and a custom

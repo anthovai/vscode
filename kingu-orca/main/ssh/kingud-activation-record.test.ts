@@ -6,9 +6,11 @@ import {
   parseKingudActivationRecord,
   serializeKingudActivationRecord,
   withActivatedVersion,
+  withDeactivatedVersionCommitted,
   withRolledBackVersion,
   type KingudStateSnapshot
 } from './kingud-activation-record'
+import { sameKingudActivationRecord } from './kingud-activation-transaction'
 
 const SNAPSHOT: KingudStateSnapshot = {
   dirName: 'pre-0.2.0+bb01-1000',
@@ -92,11 +94,77 @@ describe('kingud activation record', () => {
     expect(pinned).toEqual(['kingud-0.3.0+cc01', 'kingud-0.2.0+bb01', 'kingud-0.1.0+aa01'])
   })
 
+  // Design D7.1 R4; the real two-slot swap is kingud-cross-runtime-daemon-adoption.integration.test.ts.
+  it('pins a Bun-era slot whose live daemon a Node kingud adopted, rollback target or not', () => {
+    const bunSlotVersion = '0.1.0+ea9eae1d1d6a'
+    const nodeRecord = { ...emptyKingudActivationRecord(), active: '0.1.0+a97ad77bf77c' }
+    expect(kingudGcPinnedDirNames(nodeRecord, bunSlotVersion)).toContain(`kingud-${bunSlotVersion}`)
+    expect(kingudGcPinnedDirNames(nodeRecord)).not.toContain(`kingud-${bunSlotVersion}`)
+  })
+
   it('deduplicates pins when the live daemon came from the active bundle', () => {
     const pinned = kingudGcPinnedDirNames(
       { ...emptyKingudActivationRecord(), active: '0.3.0+cc01', previous: null },
       '0.3.0+cc01'
     )
     expect(pinned).toEqual(['kingud-0.3.0+cc01'])
+  })
+
+  it('records which Kingu activated each version, and the build a rollback left', () => {
+    const first = withActivatedVersion(
+      emptyKingudActivationRecord(),
+      '0.1.0+aa01',
+      null,
+      NOW,
+      '1.4.0'
+    )
+    const second = withActivatedVersion(first, '0.2.0+bb01', SNAPSHOT, NOW, '1.5.0')
+    expect(second).toMatchObject({ activeAppVersion: '1.5.0', previousAppVersion: '1.4.0' })
+    expect(parseKingudActivationRecord(serializeKingudActivationRecord(second))).toEqual({
+      state: 'ok',
+      record: second
+    })
+    const rolledBack = withRolledBackVersion(second, NOW)
+    expect(rolledBack).toMatchObject({
+      active: '0.1.0+aa01',
+      activeAppVersion: '1.4.0',
+      rolledBackFrom: '0.2.0+bb01'
+    })
+    // A later activation is an explicit choice, so it lifts the hold.
+    expect(withActivatedVersion(rolledBack, '0.3.0+cc01', null, NOW, '1.6.0')).not.toHaveProperty(
+      'rolledBackFrom'
+    )
+  })
+
+  it('names no previous app version when activating over a stopped host', () => {
+    const served = withActivatedVersion(
+      emptyKingudActivationRecord(),
+      '0.1.0+aa01',
+      null,
+      NOW,
+      '1.5.0'
+    )
+    const stopped = withDeactivatedVersionCommitted(served)
+    expect(stopped).toMatchObject({
+      active: null,
+      previous: '0.1.0+aa01',
+      activeAppVersion: '1.5.0'
+    })
+    const redeployed = withActivatedVersion(stopped, '0.2.0+bb01', null, NOW, '1.6.0')
+    expect(redeployed).toMatchObject({ previous: null, activeAppVersion: '1.6.0' })
+    expect(redeployed).not.toHaveProperty('previousAppVersion')
+  })
+
+  it('matches a journal from a build that drops the advisory fields', () => {
+    const current = withActivatedVersion(
+      emptyKingudActivationRecord(),
+      '0.1.0+aa01',
+      null,
+      NOW,
+      '1.5.0'
+    )
+    const { activeAppVersion: _dropped, ...older } = current
+    expect(sameKingudActivationRecord(current, older)).toBe(true)
+    expect(sameKingudActivationRecord(current, { ...older, active: '0.2.0+bb01' })).toBe(false)
   })
 })

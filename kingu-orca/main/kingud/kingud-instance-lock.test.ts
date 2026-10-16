@@ -2,20 +2,26 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import {
   acquireKingudInstanceLock,
   KINGUD_LOCK_FILE_NAME,
-  KingudInstanceLockError,
-  type KingudInstanceLockHooks
+  readKingudInstanceLockRecord,
+  type KingudInstanceLockHooks,
+  type KingudLockRecord
 } from './kingud-instance-lock'
+import { KingudInstanceLockError } from './kingud-data-root-privacy'
 
 const roots: string[] = []
 
@@ -31,8 +37,21 @@ function hooks(overrides: KingudInstanceLockHooks = {}): KingudInstanceLockHooks
     identity: () => 'uid-1000',
     version: () => '1.0.0-test',
     startedAtMs: () => 1_000,
-    startTimeMatches: () => true,
+    incarnation: () => null,
+    holderIdentity: () => 'matches',
     processIsAlive: () => false,
+    ...overrides
+  }
+}
+
+function persistedRecord(overrides: Partial<KingudLockRecord> = {}): KingudLockRecord {
+  return {
+    pid: 424242,
+    startedAtMs: 1,
+    identity: 'uid-1000',
+    version: '1.0.0-test',
+    acquiredAt: '2026-01-01T00:00:00.000Z',
+    nonce: 'stale',
     ...overrides
   }
 }
@@ -68,32 +87,134 @@ describe('acquireKingudInstanceLock', () => {
 
   it('reclaims the record of a holder that is gone', () => {
     const root = makeRoot()
-    writeFileSync(
-      join(root, KINGUD_LOCK_FILE_NAME),
-      JSON.stringify({ pid: 424242, identity: 'uid-1000', startedAtMs: 1, nonce: 'stale' })
-    )
+    writeFileSync(join(root, KINGUD_LOCK_FILE_NAME), JSON.stringify(persistedRecord()))
     const lock = acquireKingudInstanceLock(root, hooks({ processIsAlive: () => false }))
     expect(JSON.parse(readFileSync(lock.path, 'utf8')).pid).toBe(process.pid)
   })
 
   it('treats a live pid whose start time does not match as a recycled pid, not a holder', () => {
     const root = makeRoot()
-    writeFileSync(
-      join(root, KINGUD_LOCK_FILE_NAME),
-      JSON.stringify({ pid: 424242, identity: 'uid-1000', startedAtMs: 1, nonce: 'stale' })
-    )
+    writeFileSync(join(root, KINGUD_LOCK_FILE_NAME), JSON.stringify(persistedRecord()))
     const lock = acquireKingudInstanceLock(
       root,
-      hooks({ processIsAlive: () => true, startTimeMatches: () => false })
+      hooks({ processIsAlive: () => true, holderIdentity: () => 'differs' })
     )
     expect(JSON.parse(readFileSync(lock.path, 'utf8')).pid).toBe(process.pid)
+  })
+
+  it('keeps a live holder whose ticks match though its btime-derived start time drifted', () => {
+    const root = makeRoot()
+    const incarnation = { linuxStartTicks: '1234', bootId: 'boot-a' }
+    writeFileSync(
+      join(root, KINGUD_LOCK_FILE_NAME),
+      JSON.stringify(persistedRecord({ startedAtMs: 1_000, ...incarnation }))
+    )
+    const drifted = {
+      processIsAlive: () => true,
+      holderIdentity: undefined,
+      startedAtMs: () => 158_000,
+      incarnation: () => incarnation
+    }
+    expect(() => acquireKingudInstanceLock(root, hooks(drifted))).toThrow(
+      expect.objectContaining({ code: 'kingud_instance_lock_held' })
+    )
+    const reused = { ...drifted, incarnation: () => ({ ...incarnation, linuxStartTicks: '9' }) }
+    expect(acquireKingudInstanceLock(root, hooks(reused)).record.nonce).not.toBe('stale')
+  })
+
+  it.runIf(process.platform === 'linux')(
+    'keeps an older Linux record whose wall-clock start time disagrees, since that proves nothing',
+    () => {
+      const root = makeRoot()
+      writeFileSync(join(root, KINGUD_LOCK_FILE_NAME), JSON.stringify(persistedRecord()))
+      expect(() =>
+        acquireKingudInstanceLock(
+          root,
+          hooks({ processIsAlive: () => true, holderIdentity: undefined, startedAtMs: () => 9e9 })
+        )
+      ).toThrow(expect.objectContaining({ code: 'kingud_instance_lock_held' }))
+    }
+  )
+
+  it('records the incarnation in a lock an older reader still parses', () => {
+    const root = makeRoot()
+    const incarnation = { linuxStartTicks: '1234', bootId: 'boot-a' }
+    const lock = acquireKingudInstanceLock(root, hooks({ incarnation: () => incarnation }))
+    const written: unknown = JSON.parse(readFileSync(lock.path, 'utf8'))
+    expect(written).toMatchObject({ startedAtMs: 1_000, ...incarnation })
+    // The shape desktops before this change parse with: unknown keys are dropped, not refused.
+    const olderReader = z.object({
+      pid: z.number().int().positive(),
+      startedAtMs: z.number().finite().nonnegative().nullable(),
+      identity: z.string().min(1),
+      version: z.string().min(1),
+      acquiredAt: z.iso.datetime({ offset: true }),
+      nonce: z.string().min(1),
+      role: z.enum(['kingud', 'desktop']).optional()
+    })
+    expect(olderReader.parse(written)).toEqual({
+      pid: process.pid,
+      startedAtMs: 1_000,
+      identity: 'uid-1000',
+      version: '1.0.0-test',
+      acquiredAt: lock.record.acquiredAt,
+      nonce: lock.record.nonce,
+      role: 'kingud'
+    })
+    lock.release()
+  })
+
+  it('reads an older lock without an incarnation, and salvages a malformed one', () => {
+    const root = makeRoot()
+    writeFileSync(
+      join(root, KINGUD_LOCK_FILE_NAME),
+      JSON.stringify(persistedRecord({ linuxStartTicks: undefined }))
+    )
+    expect(readKingudInstanceLockRecord(join(root, KINGUD_LOCK_FILE_NAME))).not.toHaveProperty(
+      'linuxStartTicks'
+    )
+    writeFileSync(
+      join(root, KINGUD_LOCK_FILE_NAME),
+      JSON.stringify({ ...persistedRecord(), linuxStartTicks: 12, bootId: '' })
+    )
+    expect(readKingudInstanceLockRecord(join(root, KINGUD_LOCK_FILE_NAME))).toMatchObject({
+      nonce: 'stale',
+      linuxStartTicks: undefined,
+      bootId: undefined
+    })
+  })
+
+  it('does not displace a successor published between stale inspection and reclaim', () => {
+    const root = makeRoot()
+    const lockPath = join(root, KINGUD_LOCK_FILE_NAME)
+    const successor = persistedRecord({ pid: 777, startedAtMs: 2, nonce: 'successor' })
+    writeFileSync(lockPath, JSON.stringify(persistedRecord()))
+    let raced = false
+    const lockHooks = hooks({
+      processIsAlive: () => {
+        if (!raced) {
+          raced = true
+          // Simulate a contender replacing the stale record and publishing its own lock
+          // after this process inspected liveness but before it renames the entry.
+          const displacedPath = `${lockPath}.displaced`
+          renameSync(lockPath, displacedPath)
+          writeFileSync(lockPath, JSON.stringify(successor), { flag: 'wx', mode: 0o600 })
+        }
+        return false
+      }
+    })
+
+    expect(() => acquireKingudInstanceLock(root, lockHooks)).toThrow(
+      expect.objectContaining({ code: 'kingud_instance_lock_held' })
+    )
+    expect(JSON.parse(readFileSync(lockPath, 'utf8')).nonce).toBe('successor')
   })
 
   it('never reclaims a lock held by a different identity, even a dead one', () => {
     const root = makeRoot()
     writeFileSync(
       join(root, KINGUD_LOCK_FILE_NAME),
-      JSON.stringify({ pid: 424242, identity: 'uid-2000', startedAtMs: 1, nonce: 'other' })
+      JSON.stringify(persistedRecord({ identity: 'uid-2000', nonce: 'other' }))
     )
     expect(() => acquireKingudInstanceLock(root, hooks({ processIsAlive: () => false }))).toThrow(
       expect.objectContaining({ code: 'kingud_instance_lock_foreign_identity' })
@@ -106,10 +227,60 @@ describe('acquireKingudInstanceLock', () => {
     // A successor reclaimed the root while this process was wedged.
     writeFileSync(
       lock.path,
-      JSON.stringify({ pid: 777, identity: 'uid-1000', startedAtMs: 2, nonce: 'successor' })
+      JSON.stringify(persistedRecord({ pid: 777, startedAtMs: 2, nonce: 'successor' }))
     )
     lock.release()
     expect(JSON.parse(readFileSync(lock.path, 'utf8')).nonce).toBe('successor')
+  })
+
+  const garbledLocks = [
+    ['nothing (a torn write)', ''],
+    ['invalid JSON', '{'],
+    ['an incomplete record', JSON.stringify({ pid: 424242, identity: 'uid-1000' })],
+    ['an invalid pid', JSON.stringify(persistedRecord({ pid: -1 }))],
+    ['an invalid start time', JSON.stringify({ ...persistedRecord(), startedAtMs: 'yesterday' })]
+  ]
+
+  it.each(garbledLocks)('leaves a lock still being written alone: %s', (_label, contents) => {
+    const root = makeRoot()
+    writeFileSync(join(root, KINGUD_LOCK_FILE_NAME), contents)
+
+    expect(() => acquireKingudInstanceLock(root, hooks())).toThrow(
+      expect.objectContaining({ code: 'kingud_instance_lock_held' })
+    )
+    expect(readFileSync(join(root, KINGUD_LOCK_FILE_NAME), 'utf8')).toBe(contents)
+  })
+
+  it.each(garbledLocks)('reclaims an abandoned lock containing %s', (_label, contents) => {
+    const root = makeRoot()
+    const lockPath = join(root, KINGUD_LOCK_FILE_NAME)
+    writeFileSync(lockPath, contents)
+    const longAgo = new Date(Date.now() - 60_000)
+    utimesSync(lockPath, longAgo, longAgo)
+
+    const lock = acquireKingudInstanceLock(root, hooks())
+    expect(JSON.parse(readFileSync(lockPath, 'utf8')).nonce).toBe(lock.record.nonce)
+    expect(readdirSync(root).sort()).toEqual([KINGUD_LOCK_FILE_NAME])
+  })
+
+  it('fails closed when the existing lock is not a regular file', () => {
+    const root = makeRoot()
+    mkdirSync(join(root, KINGUD_LOCK_FILE_NAME))
+
+    expect(() => acquireKingudInstanceLock(root, hooks())).toThrow(
+      expect.objectContaining({ code: 'kingud_instance_lock_unreadable' })
+    )
+  })
+
+  it('fails closed without reading an oversized lock into memory', () => {
+    const root = makeRoot()
+    const lockPath = join(root, KINGUD_LOCK_FILE_NAME)
+    writeFileSync(lockPath, 'x'.repeat(64 * 1024 + 1))
+
+    expect(() => acquireKingudInstanceLock(root, hooks())).toThrow(
+      expect.objectContaining({ code: 'kingud_instance_lock_unreadable' })
+    )
+    expect(statSync(lockPath).size).toBe(64 * 1024 + 1)
   })
 
   it.runIf(process.platform !== 'win32')(
@@ -122,17 +293,21 @@ describe('acquireKingudInstanceLock', () => {
     }
   )
 
-  it.runIf(process.platform !== 'win32')('refuses a data root owned by another uid', () => {
-    const root = makeRoot()
-    // /tmp itself is root-owned and sticky on every supported platform, so it stands in for
-    // "a data root this process does not own" without needing privileges to create one.
-    expect(() => acquireKingudInstanceLock('/tmp', hooks())).toThrow(
-      expect.objectContaining({ code: 'kingud_data_root_wrong_owner' })
-    )
-    // And the private root this test made is still acceptable, so the refusal is about
-    // ownership rather than a blanket rejection.
-    expect(acquireKingudInstanceLock(root, hooks()).record.identity).toBe('uid-1000')
-  })
+  // Not as root: root owns /tmp, so "a root this process does not own" has no stand-in there.
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)(
+    'refuses a data root owned by another uid',
+    () => {
+      const root = makeRoot()
+      // /tmp itself is root-owned and sticky on every supported platform, so it stands in for
+      // "a data root this process does not own" without needing privileges to create one.
+      expect(() => acquireKingudInstanceLock('/tmp', hooks())).toThrow(
+        expect.objectContaining({ code: 'kingud_data_root_wrong_owner' })
+      )
+      // And the private root this test made is still acceptable, so the refusal is about
+      // ownership rather than a blanket rejection.
+      expect(acquireKingudInstanceLock(root, hooks()).record.identity).toBe('uid-1000')
+    }
+  )
 
   it('leaves the terminal daemon alone: the lock covers only the runtime role', () => {
     const root = makeRoot()
@@ -148,4 +323,95 @@ describe('acquireKingudInstanceLock', () => {
     const next = acquireKingudInstanceLock(root, hooks())
     expect(next.record.pid).toBe(process.pid)
   })
+
+  it('restricts a Windows data root by ACL, and refuses when the ACL cannot be applied', () => {
+    const root = makeRoot()
+    const restricted: string[] = []
+    const windows = (applied: boolean) =>
+      hooks({
+        platform: 'win32',
+        restrictWindowsDataRoot: (path) => {
+          restricted.push(path)
+          return applied
+        }
+      })
+    expect(() => acquireKingudInstanceLock(root, windows(false))).toThrow(
+      expect.objectContaining({ code: 'kingud_data_root_shared' })
+    )
+    // Refused before any record was published.
+    expect(() => readFileSync(join(root, KINGUD_LOCK_FILE_NAME))).toThrow()
+    expect(acquireKingudInstanceLock(root, windows(true)).record.pid).toBe(process.pid)
+    expect(restricted).toEqual([root, root])
+  })
+
+  it.runIf(process.platform === 'win32')(
+    'records a real creation time and leaves a really restricted data root on Windows',
+    () => {
+      const root = makeRoot()
+      const lock = acquireKingudInstanceLock(root, { identity: () => 'uid-1000' })
+      expect(lock.record.startedAtMs).toEqual(expect.any(Number))
+      expect(
+        Math.abs(lock.record.startedAtMs! - (Date.now() - process.uptime() * 1000))
+      ).toBeLessThan(5_000)
+      lock.release()
+    }
+  )
+
+  it('makes the desktop app and kingud refuse each other on one profile', () => {
+    const root = makeRoot()
+    const desktop = acquireKingudInstanceLock(root, hooks({ role: 'desktop' }))
+    expect(JSON.parse(readFileSync(desktop.path, 'utf8')).role).toBe('desktop')
+    expect(() => acquireKingudInstanceLock(root, hooks({ processIsAlive: () => true }))).toThrow(
+      expect.objectContaining({
+        code: 'kingud_instance_lock_held',
+        message: expect.stringContaining('The Kingu desktop app')
+      })
+    )
+    desktop.release()
+    const kingud = acquireKingudInstanceLock(root, hooks())
+    expect(() =>
+      acquireKingudInstanceLock(root, hooks({ role: 'desktop', processIsAlive: () => true }))
+    ).toThrow(
+      expect.objectContaining({
+        code: 'kingud_instance_lock_held',
+        message: expect.stringContaining('Another kingud')
+      })
+    )
+    kingud.release()
+  })
+
+  it('lets a desktop reclaim a crashed desktop record whose PID was reused', () => {
+    const root = makeRoot()
+    writeFileSync(
+      join(root, KINGUD_LOCK_FILE_NAME),
+      JSON.stringify(persistedRecord({ role: 'desktop', startedAtMs: null }))
+    )
+    // A null start time cannot disprove the reused PID; Electron's own lock already does.
+    const lock = acquireKingudInstanceLock(
+      root,
+      hooks({ role: 'desktop', processIsAlive: () => true })
+    )
+    expect(JSON.parse(readFileSync(lock.path, 'utf8')).nonce).toBe(lock.record.nonce)
+    lock.release()
+  })
+
+  it.runIf(process.platform !== 'win32')(
+    "leaves the desktop profile's permissions as they were",
+    () => {
+      const root = makeRoot()
+      chmodSync(root, 0o755)
+      const restricted: string[] = []
+      acquireKingudInstanceLock(root, hooks({ role: 'desktop' })).release()
+      acquireKingudInstanceLock(
+        root,
+        hooks({
+          role: 'desktop',
+          platform: 'win32',
+          restrictWindowsDataRoot: (path) => restricted.push(path) > 0
+        })
+      ).release()
+      expect(restricted).toEqual([])
+      expect(statSync(root).mode & 0o777).toBe(0o755)
+    }
+  )
 })

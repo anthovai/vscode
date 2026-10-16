@@ -5,7 +5,7 @@ import { OptionalBoolean } from './rpc-param-primitives'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
 import type { TuiAgent } from '../tui-agent'
 import { isTuiAgent } from '../tui-agent-config'
-import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-commands'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-command-prompt-limit'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -110,6 +110,10 @@ export const TerminalPaneLayoutNodeSchema = z
     })
   )
 
+const PaneLayoutEditIntentSchema = z.literal('gesture')
+
+export type PaneLayoutEditIntent = z.infer<typeof PaneLayoutEditIntentSchema>
+
 export const UpdatePaneLayout = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
@@ -118,7 +122,9 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   root: z.union([z.null(), TerminalPaneLayoutNodeSchema]),
   expandedLeafId: z.string().max(128).nullable().optional(),
   chatLeafId: z.string().max(128).nullable().optional(),
-  titlesByLeafId: z.record(z.string(), z.string()).optional()
+  titlesByLeafId: z.record(z.string(), z.string()).optional(),
+  // Why: marks a user's layout gesture; .catch keeps a newer client's unknown intent from failing the edit.
+  intent: PaneLayoutEditIntentSchema.optional().catch(undefined)
 })
 
 export const SetTabProps = WorktreeTabSelector.extend({
@@ -149,10 +155,11 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     })
     .optional(),
   // Why: agent prompts must be quoted and injected for the host shell (native,
-  // WSL, or SSH) instead of pasted from the mobile client before the TUI is ready.
+  // WSL, or SSH) instead of pasted from the mobile client before the TUI is ready. Only phones
+  // without agent.launch reach this path, and their quick-command lists stop at the legacy cap.
   agentPrompt: z
     .string()
-    .max(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
+    .max(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
     .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
     .optional(),
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan

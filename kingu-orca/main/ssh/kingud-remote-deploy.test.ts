@@ -1,45 +1,68 @@
+import type * as ExecCommandModule from './ssh-relay-exec-command'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import type * as RecordFile from './kingud-remote-record-file'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@kingu/process-host'
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({
-  execCommand: vi.fn(),
-  isUnconfirmedSshCommandTermination: () => false
+vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: vi.fn()
 }))
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
 vi.mock('./ssh-relay-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
+  isRelayInstallLockStale: vi.fn().mockResolvedValue(false),
+  RemoteInstallLockBusyError: class extends Error {},
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
 vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: vi.fn().mockResolvedValue(undefined),
   writeRelayFile: vi.fn().mockResolvedValue(undefined)
 }))
+vi.mock('./kingud-remote-record-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof RecordFile>()),
+  writeAtomicKingudRemoteRecord: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('./kingud-remote-node-runtime', () => ({
+  ensureRemoteKingudNodeRuntime: vi.fn().mockResolvedValue(undefined)
+}))
 vi.mock('./kingud-local-build-hash', () => ({
   computeLocalKingudBuildHash: () => 'abc123def4567890'
 }))
 
-import { execCommand } from './ssh-relay-deploy-helpers'
-import { acquireInstallLock } from './ssh-relay-install-lock'
-import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
+import { execCommand } from './ssh-relay-exec-command'
+import { acquireInstallLock, isRelayInstallLockStale } from './ssh-relay-install-lock'
+import { uploadRelayDirectory } from './ssh-relay-install-transfers'
+import { writeAtomicKingudRemoteRecord } from './kingud-remote-record-file'
 import { deployKingud, type KingudDeployOptions } from './kingud-remote-deploy'
 import { installKingudBundle } from './kingud-remote-install'
+import { ensureRemoteKingudNodeRuntime } from './kingud-remote-node-runtime'
 import {
   abandonInstall,
   finalizeInstall,
   isRemoteInstallComplete
-} from './ssh-relay-versioned-install'
-import { emptyKingudActivationRecord, withActivatedVersion } from './kingud-activation-record'
+} from './remote-versioned-install'
+import {
+  emptyKingudActivationRecord,
+  withActivatedVersion,
+  withDeactivatedVersionCommitted,
+  type KingudActivationRecord
+} from './kingud-activation-record'
+import { KINGUD_ACTIVATION_POLICY_REFUSED_CODE } from './kingud-installed-activation'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import type { SshConnection } from './ssh-connection'
+import { isReadinessRead } from './kingud-activation-host-test-harness'
+import { isSnapshotCaptureCommand } from './kingud-snapshot-capture-command'
+import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
+import { serializeKingudActivationTransaction } from './kingud-activation-transaction'
+import { createKingudActivationTransaction } from './kingud-activation-transaction-transitions'
 
 const mockExec = vi.mocked(execCommand)
 const NEW_VERSION = '0.2.0+bb0100000000'
 const OLD_VERSION = '0.1.0+aa01'
 
-vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
+vi.mock('./remote-versioned-install', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalFullVersion: () => '0.2.0+bb0100000000',
   isRemoteInstallComplete: vi.fn().mockResolvedValue(false),
@@ -48,6 +71,7 @@ vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
 }))
 
 function readyLine(overrides: {
+  version?: string
   buildHash?: string
   daemonState?: 'live' | 'degraded' | 'absent'
   selfTestOk?: boolean
@@ -62,7 +86,7 @@ function readyLine(overrides: {
     pairing: { available: false, reason: 'disabled_by_operator', guidance: 'n/a' },
     health: {
       buildHash: overrides.buildHash ?? 'abc123def4567890',
-      buildVersion: NEW_VERSION,
+      buildVersion: overrides.version ?? NEW_VERSION,
       nodeVersion: '20.11.0',
       nodeAbi: '115',
       platform: 'linux',
@@ -96,15 +120,30 @@ type HostScript = {
   comparisonResult?: string
   candidateStopResult?: string
   readinessAtMs?: number
+  kingudLog?: string
 }
 
 function scriptHost(script: HostScript): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
     const text = String(command)
-    if (text.startsWith('cat ') && text.includes('kingud-active.json')) {
-      return script.activationRecord
+    if (text.startsWith('tail -c')) {
+      return script.kingudLog ?? ''
     }
-    if (text.includes('.kingud-readiness') && text.startsWith('cat ')) {
+    if (text.includes('__KINGUD_RECORD_PRESENT__') && text.includes('kingud-active.json')) {
+      return script.activationRecord
+        ? `__KINGUD_RECORD_PRESENT__\n${script.activationRecord}`
+        : '__KINGUD_RECORD_ABSENT__\n'
+    }
+    if (text.includes('__KINGUD_RECORD_PRESENT__') && text.includes('transaction.json')) {
+      return '__KINGUD_RECORD_ABSENT__\n'
+    }
+    if (text.includes('__KINGUD_BUILD_HASH__')) {
+      return '__KINGUD_BUILD_HASH__ abc123def4567890\n'
+    }
+    if (text.includes('kingud.lock') && text.includes('kingu-runtime.json')) {
+      return 'CLEAR'
+    }
+    if (text.includes('.kingud-readiness') && isReadinessRead(text)) {
       if (script.readinessAtMs !== undefined && Date.now() < script.readinessAtMs) {
         return ''
       }
@@ -118,8 +157,8 @@ function scriptHost(script: HostScript): void {
         JSON.stringify({
           type: 'kingu_profile_state_ready',
           nonce: text.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/)?.[0],
-          runtime: 'bun',
-          runtimeVersion: '1.4.2',
+          runtime: 'node',
+          runtimeVersion: NODE_RUNTIME_PIN.version,
           sqliteVersion: '3.51.0',
           artifactVersion: NEW_VERSION,
           revision: 1
@@ -134,7 +173,7 @@ function scriptHost(script: HostScript): void {
       script.log.push(`stop:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
       return text.includes(NEW_VERSION) ? (script.candidateStopResult ?? 'STOPPED') : 'STOPPED'
     }
-    if (text.includes('tar -C') && text.includes('-cf')) {
+    if (isSnapshotCaptureCommand(text)) {
       script.log.push('snapshot')
       return script.snapshotResult ?? 'CAPTURED'
     }
@@ -148,15 +187,16 @@ function scriptHost(script: HostScript): void {
 
 function options(overrides: Partial<KingudDeployOptions> = {}): KingudDeployOptions {
   return {
-    conn: {} as SshConnection,
+    conn: Object.create(null),
     host: getRemoteHostPlatform('linux-x64'),
     remoteHome: '/home/u',
     localKingudDir: '/local/out/kingud',
+    target: 'linux-x64-glibc',
     nodePath: '/usr/bin/node',
     userDataDir: '/home/u/.kingu',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0 },
+    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
     readinessTimeoutMs: 50,
     sleep: async () => {},
     now: () => new Date('2026-02-02T00:00:00.000Z'),
@@ -172,7 +212,12 @@ describe('kingud install lock ownership', () => {
   const remoteDir = `/home/u/.kingu-remote/kingud-${NEW_VERSION}`
   const install = (signal?: AbortSignal) =>
     installKingudBundle(
-      { ...options({ signal }), localKingudDir: '/local/out/kingud' },
+      {
+        ...options({ signal }),
+        localKingudDir: '/local/out/kingud',
+        target: 'linux-x64-glibc',
+        nodeRuntimeArchive: async () => '/cache/node.tar.gz'
+      },
       NEW_VERSION,
       remoteDir
     )
@@ -261,8 +306,8 @@ describe('deployKingud', () => {
       expect(script.log).toEqual(['preflight'])
       expect(
         vi
-          .mocked(writeRelayFile)
-          .mock.calls.some(([, , path]) => path.includes('kingud-active.json'))
+          .mocked(writeAtomicKingudRemoteRecord)
+          .mock.calls.some(([, path]) => path.includes('kingud-active.json'))
       ).toBe(false)
     }
   )
@@ -285,14 +330,18 @@ describe('deployKingud', () => {
     expect(vi.mocked(uploadRelayDirectory).mock.calls[0][2]).toContain(`kingud-${NEW_VERSION}`)
   })
 
-  it.each(['linux-arm64', 'darwin-x64'] as const)(
+  it.each([
+    ['linux-arm64', 'linux-arm64-glibc'],
+    ['darwin-x64', 'darwin-x64']
+  ] as const)(
     'marks the %s search binary executable before completing the install',
-    async (platform) => {
+    async (platform, target) => {
       scriptHost({ activationRecord: '', readiness: {}, log: [] })
       await deployKingud(
         options({
           host: getRemoteHostPlatform(platform),
-          census: { liveSessions: 1, startedSinceActivation: 0 }
+          target,
+          census: { liveSessions: 1, startedSinceActivation: 0, daemonProtocolVersion: 3 }
         })
       )
       const chmod = mockExec.mock.calls.findIndex(([, command]) =>
@@ -300,7 +349,13 @@ describe('deployKingud', () => {
       )
       expect(chmod).toBeGreaterThanOrEqual(0)
       expect(mockExec.mock.calls[chmod]?.[1]).toContain(`/ripgrep/${platform}/rg'`)
-      expect(mockExec.mock.calls[chmod]?.[1]).toContain("/bun-runtime'")
+      expect(mockExec.mock.calls[chmod]?.[1]).not.toContain('bun-runtime')
+      expect(String(mockExec.mock.calls[chmod]?.[1]).includes('/spawn-helper')).toBe(
+        platform === 'darwin-x64'
+      )
+      expect(ensureRemoteKingudNodeRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({ target, slotDir: `/home/u/.kingu-remote/kingud-${NEW_VERSION}` })
+      )
       expect(vi.mocked(uploadRelayDirectory).mock.invocationCallOrder[0]).toBeLessThan(
         mockExec.mock.invocationCallOrder[chmod]
       )
@@ -316,7 +371,9 @@ describe('deployKingud', () => {
       {
         conn: options().conn,
         host: getRemoteHostPlatform('win32-x64'),
-        localKingudDir: '/local/out/kingud'
+        localKingudDir: '/local/out/kingud',
+        target: 'win32-x64',
+        nodeRuntimeArchive: async () => '/cache/node.zip'
       },
       NEW_VERSION,
       `C:/Users/u/.kingu-remote/kingud-${NEW_VERSION}`
@@ -328,12 +385,67 @@ describe('deployKingud', () => {
     )
   })
 
+  it.each([
+    ['a fresh fence with no journal', false, false, 'kingud_activation_fence_busy'],
+    ['a stale fence over a journal', true, true, 'kingud_activation_recovery_required'],
+    ['a fresh fence over a live run journal', false, true, 'kingud_activation_fence_busy']
+  ])('refuses before uploading on %s', async (_label, stale, journal, code) => {
+    vi.mocked(isRelayInstallLockStale).mockResolvedValueOnce(stale)
+    const JOURNAL = serializeKingudActivationTransaction(
+      createKingudActivationTransaction({
+        transactionId: '00000000-0000-4000-8000-000000000001',
+        candidateVersion: NEW_VERSION,
+        recordBefore: emptyKingudActivationRecord(),
+        snapshotDirName: 'pre-1',
+        now: new Date(0)
+      })
+    )
+    mockExec.mockImplementation(async (_conn, command) => {
+      const text = String(command)
+      if (text.includes('echo LOCKED || echo OPEN')) {
+        return 'LOCKED\n'
+      }
+      if (text.includes('__KINGUD_RECORD_ABSENT__') && text.includes('transaction.json')) {
+        return journal ? `__KINGUD_RECORD_PRESENT__\n${JOURNAL}` : '__KINGUD_RECORD_ABSENT__\n'
+      }
+      return text.includes('__KINGUD_RECORD_ABSENT__') ? '__KINGUD_RECORD_ABSENT__\n' : ''
+    })
+    await expect(deployKingud(options())).resolves.toMatchObject({
+      outcome: 'installed-not-activated',
+      code
+    })
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+  })
+
+  // BUG-21: a bare stale fence (a wake cut short) failed every update with "Recover it first".
+  it('clears a stale fence no journal backs and goes on with the update', async () => {
+    vi.mocked(isRelayInstallLockStale).mockResolvedValueOnce(true)
+    let fenced = true
+    mockExec.mockImplementation(async (_conn, command) => {
+      const text = String(command)
+      if (text.includes('echo LOCKED || echo OPEN')) {
+        return fenced ? 'LOCKED\n' : 'OPEN\n'
+      }
+      if (text.includes('echo RELEASED')) {
+        fenced = false
+      }
+      return text.includes('__KINGUD_RECORD_ABSENT__') ? '__KINGUD_RECORD_ABSENT__\n' : ''
+    })
+    await deployKingud(options()).catch(() => undefined)
+    expect(vi.mocked(acquireInstallLock).mock.calls[0]?.[3]).toMatchObject({
+      allowStaleTakeover: true
+    })
+    expect(uploadRelayDirectory).toHaveBeenCalled()
+  })
+
   it('leaves an upload incomplete when the remote cannot make search executable', async () => {
     mockExec.mockImplementation(async (_conn, command) => {
       if (String(command).startsWith('chmod 755 ')) {
         throw new Error('chmod failed')
       }
-      return ''
+      return String(command).includes('__KINGUD_RECORD_ABSENT__')
+        ? '__KINGUD_RECORD_ABSENT__\n'
+        : ''
     })
     await expect(deployKingud(options())).rejects.toThrow('chmod failed')
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
@@ -343,7 +455,7 @@ describe('deployKingud', () => {
     'restores uploaded executable modes with optional browser %s',
     async (browserTarget) => {
       const directory = mkdtempSync(join(tmpdir(), 'kingud-install-modes-'))
-      const binaries = ['bun-runtime', 'ripgrep/linux-x64/rg']
+      const binaries = ['ripgrep/linux-x64/rg']
       if (browserTarget) {
         binaries.push(`agent-browser-${browserTarget}`)
       }
@@ -365,7 +477,9 @@ describe('deployKingud', () => {
           {
             conn: options().conn,
             host: getRemoteHostPlatform('linux-x64'),
-            localKingudDir: directory
+            localKingudDir: directory,
+            target: 'linux-x64-musl',
+            nodeRuntimeArchive: async () => '/cache/node.tar.gz'
           },
           NEW_VERSION,
           directory
@@ -416,11 +530,91 @@ describe('deployKingud', () => {
     const result = await deployKingud(options())
     expect(result).toMatchObject({ outcome: 'installed-and-activated', fullVersion: NEW_VERSION })
     const written = vi
-      .mocked(writeRelayFile)
-      .mock.calls.find((call) => String(call[2]).endsWith('kingud-active.json'))
-    expect(JSON.parse(String(written?.[3]))).toMatchObject({
+      .mocked(writeAtomicKingudRemoteRecord)
+      .mock.calls.find((call) => String(call[1]).endsWith('kingud-active.json'))
+    expect(JSON.parse(String(written?.[2]))).toMatchObject({
       active: NEW_VERSION,
       previous: OLD_VERSION
+    })
+  })
+
+  it.each([
+    ['activates', 'mid-upload', (r: KingudActivationRecord) => r],
+    ['activates then stops', 'mid-upload', withDeactivatedVersionCommitted],
+    ['activates', 'before the upload', (r: KingudActivationRecord) => r],
+    ['activates then stops', 'before the upload', withDeactivatedVersionCommitted]
+  ])(
+    'applies the caller policy under the fence when another desktop %s a newer build %s',
+    async (_name, when, settle) => {
+      const newer = withActivatedVersion(
+        emptyKingudActivationRecord(),
+        '0.3.0+cc01',
+        null,
+        new Date(1),
+        '1.6.0'
+      )
+      const script: HostScript = {
+        activationRecord: when === 'mid-upload' ? ACTIVE_OLD : JSON.stringify(settle(newer)),
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: []
+      }
+      scriptHost(script)
+      vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+        script.activationRecord = JSON.stringify(settle(newer))
+      })
+      const admitRecord = vi.fn((record: KingudActivationRecord) =>
+        record.activeAppVersion === '1.6.0' ? 'host-newer' : null
+      )
+      expect(await deployKingud(options({ admitRecord }))).toMatchObject({
+        outcome: 'installed-not-activated',
+        code: KINGUD_ACTIVATION_POLICY_REFUSED_CODE
+      })
+      expect(admitRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ activeAppVersion: '1.6.0' }),
+        NEW_VERSION
+      )
+      // Nothing was preflighted, stopped, snapshotted or launched, and the record is untouched.
+      expect(script.log).toEqual([])
+      expect(
+        vi
+          .mocked(writeAtomicKingudRemoteRecord)
+          .mock.calls.some(([, path]) => path.includes('kingud-active.json'))
+      ).toBe(false)
+    }
+  )
+
+  it('treats the census as unverifiable when another incumbent lands mid-upload', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    const counted = JSON.parse(ACTIVE_OLD)
+    // An admitted peer activation: same app line, so only the census binding can catch it.
+    const peer = withActivatedVersion(counted, '0.1.5+dd01', null, new Date(5), '1.4.0')
+    vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+      script.activationRecord = JSON.stringify(peer)
+    })
+    expect(
+      await deployKingud(options({ censusRecord: counted, admitRecord: () => null }))
+    ).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'kingud_update_terminal_census_unavailable'
+    })
+    // The peer's server, which may own live terminals, was never stopped.
+    expect(script.log).toEqual([])
+  })
+
+  it('keeps the census when the incumbent under the fence is the one it counted', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    expect(await deployKingud(options({ censusRecord: JSON.parse(ACTIVE_OLD) }))).toMatchObject({
+      outcome: 'installed-and-activated'
     })
   })
 
@@ -437,6 +631,42 @@ describe('deployKingud', () => {
     expect(script.log.indexOf(`stop:${OLD_VERSION}`)).toBeLessThan(script.log.indexOf('snapshot'))
   })
 
+  it('defers on a recount just before the stop when a terminal opened during the upload', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    const recountCensus = vi.fn(async () => ({
+      liveSessions: 1,
+      startedSinceActivation: 1,
+      daemonProtocolVersion: 3
+    }))
+    expect(
+      await deployKingud(options({ censusRecord: JSON.parse(ACTIVE_OLD), recountCensus }))
+    ).toMatchObject({ outcome: 'installed-not-activated', code: 'kingud_update_terminals_running' })
+    expect(recountCensus).toHaveBeenCalledTimes(1)
+    expect(script.log).toEqual(['preflight'])
+  })
+
+  it('never recounts an incumbent other than the one it counted', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    const counted = JSON.parse(ACTIVE_OLD)
+    const peer = withActivatedVersion(counted, '0.1.5+dd01', null, new Date(5), '1.4.0')
+    vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+      script.activationRecord = JSON.stringify(peer)
+    })
+    const recountCensus = vi.fn()
+    await deployKingud(options({ censusRecord: counted, admitRecord: () => null, recountCensus }))
+    expect(recountCensus).not.toHaveBeenCalled()
+  })
+
   it('installs but does not activate when terminals are running', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
@@ -445,7 +675,7 @@ describe('deployKingud', () => {
     }
     scriptHost(script)
     const result = await deployKingud(
-      options({ census: { liveSessions: 2, startedSinceActivation: 0 } })
+      options({ census: { liveSessions: 2, startedSinceActivation: 0, daemonProtocolVersion: 3 } })
     )
     expect(result).toMatchObject({
       outcome: 'installed-not-activated',
@@ -460,15 +690,20 @@ describe('deployKingud', () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
       readiness: { [NEW_VERSION]: readyLine({ daemonState: 'degraded' }) },
-      log: []
+      log: [],
+      kingudLog: 'daemon: starting\ndaemon: socket bind failed: EACCES\n'
     }
     scriptHost(script)
     const result = await deployKingud(options())
     expect(result).toMatchObject({ code: 'kingud_activation_daemon_degraded' })
+    // The error carries why the candidate failed, not only where its log is.
+    expect(result).toMatchObject({
+      reason: expect.stringMatching(/Last lines of kingud\.log:\ndaemon: starting\n.*EACCES$/u)
+    })
     expect(
       vi
-        .mocked(writeRelayFile)
-        .mock.calls.some((call) => String(call[2]).endsWith('kingud-active.json'))
+        .mocked(writeAtomicKingudRemoteRecord)
+        .mock.calls.some((call) => String(call[1]).endsWith('kingud-active.json'))
     ).toBe(false)
   })
 
@@ -477,7 +712,7 @@ describe('deployKingud', () => {
       activationRecord: ACTIVE_OLD,
       readiness: {
         [NEW_VERSION]: readyLine({ selfTestOk: false }),
-        [OLD_VERSION]: readyLine({})
+        [OLD_VERSION]: readyLine({ version: OLD_VERSION })
       },
       log: []
     }
@@ -521,7 +756,7 @@ describe('deployKingud', () => {
         'compare-state'
       ])
       expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
-        'recovery requires a fresh host terminal census'
+        'Recover to restore the prelaunch snapshot'
       )
       expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
         '/home/u/.kingu-remote/kingud-state-snapshots/'
@@ -535,7 +770,7 @@ describe('deployKingud', () => {
   it('restarts the incumbent when a quiescent snapshot cannot be captured', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
-      readiness: { [OLD_VERSION]: readyLine({}) },
+      readiness: { [OLD_VERSION]: readyLine({ version: OLD_VERSION }) },
       log: [],
       snapshotResult: 'tar: write failed'
     }
@@ -578,7 +813,7 @@ describe('deployKingud', () => {
       activationRecord: ACTIVE_OLD,
       readiness: {
         [NEW_VERSION]: readyLine({ buildHash: 'deadbeefdeadbeef' }),
-        [OLD_VERSION]: readyLine({})
+        [OLD_VERSION]: readyLine({ version: OLD_VERSION })
       },
       log: []
     }

@@ -22,4 +22,25 @@ describe('isValidGitHubApiRepository', () => {
     expect(isValidGitHubApiRepository({ owner: 'acme', repo: '..' })).toBe(false)
     expect(isValidGitHubApiRepository({ owner: 'acme', repo: 'a/b' })).toBe(false)
   })
+
+  it.each([42, false, null, {}])('rejects a non-string repository host: %j', (host) => {
+    expect(isValidGitHubApiRepository({ owner: 'acme', repo: 'kingu', host })).toBe(false)
+  })
+
+  it.each([undefined, 'github.com', 'github.enterprise.test:8443'])(
+    'accepts supported legacy or explicit repository host types: %j',
+    (host) => {
+      expect(isValidGitHubApiRepository({ owner: 'acme', repo: 'kingu', host })).toBe(true)
+    }
+  )
+
+  it.each([
+    null,
+    'acme/kingu',
+    { owner: 42, repo: 'kingu' },
+    { owner: 'acme', repo: 42 },
+    { owner: 'acme' }
+  ])('rejects malformed runtime repository identities: %j', (repository) => {
+    expect(isValidGitHubApiRepository(repository)).toBe(false)
+  })
 })

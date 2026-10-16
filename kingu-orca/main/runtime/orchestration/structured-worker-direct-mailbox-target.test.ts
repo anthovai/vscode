@@ -7,8 +7,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-const { KinguRuntimeWithGetPtyRecordForPaneKey } =
-  await import('../kingu-runtime-get-pty-record-for-pane-key')
+const { KinguRuntimeWithGetPtyRecordForPaneKey } = await import('./terminal-pane-mail-routing')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -19,7 +18,7 @@ const {
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 /** The real method through the real prototype chain; a re-declared copy would pin nothing. */
-class MailboxTargetProbe extends KinguRuntimeWithGetPtyRecordForPaneKey {
+abstract class MailboxTargetProbe extends KinguRuntimeWithGetPtyRecordForPaneKey {
   probeResolveTarget(mailboxHandle: string): unknown {
     return this.resolveStructuredMailboxTarget(mailboxHandle)
   }

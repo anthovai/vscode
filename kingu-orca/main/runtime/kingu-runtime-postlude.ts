@@ -1,4 +1,3 @@
-// @ts-nocheck -- mechanically split from KinguRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolution'
 import { REPO_SEARCH_REFS_DEFAULT_LIMIT } from '../../shared/repo-search-limits'
 

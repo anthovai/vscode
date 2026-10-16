@@ -7,9 +7,9 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { KinguRuntimeWithGetOrchestrationDispatchAuthority } =
-  await import('./kingu-runtime-get-orchestration-dispatch-authority')
+  await import('./terminal/output/terminal-orchestration-authority')
 const { KinguRuntimeWithVerifyOrchestrationCompatibilityCaller } =
-  await import('./kingu-runtime-verify-orchestration-compatibility-caller')
+  await import('./orchestration/terminal-authority/verify-orchestration-compatibility-caller')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

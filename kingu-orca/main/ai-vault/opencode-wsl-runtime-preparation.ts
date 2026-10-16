@@ -1,21 +1,31 @@
+import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { KINGUD_BUN_RELEASE_ASSETS, type KingudBunTarget } from '../../shared/kingud-bun-runtime'
-import { RELAY_OPENCODE_SQLITE_READER_FILENAME } from '../../shared/relay-artifacts'
+import type { ServerTarget } from '../../shared/node-runtime-pin'
+import { OPENCODE_SQLITE_READER_FILENAME } from '../../shared/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
+import { NODE_SQLITE_READER_API_SOURCE } from '../sqlite/node-sqlite-reader-api'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
-import { materializeCachedKingudBunRuntime } from '../ssh/kingud-bun-runtime-materializer'
+import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
 import { parseKingudLinuxLibc } from '../ssh/kingud-deployment-target'
+import {
+  installNodeRuntimeFromHostArchiveCommand,
+  nodeRuntimeStoreDir,
+  posixNodeRuntimeExecutable,
+  probeRemoteNodeRuntimeCommand,
+  REMOTE_NODE_RUNTIME_READY
+} from '../ssh/kingud-remote-node-runtime'
+import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 const preparation = new Map<string, { value: OpenCodeWslRuntime; expires: number }>()
-const downloads = new Map<KingudBunTarget, Promise<string>>()
+const downloads = new Map<ServerTarget, Promise<string>>()
 const PREPARATION_TIMEOUT_MS = 180_000
-const SQLITE_PROBE = `const db=new (require('node:sqlite').DatabaseSync)(':memory:');db.prepare('SELECT 1').get();db.close();process.stdout.write(process.execPath)`
+const SQLITE_PROBE = `const sqlite=require('node:sqlite');if(!(${NODE_SQLITE_READER_API_SOURCE})(sqlite))throw Error('SQLite reader API missing');const db=new sqlite.DatabaseSync(':memory:');db.prepare('SELECT 1').get();db.close();process.stdout.write(process.execPath)`
 
 /** Only running distro roots enter here; a slow first install must not hold up local history. */
 export async function prepareOpenCodeWslReaders(
@@ -68,7 +78,7 @@ export async function prepareOpenCodeWslReaders(
 async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   const deadline = Date.now() + PREPARATION_TIMEOUT_MS
   const signal = AbortSignal.timeout(PREPARATION_TIMEOUT_MS)
-  const run = async (spec: WslSpec): Promise<string> => {
+  const run = async (spec: WslSpec, timeoutMs = 15_000): Promise<string> => {
     signal.throwIfAborted()
     const running = await waitForPromiseWithSignal(
       filterPathsToRunningWslDistrosAsync([toWindowsWslUncPath('/', distro)], {
@@ -83,7 +93,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     const result = await runWslProcess({
       ...spec,
       distro,
-      timeoutMs: Math.max(1, Math.min(15_000, deadline - Date.now())),
+      timeoutMs: Math.max(1, Math.min(timeoutMs, deadline - Date.now())),
       maxOutputBytes: 16 * 1024
     })
     if (result.code !== 0 || result.timedOut) {
@@ -92,10 +102,8 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     return result.stdout.trim()
   }
   const app = getAppEnvironment()
-  // The reader is plain JavaScript; either packaged Linux architecture is usable.
-  const reader = (['linux-x64', 'linux-arm64'] as const)
-    .flatMap((platform) => relayBundleCandidates(platform, app.getAppPath()))
-    .map((directory) => join(directory, RELAY_OPENCODE_SQLITE_READER_FILENAME))
+  const reader = relayBundleCandidates('wsl', app.getAppPath())
+    .map((directory) => join(directory, OPENCODE_SQLITE_READER_FILENAME))
     .find(existsSync)
   if (!reader) {
     throw new Error('The bundled WSL SQLite reader is missing. Reinstall Kingu to repair it.')
@@ -103,6 +111,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   const hasDatabase = await run({
     script: [
       'data="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"',
+      'if [ -f "$HOME/.zcode/cli/db/db.sqlite" ]; then printf present; exit 0; fi',
       // WSL discovery still enumerates the default data root independently of guest overrides.
       'for db in "$HOME/.local/share/opencode"/opencode.db "$HOME/.local/share/opencode"/opencode-*.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       'case "${OPENCODE_DB-}" in',
@@ -115,7 +124,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     loginPath: 'none'
   })
   if (hasDatabase !== 'present') {
-    return { distro, error: 'No OpenCode database is present in this WSL distro.' }
+    return { distro, error: 'No OpenCode or ZCode database is present in this WSL distro.' }
   }
   const readerPath = await run({
     program: 'wslpath',
@@ -142,49 +151,50 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
       })
     )
     const target = `linux-${arch === 'x86_64' ? 'x64' : 'arm64'}-${libc}` as const
-    const expected = KINGUD_BUN_RELEASE_ASSETS[target].executableSha256
     const home = await run({ script: 'printf %s "$HOME"', loginPath: 'none' })
     if (!home.startsWith('/')) {
       throw new Error('WSL did not provide an absolute home directory.')
     }
-    executable = `${home}/.cache/kingu/vault-sqlite/${expected}/bun`
-    const present = await run({
-      script: 'if [ -x "$1" ]; then sha256sum -- "$1"; fi',
-      args: [executable],
+    // Same layout and checks as an SSH host's store; a legacy vault-sqlite/ Bun is left alone.
+    const host = getRemoteHostPlatform(arch === 'x86_64' ? 'linux-x64' : 'linux-arm64')
+    const runtimeDir = nodeRuntimeStoreDir(host, `${home}/.cache/kingu`, target)
+    executable = posixNodeRuntimeExecutable(host, runtimeDir)
+    const probe = await run({
+      script: probeRemoteNodeRuntimeCommand(host, runtimeDir, target),
       loginPath: 'none'
     })
-    if (!present.startsWith(`${expected} `)) {
+    if (probe !== REMOTE_NODE_RUNTIME_READY) {
       let download = downloads.get(target)
       if (!download) {
-        download = materializeCachedKingudBunRuntime(
+        download = materializeNodeRuntimeArchive(
           target,
           join(app.getPath('userData'), 'kingud-artifacts'),
-          {
-            signal: AbortSignal.timeout(PREPARATION_TIMEOUT_MS)
-          }
+          { signal: AbortSignal.timeout(PREPARATION_TIMEOUT_MS) }
         ).finally(() => downloads.delete(target))
         downloads.set(target, download)
       }
-      const localRuntime = await waitForPromiseWithSignal(download, signal)
+      const localArchive = await waitForPromiseWithSignal(download, signal)
       const source = await run({
         program: 'wslpath',
-        args: ['-a', '-u', localRuntime],
+        args: ['-a', '-u', localArchive],
         loginPath: 'none'
       })
-      await run({
-        script: [
-          'set -eu; umask 077',
-          'mkdir -p -- "${2%/*}"',
-          'stage=$(mktemp "${2}.upload.XXXXXX")',
-          'trap \'rm -f -- "$stage"\' EXIT',
-          'cp -- "$1" "$stage"',
-          'actual=$(sha256sum -- "$stage"); [ "${actual%% *}" = "$3" ]',
-          'chmod 700 "$stage"',
-          'mv -f -- "$stage" "$2"'
-        ].join('\n'),
-        args: [source, executable, expected],
-        loginPath: 'none'
-      })
+      const promoted = await run(
+        {
+          script: installNodeRuntimeFromHostArchiveCommand(host, {
+            runtimeDir,
+            archive: basename(localArchive),
+            target,
+            token: randomBytes(8).toString('hex')
+          }),
+          args: [source],
+          loginPath: 'none'
+        },
+        120_000
+      )
+      if (promoted.split('\n').at(-1) !== REMOTE_NODE_RUNTIME_READY) {
+        throw new Error('WSL did not verify the pinned Node runtime.')
+      }
     }
   }
   return { distro, executable, readerPath }

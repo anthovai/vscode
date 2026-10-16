@@ -31,7 +31,7 @@ function pillText(container: HTMLDivElement): string {
 }
 
 function inventory(
-  entries: { name: string; status: 'current' | 'outdated' | 'unrecognized' }[],
+  entries: { name: string; status: 'current' | 'outdated' | 'inaccessible' }[],
   eligibleUpdateNames: string[]
 ): SkillFreshnessInventory {
   return {
@@ -48,12 +48,8 @@ function inventory(
       physicalIdentity: `physical-${entry.name}-${index}`,
       topology: 'canonical-copy',
       status: entry.status,
-      installedReleaseRevision: 1,
-      installedAppVersion: '1.0.0',
-      currentReleaseRevision: 2,
       currentPackageDigest: 'current',
-      currentAppVersion: '2.0.0',
-      observedPackageDigest: 'old',
+      lockSource: 'anthovai/kingu-intelligence',
       errorCategory: null
     })),
     eligibleUpdateNames,
@@ -114,7 +110,7 @@ describe('SkillFreshnessStatusPill', () => {
     mocks.inventory = inventory(
       [
         { name: 'kingu-cli', status: 'outdated' },
-        { name: 'kingu-cli', status: 'unrecognized' }
+        { name: 'kingu-cli', status: 'inaccessible' }
       ],
       []
     )

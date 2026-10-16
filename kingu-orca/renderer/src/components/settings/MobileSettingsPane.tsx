@@ -12,8 +12,7 @@ import { MobileRelayBetaNotice } from './MobileRelayBetaNotice'
 export { getMobileSettingsPaneSearchEntries }
 
 const KINGU_IOS_APP_STORE_URL = 'https://apps.apple.com/app/kingu-ide/id6766130217'
-const KINGU_ANDROID_APK_URL =
-  'https://github.com/anthovai/kingu-intelligence/releases/download/mobile-android-v0.0.48/app-release.apk'
+const KINGU_ANDROID_APK_URL = 'https://www.onkingu.dev/download/android'
 
 export function MobileSettingsPane(): React.JSX.Element {
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)

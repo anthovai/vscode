@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
+import { runProcessSync } from '@kingu/process-host'
+import type { ProcessResult } from '@kingu/process-host/process-spec'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 
 /**

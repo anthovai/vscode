@@ -26,6 +26,12 @@ fi
 [[ -n "${KINGU_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${KINGU_OPENCODE_CONFIG_DIR}"
 [[ -n "${KINGU_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${KINGU_MIMOCODE_HOME}"
 [[ -n "${KINGU_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"${KINGU_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="${KINGU_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+if [ -n "${KINGU_CLI_BIN_DIR:-}" ]; then
+  case "${PATH:-}" in
+    "$KINGU_CLI_BIN_DIR"|"$KINGU_CLI_BIN_DIR":*) ;;
+    *) export PATH="$KINGU_CLI_BIN_DIR${PATH:+:$PATH}" ;;
+  esac
+fi
 # Why: OMP does not auto-load Kingu's managed status extension; wrap only
 # interactive launch invocations so subcommands such as `omp config` keep
 # their normal argv shape.
@@ -88,6 +94,32 @@ if [[ -n "${KINGU_OMP_STATUS_EXTENSION:-}" ]]; then
   function omp { __kingu_omp "$@"; }
 fi
 
+# Why: a typed alias expands inside the shell, after pane launch prep.
+# Why unalias inside the substitution: an alias named codex makes command -v
+# report the alias text, and the subshell leaves the user's own alias intact.
+# Why || : twice — zsh alone aborts inside the substitution, but every shell's
+# assignment adopts its exit status, so an absent codex trips set -e in bash too.
+__kingu_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+if [[ -n "${__kingu_codex_binary:-}" && -x "${__kingu_codex_binary}" ]]; then
+  # Why the function reserved word: it suppresses alias expansion of the name,
+  # which otherwise rewrites this header at parse time and aborts the whole file.
+  function codex {
+    # Why local: zsh's warn_create_global warns for each global a function creates.
+    local __kingu_codex_arg __kingu_codex_isolate="${KINGU_CODEX_ISOLATE:-1}"
+    if [[ -n "${KINGU_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${KINGU_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+      "${KINGU_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    fi
+    for __kingu_codex_arg in "$@"; do
+      case "$__kingu_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __kingu_codex_isolate=0 ;; esac
+    done
+    # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
+    if [[ "$__kingu_codex_isolate" != 0 ]]; then
+      case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+    fi
+    command codex "$@"
+  }
+fi
+unset __kingu_codex_binary
 if [[ -n "${KINGU_HISTFILE:-}" ]]; then
   HISTFILE="$KINGU_HISTFILE"
   builtin unset KINGU_HISTFILE

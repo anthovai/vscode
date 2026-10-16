@@ -217,8 +217,8 @@ export function MobilePairingConnectionOptions({
           >
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
               {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
-                'Relay only — LAN does not need an account.'
+                'auto.components.settings.MobilePairingConnectionOptions.relaySignInDetail',
+                'Signs this desktop in to Kingu and routes the phone through Kingu’s servers. LAN does not need an account.'
               )}
             </p>
             <Button

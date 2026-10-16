@@ -1,0 +1,304 @@
+import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { chmod, copyFile, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { z } from 'zod'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import {
+  KINGUD_NODE_RUNTIME_MARKER_FILENAME,
+  KINGUD_SERVER_TARGET_FILENAME,
+  KINGUD_TEMPLATE_MANIFEST_FILENAME,
+  KINGUD_TEMPLATE_TARGETS_DIR,
+  KINGUD_VERSION_FILENAME,
+  kingudArtifactFilenames,
+  kingudTemplateCommonFilenames,
+  kingudTemplateTargetFilenames
+} from '../../shared/kingud-artifacts'
+import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../shared/node-runtime-pin'
+import { findKingudCachePath } from '../node-runtime/kingud-cache-path'
+import type { PinnedRuntimeMaterializeOptions } from '../node-runtime/pinned-runtime-materializer'
+import { readKingudArtifactVerificationRecord } from './kingud-artifact-verification-record'
+import {
+  isCompleteArtifact,
+  rememberVerification,
+  sameHashes,
+  signSlot,
+  slotMatchesRecord,
+  verifiedArtifactIdentity,
+  type ArtifactSource,
+  type ExpectedSha256
+} from './kingud-artifact-source-verification'
+import {
+  KingudArtifactsUnavailableError,
+  KingudHostUnsupportedError
+} from './kingud-host-unavailable'
+
+const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u)
+const TemplateTargetSchema = z
+  .object({
+    files: z.record(z.string(), Sha256Schema),
+    browserName: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
+      .optional(),
+    browserSha256: Sha256Schema.optional()
+  })
+  .refine((target) => Boolean(target.browserName) === Boolean(target.browserSha256), {
+    message: 'browserName and browserSha256 must either both be present or both be absent'
+  })
+const TemplateManifestSchema = z.object({
+  schemaVersion: z.literal(3),
+  commonSha256: z.record(z.string(), Sha256Schema),
+  targets: z.record(z.string(), TemplateTargetSchema)
+})
+
+type MaterializeOptions = PinnedRuntimeMaterializeOptions & {
+  templateDir?: string
+  cacheRoot?: string
+  /** WSL wake path only: reuse digests recorded by stat signature instead of re-hashing. */
+  trustVerificationRecord?: boolean
+}
+
+const materializations = new Map<string, Promise<string>>()
+// Slots handed out this session: a deploy may still be reading one, so cache retention keeps them.
+const materializedVersions = new Set<string>()
+
+export function materializedKingudArtifactVersions(): ReadonlySet<string> {
+  return materializedVersions
+}
+
+/** A verified slot directory for `target`; its runtime is referenced, not included (design D2). */
+export async function materializeKingudArtifact(
+  target: NodeRuntimeTarget,
+  options: MaterializeOptions = {}
+): Promise<string> {
+  options.signal?.throwIfAborted()
+  const templateDir = options.templateDir ?? resolveKingudTemplateDir()
+  const cacheRoot =
+    options.cacheRoot ?? join(getAppEnvironment().getPath('userData'), 'kingud-artifacts')
+  const trustVerificationRecord = options.trustVerificationRecord === true
+  // Why the trust bit is keyed: an SSH or local caller must never join a record-trusting fill.
+  const key = `${templateDir}\0${cacheRoot}\0${target}\0${trustVerificationRecord}`
+  const existing = materializations.get(key)
+  if (existing) {
+    return waitForPromiseWithSignal(existing, options.signal)
+  }
+  // Cancellation detaches one caller; the bounded cache fill still serves other deployments.
+  const pending = assembleKingudArtifact({
+    templateDir,
+    cacheRoot,
+    target,
+    trustVerificationRecord
+  }).finally(() => materializations.delete(key))
+  materializations.set(key, pending)
+  return waitForPromiseWithSignal(pending, options.signal)
+}
+
+export async function assembleKingudArtifact(args: {
+  templateDir: string
+  cacheRoot: string
+  target: NodeRuntimeTarget
+  manifest?: z.infer<typeof TemplateManifestSchema>
+  /** Test seam for deciding when a file's stat signature is old enough to trust. */
+  now?: () => number
+  /** Off (SSH, local serve): every launch hashes, and no record is read or written. */
+  trustVerificationRecord?: boolean
+}): Promise<string> {
+  const trust = args.trustVerificationRecord === true
+  const manifest = args.manifest ?? (await readTemplateManifest(args.templateDir))
+  const sources = artifactSources(args.templateDir, args.target, manifest)
+  const expected = expectedTemplateSha256(args.target, manifest)
+  const targetRoot = join(args.cacheRoot, args.target)
+  const nowMs = (args.now ?? Date.now)()
+  const record = trust ? await readKingudArtifactVerificationRecord(targetRoot) : null
+  const identity = await verifiedArtifactIdentity(sources, expected, record, nowMs, trust)
+  await verifyTemplateMarkers(args.templateDir, args.target)
+  const { fullVersion, sourceHashes } = identity
+  const recordedSlot =
+    record && record.contentDigest === identity.contentDigest && sameHashes(record, sourceHashes)
+      ? record.slot
+      : null
+  let slotFromRecord = false
+  const cached = await findKingudCachePath(
+    (attempt) => join(targetRoot, `${fullVersion}${attempt ? `.repair-${attempt}` : ''}`),
+    async (path) => {
+      slotFromRecord = await slotMatchesRecord(path, fullVersion, sources, recordedSlot, nowMs)
+      return slotFromRecord || isCompleteArtifact(path, fullVersion, sources, sourceHashes)
+    }
+  )
+  const targetDir = cached.path
+  materializedVersions.add(fullVersion)
+  if (cached.verified) {
+    // Retention evicts by recency, so a reused slot counts as recently used.
+    const now = new Date()
+    await utimes(targetDir, now, now).catch(() => undefined)
+    if (trust) {
+      const slot = slotFromRecord ? recordedSlot : await signSlot(targetDir, sources, nowMs)
+      await rememberVerification(targetRoot, record, identity, slot)
+    }
+    return targetDir
+  }
+  await mkdir(targetRoot, { recursive: true })
+  const stagingDir = join(targetRoot, `.staging-${process.pid}-${randomUUID()}`)
+  try {
+    for (const source of sources) {
+      const destination = join(stagingDir, source.filename)
+      await mkdir(dirname(destination), { recursive: true })
+      await copyFile(source.path, destination)
+      if (source.executable && !args.target.startsWith('win32-')) {
+        await chmod(destination, 0o755)
+      }
+    }
+    await writeFile(join(stagingDir, KINGUD_VERSION_FILENAME), `${fullVersion}\n`, { mode: 0o600 })
+    if (!(await isCompleteArtifact(stagingDir, fullVersion, sources, sourceHashes))) {
+      throw new Error('Kingud artifact sources changed while copying')
+    }
+    try {
+      await rename(stagingDir, targetDir)
+    } catch (error) {
+      if (!(await isCompleteArtifact(targetDir, fullVersion, sources, sourceHashes))) {
+        throw new Error(`Kingud artifact cache entry is unavailable or corrupted: ${targetDir}`, {
+          cause: error
+        })
+      }
+    }
+    if (trust) {
+      // Fresh copies are not settled yet, so the next launch hashes this slot once more.
+      await rememberVerification(targetRoot, record, identity, null)
+    }
+    return targetDir
+  } finally {
+    await rm(stagingDir, { recursive: true, force: true })
+  }
+}
+
+function isExecutableArtifact(filename: string): boolean {
+  return /(?:^|\/)(?:rg|spawn-helper)$/.test(filename)
+}
+
+function artifactSources(
+  templateDir: string,
+  target: NodeRuntimeTarget,
+  manifest: z.infer<typeof TemplateManifestSchema>
+): ArtifactSource[] {
+  const targetDir = join(templateDir, KINGUD_TEMPLATE_TARGETS_DIR, target)
+  const targetManifest = manifest.targets[target]
+  if (!targetManifest) {
+    throw new KingudHostUnsupportedError(`Packaged kingud template does not support ${target}`)
+  }
+  const targetFiles = new Set(kingudTemplateTargetFilenames(target))
+  const required = kingudArtifactFilenames(target).map((filename) => ({
+    filename,
+    path: join(targetFiles.has(filename) ? targetDir : templateDir, ...filename.split('/')),
+    executable: isExecutableArtifact(filename)
+  }))
+  if (!targetManifest.browserName) {
+    return required
+  }
+  return [
+    ...required,
+    {
+      filename: targetManifest.browserName,
+      path: join(targetDir, targetManifest.browserName),
+      executable: true
+    }
+  ]
+}
+
+/** The manifest digest each slot source must hash to. */
+function expectedTemplateSha256(
+  target: NodeRuntimeTarget,
+  manifest: z.infer<typeof TemplateManifestSchema>
+): Map<string, ExpectedSha256> {
+  const targetManifest = manifest.targets[target]
+  if (!targetManifest) {
+    throw new KingudHostUnsupportedError(`Packaged kingud template does not support ${target}`)
+  }
+  const expected = new Map<string, ExpectedSha256>()
+  for (const filename of kingudTemplateCommonFilenames()) {
+    const sha256 = manifest.commonSha256[filename]
+    if (!sha256) {
+      throw new Error(`Packaged kingud template manifest omits ${filename}`)
+    }
+    expected.set(filename, { sha256, label: `kingud template ${filename}` })
+  }
+  for (const filename of kingudTemplateTargetFilenames(target)) {
+    const sha256 = targetManifest.files[filename]
+    if (!sha256) {
+      throw new Error(`Packaged kingud template manifest omits ${target} ${filename}`)
+    }
+    expected.set(filename, { sha256, label: `${target} ${filename}` })
+  }
+  if (targetManifest.browserName && targetManifest.browserSha256) {
+    // A browser named like a required file would replace that file's manifest digest.
+    if (expected.has(targetManifest.browserName)) {
+      throw new Error(`Packaged kingud template ${target} browser name collides with a slot file`)
+    }
+    expected.set(targetManifest.browserName, {
+      sha256: targetManifest.browserSha256,
+      label: `${target} browser`
+    })
+  }
+  return expected
+}
+
+async function readTemplateManifest(
+  templateDir: string
+): Promise<z.infer<typeof TemplateManifestSchema>> {
+  return TemplateManifestSchema.parse(
+    JSON.parse(await readFile(join(templateDir, KINGUD_TEMPLATE_MANIFEST_FILENAME), 'utf8'))
+  )
+}
+
+/** Content checks a manifest digest cannot express; both files are a few bytes. */
+async function verifyTemplateMarkers(
+  templateDir: string,
+  target: NodeRuntimeTarget
+): Promise<void> {
+  const targetDir = join(templateDir, KINGUD_TEMPLATE_TARGETS_DIR, target)
+  if ((await readFile(join(targetDir, KINGUD_SERVER_TARGET_FILENAME), 'utf8')).trim() !== target) {
+    throw new Error(`Packaged kingud template target identity does not match ${target}`)
+  }
+  // Why against this client's pin: the slot must name the runtime this client will upload.
+  const runtimeReference = await readFile(
+    join(targetDir, KINGUD_NODE_RUNTIME_MARKER_FILENAME),
+    'utf8'
+  )
+  if (runtimeReference.trim() !== pinnedNodeRuntimeAsset(target).executableSha256) {
+    throw new Error(`Packaged kingud template ${target} does not reference the pinned Node`)
+  }
+}
+
+export function getKingudTemplateCandidates(): string[] {
+  const candidates: string[] = []
+  if (process.env.KINGU_KINGUD_TEMPLATE_PATH) {
+    candidates.push(process.env.KINGU_KINGUD_TEMPLATE_PATH)
+  }
+  if (process.resourcesPath) {
+    candidates.push(join(process.resourcesPath, 'kingud-template'))
+  }
+  const appPath = getAppEnvironment().getAppPath()
+  candidates.push(
+    join(appPath, 'out', 'kingud-template'),
+    join(appPath, 'resources', 'kingud-template')
+  )
+  return [...new Set(candidates)]
+}
+
+/** Whether this build carries an kingud template at all; dev builds usually don't. */
+export function hasKingudTemplate(): boolean {
+  return getKingudTemplateCandidates().some((candidate) => existsSync(candidate))
+}
+
+function resolveKingudTemplateDir(): string {
+  const found = getKingudTemplateCandidates().find((candidate) => existsSync(candidate))
+  if (!found) {
+    throw new KingudArtifactsUnavailableError('The packaged kingud deployment template is missing')
+  }
+  return found
+}
+
+export function resetKingudArtifactMaterializationsForTests(): void {
+  materializations.clear()
+}

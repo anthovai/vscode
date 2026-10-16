@@ -1,11 +1,10 @@
-// @ts-nocheck -- mechanically split from KinguRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { KinguRuntimeWithDeliverPendingMessages } from './kingu-runtime-deliver-pending-messages'
+import { KinguRuntimeWithDeliverPendingMessages } from './orchestration/mail/terminal-message-delivery'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
-import type { RuntimeTerminalWait } from '../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { BrowserWindow } from 'electron'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 
-export class KinguRuntimeWithResolveWaiter extends KinguRuntimeWithDeliverPendingMessages {
+export abstract class KinguRuntimeWithResolveWaiter extends KinguRuntimeWithDeliverPendingMessages {
   protected resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
     this.terminalWaiters.resolve(waiter, result)
   }
@@ -26,7 +25,7 @@ export class KinguRuntimeWithResolveWaiter extends KinguRuntimeWithDeliverPendin
     return `${tabId}::${leafId}`
   }
 
-  protected getAuthoritativeWindow(): BrowserWindow {
+  getAuthoritativeWindow(): BrowserWindow {
     const win = this.getAvailableAuthoritativeWindow()
     if (!win || win.isDestroyed()) {
       throw new Error('No renderer window available')

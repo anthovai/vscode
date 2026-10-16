@@ -10,6 +10,11 @@ import {
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import { KINGU_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
+import {
+  RUNTIME_SOURCE_ID_ENV,
+  RUNTIME_SOURCE_INCARNATION_ENV,
+  RUNTIME_SOURCE_PROFILE_PATH_ENV
+} from '../../shared/runtime-source-env'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -82,6 +87,7 @@ export function addKinguWslInteropEnv(env: Record<string, string>): void {
     // Why /p: the managed CLI launcher lives in the host's userData tree.
     'KINGU_WSL_CLI_DIR/p',
     'KINGU_CODEX_LAUNCH_PREFLIGHT/p',
+    'KINGU_CODEX_ISOLATE/u',
     'KINGU_PANE_KEY/u',
     'KINGU_TAB_ID/u',
     'KINGU_WORKTREE_ID/u',
@@ -94,6 +100,10 @@ export function addKinguWslInteropEnv(env: Record<string, string>): void {
     'KINGU_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
     'KINGU_ORCHESTRATION_COMPATIBILITY_HOST_ID/u',
     'KINGU_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u',
+    `${RUNTIME_SOURCE_ID_ENV}/u`,
+    `${RUNTIME_SOURCE_INCARNATION_ENV}/u`,
+    // Why /u: compared with the Windows CLI's own userData path, never read as a guest path.
+    `${RUNTIME_SOURCE_PROFILE_PATH_ENV}/u`,
     'KINGU_AGENT_HOOK_PORT/u',
     'KINGU_AGENT_HOOK_TOKEN/u',
     'KINGU_AGENT_HOOK_ENV/u',

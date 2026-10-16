@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  KINGUD_NATIVE_PRECONDITION_EXIT_CODE,
-  runKingudNativePreflight
-} from './kingud-native-preflight'
+import { runKingudNativePreflight } from './kingud-native-preflight'
+import { KINGUD_EXIT_CONFIGURATION } from './kingud-configuration-exit'
 import {
   runtimeTerminalDegradation,
   setRuntimeTerminalUnavailableCause
@@ -50,7 +48,7 @@ describe('runKingudNativePreflight', () => {
       verdict({ status: 'blocked', reason: 'libc_floor', detail: 'the binary requires GLIBC_2.34' })
     )
 
-    expect(exit).toHaveBeenCalledWith(KINGUD_NATIVE_PRECONDITION_EXIT_CODE)
+    expect(exit).toHaveBeenCalledWith(KINGUD_EXIT_CONFIGURATION)
     expect(warn).not.toHaveBeenCalled()
     const message = fail.mock.calls[0][0] as string
     expect(message).toContain('newer C library')
@@ -58,11 +56,6 @@ describe('runKingudNativePreflight', () => {
     expect(message).toContain('libc glibc 2.31')
     // The toolchain hint is what makes it actionable rather than merely accurate.
     expect(message).toContain('sudo apt-get install -y build-essential python3')
-  })
-
-  it('exits with EX_CONFIG so a supervisor does not restart an unequippable host forever', () => {
-    expect(KINGUD_NATIVE_PRECONDITION_EXIT_CODE).toBe(78)
-    expect(KINGUD_NATIVE_PRECONDITION_EXIT_CODE).not.toBe(1)
   })
 
   it('publishes the blocked cause as a status degradation', () => {

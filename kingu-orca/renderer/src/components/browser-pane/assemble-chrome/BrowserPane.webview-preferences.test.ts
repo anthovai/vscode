@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { KINGU_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { KINGU_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
 
 const registryMocks = vi.hoisted(() => ({
   destroyPersistentWebview: vi.fn(),
@@ -56,7 +56,7 @@ describe('BrowserPane webview preferences', () => {
       'persist:kingu-browser-session-profile-1'
     )
     expect(ensuredWebview?.webview.getAttribute('webpreferences')).toBe(
-      `${KINGU_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE},transparent=false`
+      KINGU_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE
     )
     expect(registryMocks.registerPersistentWebview).toHaveBeenCalledWith(
       'browser-page-1',

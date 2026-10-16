@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,7 +30,7 @@ describe('KinguRuntimeRpcServer', () => {
   it('writes runtime metadata with transport details when started', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
     const runtime = new KinguRuntimeService()
-    const server = new KinguRuntimeRpcServer({ runtime, userDataPath })
+    const server = new KinguRuntimeRpcServer({ methods: [], runtime, userDataPath })
 
     await server.start()
 
@@ -51,7 +52,7 @@ describe('KinguRuntimeRpcServer', () => {
     // against this still-serving runtime once that instance exits.
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
     const runtime = new KinguRuntimeService()
-    const server = new KinguRuntimeRpcServer({ runtime, userDataPath })
+    const server = new KinguRuntimeRpcServer({ methods: [], runtime, userDataPath })
     await server.start()
     const published = readRuntimeMetadata(userDataPath)
 
@@ -74,6 +75,7 @@ describe('KinguRuntimeRpcServer', () => {
     // Why: a synthetic owned pid frees the always-alive process.pid to stand in for
     // the sibling — Windows never assigns pid 1, so hardcoding it there reads as dead.
     const server = new KinguRuntimeRpcServer({
+      methods: [],
       runtime: new KinguRuntimeService(),
       userDataPath,
       pid: 4242
@@ -96,7 +98,11 @@ describe('KinguRuntimeRpcServer', () => {
 
   it('stops reclaiming runtime metadata after the server is stopped', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
-    const server = new KinguRuntimeRpcServer({ runtime: new KinguRuntimeService(), userDataPath })
+    const server = new KinguRuntimeRpcServer({
+      methods: [],
+      runtime: new KinguRuntimeService(),
+      userDataPath
+    })
     await server.start()
     const watch = server['metadataOwnershipWatch']
     if (!watch) {
@@ -125,7 +131,7 @@ describe('KinguRuntimeRpcServer', () => {
     // activeTransports guard — not the interval teardown — is what stops it republishing.
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
     const runtime = new KinguRuntimeService()
-    const server = new KinguRuntimeRpcServer({ runtime, userDataPath, pid: 1001 })
+    const server = new KinguRuntimeRpcServer({ methods: [], runtime, userDataPath, pid: 1001 })
     await server.start()
 
     let releaseRead: (record: RuntimeMetadata | null) => void = () => {}
@@ -155,6 +161,7 @@ describe('KinguRuntimeRpcServer', () => {
 
   it('flushes a lastSeen refresh scheduled while transports stop', async () => {
     const server = new KinguRuntimeRpcServer({
+      methods: [],
       runtime: new KinguRuntimeService(),
       userDataPath: mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-')),
       enableWebSocket: false
@@ -209,6 +216,7 @@ describe('KinguRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
     const runtime = new KinguRuntimeService()
     const server = new KinguRuntimeRpcServer({
+      methods: [],
       runtime,
       userDataPath,
       pid: 1001
@@ -228,7 +236,7 @@ describe('KinguRuntimeRpcServer', () => {
   it('closes the socket if metadata publication fails during startup', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
     const runtime = new KinguRuntimeService()
-    const server = new KinguRuntimeRpcServer({ runtime, userDataPath })
+    const server = new KinguRuntimeRpcServer({ methods: [], runtime, userDataPath })
     const writeMetadataSpy = vi
       .spyOn(runtimeMetadataModule, 'writeRuntimeMetadata')
       .mockImplementationOnce(() => {

@@ -1,14 +1,15 @@
 import {
-  getCommandTokenPathBasename,
-  getFirstCommandToken
-} from '../../../../shared/command-token-scanner'
-import {
   PRIMARY_AGENT_DIR_ENV_BY_KIND,
   SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
-import { AGENT_HOOK_RUNTIME_ENV_KEYS, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS } from './spawn-env-keys'
+import { getAgentLaunchExecutableName } from '../../../../shared/agent-command-line-intent'
+import {
+  AGENT_HOOK_RUNTIME_ENV_KEYS,
+  CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS,
+  KINGU_AGENT_SESSION_CALLER_ENV_KEYS
+} from './spawn-env-keys'
 
 export function readEnvWithProcessFallback(
   baseEnv: Record<string, string>,
@@ -139,22 +140,22 @@ export function getInheritedAgentHookEnvKeysToDelete(
   ].filter((key) => env[key] === undefined)
 }
 
-export function getInheritedClaudeSessionStampEnvKeysToDelete(
+export function getInheritedAgentSessionStampEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: strip only values inherited from the pty host; a caller that explicitly
-  // provides a stamp (deliberately spawning a nested Claude child) keeps it.
-  return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
+  // Why: a caller that explicitly provides a Claude stamp (a nested Claude child) keeps it; no
+  // terminal is a structured session, so the session caller keys always go.
+  return [
+    ...CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined),
+    ...KINGU_AGENT_SESSION_CALLER_ENV_KEYS
+  ]
 }
 
 export { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 
 export function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
-  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
-    .toLowerCase()
-    .replace(/\.(?:cmd|exe|sh)$/, '')
-  return binary === 'mimo'
+  return getAgentLaunchExecutableName(launchCommand) === 'mimo'
 }
 
 export function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
@@ -171,15 +172,16 @@ export function resolveMimocodeSourceHome(baseEnv: Record<string, string>): stri
 }
 
 export function resolveOpenCodeSourceConfigDir(
-  baseEnv: Record<string, string>
+  baseEnv: Record<string, string>,
+  inheritedEnv: NodeJS.ProcessEnv = process.env
 ): string | undefined {
-  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
-  const kinguConfigDir = baseEnv.KINGU_OPENCODE_CONFIG_DIR ?? process.env.KINGU_OPENCODE_CONFIG_DIR
+  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? inheritedEnv.OPENCODE_CONFIG_DIR
+  const kinguConfigDir = baseEnv.KINGU_OPENCODE_CONFIG_DIR ?? inheritedEnv.KINGU_OPENCODE_CONFIG_DIR
   if (configDir && kinguConfigDir && configDir !== kinguConfigDir) {
     return configDir
   }
   const sourceDir =
-    baseEnv.KINGU_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.KINGU_OPENCODE_SOURCE_CONFIG_DIR
+    baseEnv.KINGU_OPENCODE_SOURCE_CONFIG_DIR ?? inheritedEnv.KINGU_OPENCODE_SOURCE_CONFIG_DIR
   if (sourceDir) {
     return sourceDir
   }

@@ -30,6 +30,7 @@ const FOLDERS = [
 	['shared', 'src/shared'],
 	['preload', 'src/preload'],
 	['relay', 'src/relay'],
+	['packages', 'src/packages'],
 	['types', 'src/types'],
 	['renderer', 'src/renderer'],
 	['resources', 'resources'],
@@ -45,6 +46,10 @@ const git = (cwd: string, args: string[], options: { input?: string } = {}): Buf
 
 function tree(cwd: string, commit: string, folder: string): Map<string, string> {
 	const map = new Map<string, string>();
+	// A folder the ADE removed (`src/relay` went in 2026-10) reads as empty, so its files count as deleted upstream.
+	if (!git(cwd, ['ls-tree', '--name-only', commit, '--', folder]).toString().trim()) {
+		return map;
+	}
 	const out = git(cwd, ['ls-tree', '-r', '-z', '--format=%(objectmode) %(objectname) %(path)', `${commit}:${folder}`]).toString();
 	for (const line of out.split('\0')) {
 		if (!line) {

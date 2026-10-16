@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the Kingu rebrand lengthens messages past the formatter width; upstream keeps this file at the limit. */
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import type {

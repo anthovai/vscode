@@ -1,21 +1,56 @@
 /**
  * The two things a supervisor reads off a launch: what the arguments mean, and what an exit
- * code means. Both are part of the ops contract in docs/reference/kingud-operations.md.
+ * code means. Both are part of the supervisor ops contract.
  */
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  KINGUD_EXIT_CONFIGURATION,
-  KINGUD_EXIT_FAILED,
-  parseArgs,
-  resolveKingudExitCode
-} from './kingud-entry'
+import { parseArgs } from './kingud-command-arguments'
+import { KINGUD_EXIT_CONFIGURATION } from './kingud-configuration-exit'
+import { KINGUD_EXIT_FAILED, resolveKingudExitCode } from './kingud-exit-code'
 import { startKingudWithLifecycle } from './kingud-lifecycle'
+import {
+  beginAgentSessionRuntimeRecord,
+  readAgentSessionRuntimeEnds
+} from '../runtime/agent-session-runtime-end-record'
 import { KingudBindAddressError } from './kingud-bind-address'
-import { KingudInstanceLockError } from './kingud-instance-lock'
+import { KingudInstanceLockError } from './kingud-data-root-privacy'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
 import { KingudBundledRuntimeError } from './kingud-bundled-runtime'
 
 describe('parseArgs', () => {
+  it('accepts help alongside valid server flags', () => {
+    expect(parseArgs(['--help'])).toEqual({ help: true })
+    expect(parseArgs(['-h'])).toEqual({ help: true })
+    expect(parseArgs(['--json', '--help', '--port', '0'])).toEqual({
+      json: true,
+      help: true,
+      port: 0
+    })
+  })
+
+  it('keeps help-looking values as values', () => {
+    expect(parseArgs(['--bind', '--help'])).toEqual({ bind: '--help' })
+    expect(parseArgs(['--pairing-address', '-h'])).toEqual({ pairingAddress: '-h' })
+    expect(parseArgs(['--project-root', '--help'])).toEqual({ projectRoot: '--help' })
+    expect(parseArgs(['--bind', '--help', '-h'])).toEqual({ bind: '--help', help: true })
+  })
+
+  it('still rejects invalid arguments and incompatible flags with help', () => {
+    expect(() => parseArgs(['--help', '--unknown'])).toThrow('Unknown argument: --unknown')
+    expect(() => parseArgs(['--help', '--port', 'bad'])).toThrow('--port expects an integer')
+    expect(() => parseArgs(['--help', '--bind'])).toThrow('--bind expects a value')
+    expect(() => parseArgs(['--help', '--recipe-json'])).toThrow(
+      'Recipe JSON output requires --project-root.'
+    )
+    for (const flag of ['--no-pairing', '--mobile-pairing']) {
+      expect(() => parseArgs(['--help', '--grant-desktop-control', flag])).toThrow(
+        '--grant-desktop-control applies only to the default runtime pairing offer'
+      )
+    }
+  })
+
   it('accepts --bind and leaves it unset when absent', () => {
     expect(parseArgs(['--bind', '0.0.0.0'])).toEqual({ bind: '0.0.0.0' })
     expect(parseArgs([])).toEqual({})
@@ -24,6 +59,30 @@ describe('parseArgs', () => {
       bind: '10.0.0.5',
       json: true
     })
+  })
+
+  it('takes the desktop serve flags kingu serve forwards', () => {
+    expect(parseArgs(['--recipe-json', '--project-root', '/work/app'])).toEqual({
+      recipeJson: true,
+      projectRoot: '/work/app'
+    })
+    expect(parseArgs(['--mobile-pairing'])).toEqual({ mobilePairing: true })
+    expect(parseArgs(['--no-pairing'])).toEqual({ noPairing: true })
+    expect(() => parseArgs(['--recipe-json'])).toThrow(
+      'Recipe JSON output requires --project-root.'
+    )
+    expect(() => parseArgs(['--project-root'])).toThrow('--project-root expects a value')
+  })
+
+  it('rejects contradictory pairing flags with the desktop serve message', () => {
+    expect(() => parseArgs(['--no-pairing', '--mobile-pairing'])).toThrow(
+      'Use either --mobile-pairing or --no-pairing, not both.'
+    )
+    for (const flag of ['--no-pairing', '--mobile-pairing']) {
+      expect(() => parseArgs(['--recipe-json', '--project-root', '/work/app', flag])).toThrow(
+        `Recipe JSON output requires runtime pairing; remove ${flag}.`
+      )
+    }
   })
 
   it('rejects --bind with no value rather than silently binding the default', () => {
@@ -103,6 +162,30 @@ describe('kingud lifecycle cleanup', () => {
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
     expect(cleanupHost).toHaveBeenCalledOnce()
+  })
+
+  it("records the runtime's end before its stop waits on anything", async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kingud-runtime-end-'))
+    try {
+      beginAgentSessionRuntimeRecord(directory, 'kingud-runtime', 1)
+      let endSeenByCleanup: string | undefined
+      const handle = await startKingudWithLifecycle(
+        async (registerCleanup) => {
+          registerCleanup(async () => {
+            endSeenByCleanup = readAgentSessionRuntimeEnds(directory)?.get('kingud-runtime')
+          })
+          return {}
+        },
+        vi.fn(async () => {})
+      )
+
+      await handle.stop()
+
+      // A chat whose agent dies with this stop reads as a restart, not a crash.
+      expect(endSeenByCleanup).toBe('quit')
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('keeps the host aware of failed runtime teardown so it cannot release profile admission', async () => {

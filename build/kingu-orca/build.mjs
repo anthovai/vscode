@@ -101,8 +101,33 @@ const external = [
 	'sherpa-onnx',
 	// Ships a UMD wrapper whose require() esbuild cannot follow; node resolves it.
 	'jsonc-parser',
+	// The ADE's own native addon (Windows DACLs), which it resolves at runtime and only on Windows.
+	'@kingu/windows-security',
 	'*.node',
 ];
+
+/**
+ * The ADE's workspace packages (`src/packages/*`, vendored as `kingu-orca/packages/*`).
+ *
+ * The ADE links them through pnpm and builds them to `dist/` before its own build;
+ * here there is no workspace link and no `dist/`, so each import is resolved the way
+ * the ADE's own dev build does, through the package's `kingu-source` export.
+ */
+const workspacePackagePlugin = {
+	name: 'kingu-orca-workspace-packages',
+	setup(build) {
+		build.onResolve({ filter: /^@kingu\/process-host(\/.*)?$/ }, args => {
+			const dir = path.join(vendored, 'packages', 'process-host');
+			const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+			const subpath = `.${args.path.slice('@kingu/process-host'.length)}`;
+			const target = manifest.exports?.[subpath]?.['kingu-source'];
+			if (!target) {
+				throw new Error(`kingu-orca: @kingu/process-host has no kingu-source export for ${subpath}`);
+			}
+			return { path: path.join(dir, target) };
+		});
+	},
+};
 
 /** Everything the bundles agree on; only the entry and the output differ. */
 function shared(bundleDir) {
@@ -112,7 +137,7 @@ function shared(bundleDir) {
 		format: 'cjs',
 		target: 'node20',
 		external,
-		plugins: [createAssetPlugin(bundleDir)],
+		plugins: [createAssetPlugin(bundleDir), workspacePackagePlugin],
 		sourcemap: true,
 		logLevel: 'info',
 		metafile: true,
@@ -203,25 +228,41 @@ fs.mkdirSync(sidecarDir, { recursive: true });
 fs.writeFileSync(path.join(vendored, 'out', 'package.json'), JSON.stringify({ type: 'commonjs' }));
 const sidecars = await esbuild.build({
 	...shared(sidecarDir),
+	// Mirrors `MAIN_BUILD_ENTRY_POINTS` in the ADE's config/build-plugins/main-build-entry-points.ts.
 	entryPoints: {
 		'daemon-entry': path.join(vendored, 'main/daemon/daemon-entry.ts'),
 		'plugin-host-entry': path.join(vendored, 'main/plugins/plugin-host-entry.ts'),
 		'computer-sidecar': path.join(vendored, 'main/computer/sidecar-entry.ts'),
 		'stt-worker': path.join(vendored, 'main/speech/stt-worker.ts'),
 		'warp-theme-parser-worker': path.join(vendored, 'main/warp-themes/warp-theme-parser-worker.ts'),
-		'session-scanner-opencode-sqlite-worker-entry': path.join(vendored, 'main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts'),
-		'session-scanner-worker-entry': path.join(vendored, 'main/ai-vault/session-scanner-worker-entry.ts'),
+		'foreign-sqlite-reader-entry': path.join(vendored, 'main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'),
 		'session-scanner-service-entry': path.join(vendored, 'main/ai-vault/session-scanner-service-entry.ts'),
 		'wsl-transcript-fs-process-entry': path.join(vendored, 'main/native-chat/wsl-transcript-fs-process-entry.ts'),
 		'port-scan-command-worker-entry': path.join(vendored, 'main/ports/port-scan-command-worker-entry.ts'),
+		'worker-thread-child-process-entry': path.join(vendored, 'main/worker-thread-child-process/worker-thread-child-process-entry.ts'),
 		'usage-scan-worker-entry': path.join(vendored, 'main/usage/usage-scan-worker-entry.ts'),
+		'claude-profile-setup-worker-entry': path.join(vendored, 'main/claude-accounts/claude-profile-setup-worker-entry.ts'),
 		'profile-state-backup-worker-entry': path.join(vendored, 'main/persistence/profile-state/profile-state-backup-worker-entry.ts'),
 		'profile-state-writer-worker-entry': path.join(vendored, 'main/persistence/profile-state/profile-state-writer-worker-entry.ts'),
 		'parcel-watcher-process-entry': path.join(vendored, 'main/ipc/parcel-watcher-process-entry.ts'),
+		'kingud/kingud-local-serve-selection-entry': path.join(vendored, 'main/kingud/kingud-local-serve-selection-entry.ts'),
 		'main-thread-hang-watchdog-entry': path.join(vendored, 'main/hang-watchdog/main-thread-hang-watchdog-entry.ts'),
+		// The modules the ADE's CLI imports (`CLI_MAIN_ENTRY_NAMES` in its plain-node-entry-guard).
 		'agent-hooks/managed-agent-hook-controls': path.join(vendored, 'main/agent-hooks/managed-agent-hook-controls.ts'),
-		'codex/managed-home-shell-preflight': path.join(vendored, 'main/codex/managed-home-shell-preflight.ts'),
+		'gitlab/project-ref-parser': path.join(vendored, 'main/gitlab/project-ref-parser.ts'),
+		'kingu-profiles/profile-index-store': path.join(vendored, 'main/kingu-profiles/profile-index-store.ts'),
 		'claude-accounts/keychain': path.join(vendored, 'main/claude-accounts/keychain.ts'),
+		'persistence/profile-state/profile-state-access': path.join(vendored, 'main/persistence/profile-state/profile-state-access.ts'),
+		'persistence/profile-state/profile-state-active-location': path.join(vendored, 'main/persistence/profile-state/profile-state-active-location.ts'),
+		'persistence/profile-state/profile-state-storage-classification': path.join(vendored, 'main/persistence/profile-state/profile-state-storage-classification.ts'),
+		'persistence/profile-state/profile-state-offline-settings': path.join(vendored, 'main/persistence/profile-state/profile-state-offline-settings.ts'),
+		'persistence/profile-state/profile-state-backup-path': path.join(vendored, 'main/persistence/profile-state/profile-state-backup-path.ts'),
+		'persistence/profile-state/profile-state-database-recovery': path.join(vendored, 'main/persistence/profile-state/profile-state-database-recovery.ts'),
+		'persistence/profile-state/profile-state-domain-reader': path.join(vendored, 'main/persistence/profile-state/profile-state-domain-reader.ts'),
+		'persistence/profile-state/profile-state-recovery-command': path.join(vendored, 'main/persistence/profile-state/profile-state-recovery-command.ts'),
+		'persistence/profile-state/legacy-json/profile-state-export-path': path.join(vendored, 'main/persistence/profile-state/legacy-json/profile-state-export-path.ts'),
+		'persistence/profile-state/legacy-json/profile-state-recovery': path.join(vendored, 'main/persistence/profile-state/legacy-json/profile-state-recovery.ts'),
+		'startup/http1-compatibility-marker': path.join(vendored, 'main/startup/http1-compatibility-marker.ts'),
 		'browser-window-close-preload': path.join(vendored, 'preload/browser-window-close.ts'),
 		'doc-preview-link-preload': path.join(vendored, 'preload/doc-preview-link.ts'),
 	},

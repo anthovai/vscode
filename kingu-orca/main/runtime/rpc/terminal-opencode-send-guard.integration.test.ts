@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KinguRuntimeService } from '../kingu-runtime'
 import { RpcDispatcher } from './dispatcher'

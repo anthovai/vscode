@@ -3,7 +3,7 @@ import type { AgentStatusOrchestrationContext } from '../../../../../../shared/a
 import { AgentHookServer } from '../../../../../agent-hooks/server'
 import type { KinguRuntimeService } from '../../../../kingu-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { KinguRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../kingu-runtime-get-orchestration-dispatch-authority'
+import { KinguRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
 import {
   AgentStatusObservedPaneIdentityCapture,
   AgentStatusObservedPaneIdentities,

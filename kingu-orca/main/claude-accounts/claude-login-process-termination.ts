@@ -1,4 +1,5 @@
-import { spawnProcess, type ChildProcessHandle } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@kingu/process-host'
+import type { ChildProcessHandle } from '@kingu/process-host/process-spec'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'

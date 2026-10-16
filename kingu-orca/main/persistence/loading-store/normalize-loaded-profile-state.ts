@@ -3,13 +3,15 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import { normalizeKingudMigrationEvictedReceipts } from '../../../shared/kingud-migration-evicted-receipts'
+import { normalizeKingudMigrationImportReceipts } from '../../../shared/kingud-migration-manifest-validation'
+import { normalizeKingudMigrationStagedCatalogs } from '../../../shared/kingud-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
 } from '../leasing-ssh-ptys/ssh-normalization'
 import {
-  normalizeClaudeLivePtySessionIds,
   normalizeLegacyPaneKeyAliasEntries,
   normalizeMigrationUnsupportedPtyEntries
 } from '../restoring-sessions/pane-alias-normalization'
@@ -99,13 +101,21 @@ export function normalizeLoadedProfileState(
       .map(normalizeSshRemotePtyLease)
       .filter((lease): lease is SshRemotePtyLease => lease !== null),
     sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
-    claudeLivePtySessionIds: normalizeClaudeLivePtySessionIds(parsed.claudeLivePtySessionIds),
     migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
       parsed.migrationUnsupportedPtyEntries
     ),
     legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
+    kingudMigrationImportReceipts: normalizeKingudMigrationImportReceipts(
+      parsed.kingudMigrationImportReceipts
+    ),
+    kingudMigrationEvictedReceipts: normalizeKingudMigrationEvictedReceipts(
+      parsed.kingudMigrationEvictedReceipts
+    ),
+    kingudMigrationStagedCatalogs: normalizeKingudMigrationStagedCatalogs(
+      parsed.kingudMigrationStagedCatalogs
+    ),
     onboarding: normalizedOnboarding
   }
 }

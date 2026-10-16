@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the Kingu rebrand lengthens fixture strings past the formatter width; upstream keeps this file at the limit. */
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'

@@ -1,8 +1,12 @@
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { resolveKingudBrowserProvider } from './kingud-browser-provider'
+import { startKingudBrowserProvider } from './kingud-browser-startup'
+import { KingudRuntimeLifetime, type KingudRuntimeCleanup } from './kingud-runtime-lifetime'
+import type { KingudManagedStopInstance } from '../../shared/kingud-stop-request'
 import { acquireKingudInstanceLock } from './kingud-instance-lock'
 import { KINGUD_BUNDLED_LAUNCHER_ENV } from './kingud-bundled-runtime'
 import { resolveKingudExitCode } from './kingud-exit-code'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { KINGUD_SHUTDOWN_DEADLINE_MS } from './kingud-stop-deadlines'
 import {
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
@@ -19,29 +23,39 @@ function createIdempotentKingudCleanup(cleanup: () => Promise<void>): () => Prom
   }
 }
 
-export const KINGUD_SHUTDOWN_DEADLINE_MS = 15_000
+export { KINGUD_SHUTDOWN_DEADLINE_MS }
 
-/** A launcher and its child can both receive the same process-group or service stop signal. */
+/** True when this call began the stop; false when another source already owns it. */
+export type KingudShutdownTrigger = (reason: string, onFailed?: () => void) => boolean
+
+/**
+ * A launcher and its child can both receive the same process-group or service stop signal.
+ * Returns the trigger stop-request listeners share, so every source runs one bounded stop.
+ * `onFailed` runs before a failed or overdue stop exits, so a caller can retract a clean record.
+ */
 export function installKingudShutdownSignals(
   stop: () => Promise<void>,
   deadlineMs = KINGUD_SHUTDOWN_DEADLINE_MS
-): void {
+): KingudShutdownTrigger {
   let stopping = false
-  const shutdown = (signal: string): void => {
+  const shutdown: KingudShutdownTrigger = (signal, onFailed) => {
     if (stopping) {
-      return
+      return false
     }
     stopping = true
     setTimeout(() => {
       console.error(`kingud: shutdown after ${signal} exceeded ${deadlineMs}ms — exiting`)
+      onFailed?.()
       process.exit(1)
     }, deadlineMs)
     stop()
       .then(() => process.exit(0))
       .catch((error) => {
         console.error(`kingud: shutdown after ${signal} failed:`, error)
+        onFailed?.()
         process.exit(resolveKingudExitCode(error))
       })
+    return true
   }
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
@@ -55,26 +69,28 @@ export function installKingudShutdownSignals(
       shutdown('launcher disconnect')
     }
   }
+  return shutdown
 }
 
 export async function startKingudWithLifecycle<T extends object>(
-  start: (registerRuntimeCleanup: (cleanup: () => Promise<void>) => void) => Promise<T>,
+  start: (registerRuntimeCleanup: (cleanup: KingudRuntimeCleanup) => void) => Promise<T>,
   cleanupHost: (runtimeCleanupSucceeded: boolean) => Promise<void>
 ): Promise<T & { stop(): Promise<void> }> {
-  let cleanupRuntime = async (): Promise<void> => {}
+  // Runtime resources stop in reverse registration order before any host resource.
+  const runtime = new KingudRuntimeLifetime()
   const cleanup = createIdempotentKingudCleanup(async () => {
+    // First, before any wait: chats whose agent dies with this stop read as a restart, not a crash.
+    recordAgentSessionRuntimeEnd('quit')
     let runtimeCleanupSucceeded = false
     try {
-      await cleanupRuntime()
+      await runtime.stop()
       runtimeCleanupSucceeded = true
     } finally {
       await cleanupHost(runtimeCleanupSucceeded)
     }
   })
   try {
-    const handle = await start((nextCleanup) => {
-      cleanupRuntime = nextCleanup
-    })
+    const handle = await start((nextCleanup) => runtime.add(nextCleanup))
     return { ...handle, stop: cleanup }
   } catch (error) {
     try {
@@ -87,51 +103,50 @@ export async function startKingudWithLifecycle<T extends object>(
   }
 }
 
-/** Keep profile admission until every runtime writer has stopped. */
+/** Keep profile admission and the instance lock until every runtime writer has stopped. */
 export async function startKingudWithHost<T extends object>(
   userDataPath: string,
-  start: (registerCleanup: (cleanup: () => Promise<void>) => void) => Promise<T>,
+  start: (registerCleanup: (cleanup: KingudRuntimeCleanup) => void) => Promise<T>,
   runQuitHandlers: () => void
-): Promise<T & { stop(): Promise<void> }> {
+): Promise<T & { stop(): Promise<void>; instance: KingudManagedStopInstance }> {
   const instanceLock = acquireKingudInstanceLock(userDataPath)
+  const { pid, startedAtMs, nonce } = instanceLock.record
+  const instance = { pid, startedAtMs, nonce, lockPath: instanceLock.path }
   let admission: ProfileStateRuntimeAdmission | undefined
-  let browserProvider: Awaited<ReturnType<typeof resolveKingudBrowserProvider>> | undefined
+  let browserProvider: ReturnType<typeof startKingudBrowserProvider> | undefined
   return startKingudWithLifecycle(
     async (registerCleanup) => {
       admission = acquireProfileStateRuntimeAdmission(userDataPath)
-      browserProvider = await resolveKingudBrowserProvider({ userDataPath })
-      const provider = browserProvider
-      setRuntimeBrowserCommandsFactory(provider?.factory ?? null, {
-        headless: provider !== null,
-        ...(provider ? { isAvailable: () => provider.isAvailable() } : {})
-      })
-      return start(registerCleanup)
+      // Why not awaited: a desktop sidecar's authorization UI must not hold RPC readiness hostage.
+      browserProvider = startKingudBrowserProvider({ userDataPath })
+      return { ...(await start(registerCleanup)), instance }
     },
     async (runtimeCleanupSucceeded) => {
-      try {
-        await browserProvider?.stop()
-      } finally {
-        setRuntimeBrowserCommandsFactory(null)
-        runQuitHandlers()
-        try {
-          // Failed teardown excludes recovery until the process actually exits.
-          if (runtimeCleanupSucceeded) {
-            admission?.release()
-          }
-        } finally {
+      // Failed teardown keeps both fences until the process actually exits.
+      const host = new KingudRuntimeLifetime(() => {
+        if (runtimeCleanupSucceeded) {
           instanceLock.release()
         }
-      }
+      })
+      host.add(({ failed }) => {
+        if (runtimeCleanupSucceeded && !failed) {
+          admission?.release()
+        }
+      })
+      host.add(() => runQuitHandlers())
+      host.add(() => setRuntimeBrowserCommandsFactory(null))
+      host.add(() => browserProvider?.stop())
+      await host.stop()
     }
   )
 }
 
 export async function flushKingudProfileStoreForShutdown(store: {
-  flushFinalOrThrowAsync(options?: { exportJsonCompatibility?: boolean }): Promise<void>
+  flushFinalOrThrowAsync(): Promise<void>
   freezeWritesAsync(): Promise<void>
 }): Promise<void> {
   try {
-    await store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+    await store.flushFinalOrThrowAsync()
   } finally {
     await store.freezeWritesAsync()
   }

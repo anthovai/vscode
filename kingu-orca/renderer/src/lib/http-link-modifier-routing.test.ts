@@ -2,58 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
-  registerWorkspaceHttpLinkBrowserOpener,
-  resolveModifierRouting
+  registerWorkspaceHttpLinkBrowserOpener
 } from './http-link-routing'
-
-describe('resolveModifierRouting', () => {
-  it('is inert without the modifier regardless of settings', () => {
-    for (const openLinksInApp of [true, false]) {
-      for (const inverts of [true, false]) {
-        expect(resolveModifierRouting(false, openLinksInApp, inverts)).toEqual({
-          wantsKingu: false,
-          wantsSystemBrowser: false
-        })
-      }
-    }
-  })
-
-  // Why: the setting ships off, so the historical one-way escape hatch must be
-  // byte-for-byte unchanged for every existing user.
-  it('always forces the system browser when inverting is off', () => {
-    expect(resolveModifierRouting(true, true, false)).toEqual({
-      wantsKingu: false,
-      wantsSystemBrowser: true
-    })
-    expect(resolveModifierRouting(true, false, false)).toEqual({
-      wantsKingu: false,
-      wantsSystemBrowser: true
-    })
-  })
-
-  it('still reaches the system browser when inverting and links open in Kingu', () => {
-    expect(resolveModifierRouting(true, true, true)).toEqual({
-      wantsKingu: false,
-      wantsSystemBrowser: true
-    })
-  })
-
-  it('reaches Kingu when inverting and links open in the system browser', () => {
-    expect(resolveModifierRouting(true, false, true)).toEqual({
-      wantsKingu: true,
-      wantsSystemBrowser: false
-    })
-  })
-
-  it('only diverges from the legacy behavior when links open externally', () => {
-    expect(resolveModifierRouting(true, true, true)).toEqual(
-      resolveModifierRouting(true, true, false)
-    )
-    expect(resolveModifierRouting(true, false, true)).not.toEqual(
-      resolveModifierRouting(true, false, false)
-    )
-  })
-})
 
 describe('modifier routing across link source owners', () => {
   const openUrlMock = vi.fn()

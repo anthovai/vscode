@@ -1,17 +1,11 @@
 import type { KinguCloudAuthConfig } from './profile-cloud-auth-config'
 import type { ActiveKinguProfileState } from './profile-index-store'
-import {
-  clearKinguCloudSession,
-  type KinguCloudSession,
-  readKinguCloudSession,
-  saveKinguCloudSessionIfCurrent
-} from './profile-cloud-session-store'
+import { kinguCloudSessionKey, type KinguCloudSession } from './profile-cloud-session-store'
 import {
   isAmbiguousCloudRequestFailure,
   KinguCloudRequestError,
   refreshKinguCloudSession
 } from './profile-cloud-client'
-import { linkKinguProfileToCloud } from './profile-cloud-index'
 import type { KinguCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 import {
   AmbiguousRefreshReplayBlockedError,
@@ -20,12 +14,13 @@ import {
   recordAmbiguousRefreshAttempt,
   wasRefreshTokenAmbiguouslyAttempted
 } from './profile-cloud-refresh-replay-guard'
-import {
-  captureCloudSessionMutation,
-  cloudSessionIdentity,
-  tombstoneCloudSession
-} from './profile-cloud-session-mutation'
 import { emitKinguCloudSessionInvalidated } from './profile-cloud-session-invalidation'
+import {
+  commitCloudSessionRotation,
+  readCloudSession,
+  signOutRevokedCloudSession,
+  takeCloudSessionTicket
+} from './profile-cloud-session-owner'
 
 const CLOUD_SESSION_REFRESH_SKEW_MS = 60_000
 
@@ -56,36 +51,15 @@ class StaleCloudSessionMutationError extends Error {
   }
 }
 
-function cloudSessionRefreshKey(profileId: string, userDataPath: string): string {
-  return `${userDataPath}\0${profileId}`
-}
-
-// Why: with refresh-token rotation, only the session that actually failed may
-// clear the store; otherwise a loser of a concurrent refresh race would wipe
-// the winner's freshly rotated session.
 function clearCloudSessionIfUnchanged(
   profileId: string,
   userDataPath: string,
-  failed: KinguCloudSession,
-  active: ActiveKinguProfileState
+  failed: KinguCloudSession
 ): void {
-  const current = readKinguCloudSession(profileId, userDataPath)
-  if (current.status === 'found' && current.session.refreshToken !== failed.refreshToken) {
+  if (!signOutRevokedCloudSession(profileId, userDataPath, failed)) {
     return
   }
-  // A session we were denied is not a session we may delete: the token we would be clearing might
-  // not even be the one that failed, and `clearKinguCloudSession` unlinks the file outright.
-  if (current.status === 'unreadable') {
-    return
-  }
-  if (active.profile.cloud) {
-    tombstoneCloudSession(
-      cloudSessionIdentity(active.profile.id, active.profile.cloud),
-      userDataPath
-    )
-  }
-  clearKinguCloudSession(profileId, userDataPath)
-  forgetAmbiguousRefreshAttempt(cloudSessionRefreshKey(profileId, userDataPath))
+  forgetAmbiguousRefreshAttempt(kinguCloudSessionKey(profileId, userDataPath))
   // Why: the renderer cached auth status at startup; without this it keeps
   // showing "Connected" until the app restarts.
   emitKinguCloudSessionInvalidated()
@@ -103,7 +77,7 @@ function warnIfPossibleRefreshReplay(
   if (!(error instanceof KinguCloudRequestError) || error.statusCode !== 401) {
     return
   }
-  const key = cloudSessionRefreshKey(profileId, userDataPath)
+  const key = kinguCloudSessionKey(profileId, userDataPath)
   if (!wasRefreshTokenAmbiguouslyAttempted(key, failed.refreshToken)) {
     return
   }
@@ -146,7 +120,7 @@ async function attemptCloudSessionRefresh(
       // Another caller may have rotated the stored session while this attempt
       // was in flight; that result is the one to use, and the token this attempt
       // held is no longer ours to send again.
-      const current = readKinguCloudSession(active.profile.id, userDataPath)
+      const current = readCloudSession(active.profile.id, userDataPath)
       if (current.status === 'found' && current.session.refreshToken !== session.refreshToken) {
         return { status: 'rotated-elsewhere', session: current.session }
       }
@@ -166,13 +140,13 @@ async function refreshStoredCloudSession(
   // Why: refresh tokens rotate, so concurrent refreshes must single-flight;
   // a second POST with the same refresh token can trip server reuse detection
   // and revoke the whole token family.
-  const key = cloudSessionRefreshKey(active.profile.id, userDataPath)
+  const key = kinguCloudSessionKey(active.profile.id, userDataPath)
   const inflight = inflightCloudSessionRefreshes.get(key)
   if (inflight) {
     return inflight
   }
   const task = (async () => {
-    const current = readKinguCloudSession(active.profile.id, userDataPath)
+    const current = readCloudSession(active.profile.id, userDataPath)
     if (current.status === 'found' && current.session.refreshToken !== session.refreshToken) {
       // Another caller already rotated this session; reuse its result.
       return current.session
@@ -183,36 +157,30 @@ async function refreshStoredCloudSession(
     if (blocksAmbiguousRefreshReplay(key, session.refreshToken)) {
       throw new AmbiguousRefreshReplayBlockedError()
     }
-    const expectedIdentity = cloudSessionIdentity(active.profile.id, active.profile.cloud)
-    const snapshot = captureCloudSessionMutation(expectedIdentity, userDataPath)
+    const linked = active.profile.cloud
+    const ticket = takeCloudSessionTicket(active.profile.id, userDataPath)
     const attempt = await attemptCloudSessionRefresh(key, config, active, userDataPath, session)
     if (attempt.status === 'rotated-elsewhere') {
       return attempt.session
     }
     const refreshed = attempt.response
-    const refreshedIdentity = cloudSessionIdentity(active.profile.id, refreshed.cloud)
     if (
-      refreshedIdentity.cloudUserId !== expectedIdentity.cloudUserId ||
-      refreshedIdentity.cloudProfileId !== expectedIdentity.cloudProfileId ||
-      refreshedIdentity.organizationId !== expectedIdentity.organizationId
+      refreshed.cloud.userId !== linked.userId ||
+      refreshed.cloud.cloudProfileId !== linked.cloudProfileId
     ) {
       throw new StaleCloudSessionMutationError()
     }
-    const nextSession = {
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      organizations: refreshed.organizations,
-      capabilities: refreshed.capabilities
-    }
-    if (
-      saveKinguCloudSessionIfCurrent(active.profile.id, userDataPath, nextSession, snapshot) ===
-      null
-    ) {
+    const saved = commitCloudSessionRotation(
+      active.profile.id,
+      userDataPath,
+      ticket,
+      session,
+      refreshed
+    )
+    if (!saved) {
       throw new StaleCloudSessionMutationError()
     }
-    linkKinguProfileToCloud(active.profile.id, refreshed.cloud, userDataPath)
-    return nextSession
+    return saved
   })()
   inflightCloudSessionRefreshes.set(key, task)
   try {
@@ -227,7 +195,7 @@ export async function readFreshKinguCloudSession(
   active: ActiveKinguProfileState,
   userDataPath: string
 ): Promise<FreshCloudSessionResult> {
-  const session = readKinguCloudSession(active.profile.id, userDataPath)
+  const session = readCloudSession(active.profile.id, userDataPath)
   if (session.status !== 'found') {
     return { status: 'reconnect-required' }
   }
@@ -242,7 +210,7 @@ export async function readFreshKinguCloudSession(
   } catch (error) {
     if (isKinguCloudAuthFailure(error)) {
       warnIfPossibleRefreshReplay(active.profile.id, userDataPath, session.session, error)
-      clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session.session, active)
+      clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session.session)
       return { status: 'reconnect-required' }
     }
     throw error
@@ -263,7 +231,7 @@ export async function forceRefreshKinguCloudSession(
   } catch (error) {
     if (isKinguCloudAuthFailure(error)) {
       warnIfPossibleRefreshReplay(active.profile.id, userDataPath, session, error)
-      clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session, active)
+      clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session)
       return { status: 'reconnect-required' }
     }
     throw error
@@ -303,7 +271,7 @@ export async function runWithFreshKinguCloudSession<T>(
       // the user out for it would destroy a valid session, so let it surface
       // as a failed operation instead.
       if (retryError instanceof KinguCloudRequestError && retryError.statusCode === 401) {
-        clearCloudSessionIfUnchanged(active.profile.id, userDataPath, refreshed.session, active)
+        clearCloudSessionIfUnchanged(active.profile.id, userDataPath, refreshed.session)
         return { status: 'reconnect-required' }
       }
       throw retryError

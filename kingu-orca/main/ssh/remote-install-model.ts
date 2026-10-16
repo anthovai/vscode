@@ -1,11 +1,13 @@
 /**
- * The two things Kingu installs into `~/.kingu-remote/`, and the rules that keep them from
+ * The things Kingu installs into `~/.kingu-remote/`, and the rules that keep them from
  * touching each other.
  *
- * `docs/design/shipping-kingud.html` §06 settles that on-disk coexistence is permanent: the
- * relay is the dumb execution host for SSH-target users, kingud is the peer for paired
- * environments, and no plan item retires either. So `relay-<version>/` and `kingud-<version>/`
- * sit side by side forever, and the namespace has to be a parameter rather than a literal.
+ * Design D10 (to be tracked in docs/reference/remote-server-install-model.md): the relay and
+ * kingud converge into one server package; on the host that is `server-<version>/` plus the
+ * shared `runtimes/node-<sha256>/` store. Legacy `relay-*` / `kingud-*` directories belong to a
+ * migration sweep that deletes only on an `exited` verdict, handed over in two releases: this
+ * one lists them as diagnostics only. Until then each is its own namespace, so the prefix has
+ * to be a parameter rather than a literal.
  *
  * GC ownership is the trap that parameterization creates. Each model garbage-collects ONLY
  * its own directories — see `remoteInstallDirOwner`. Relay's regex happened to be narrow
@@ -17,12 +19,14 @@ import {
   relayArtifactFilenames,
   RELAY_INSTALL_COMPLETE_FILENAME,
   RELAY_VERSION_FILENAME
-} from '../../shared/relay-artifacts'
+} from './relay-install-artifacts'
 import {
   kingudArtifactFilenames,
   KINGUD_INSTALL_COMPLETE_FILENAME,
+  KINGUD_RUNTIMES_DIRNAME,
   KINGUD_VERSION_FILENAME
 } from '../../shared/kingud-artifacts'
+import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
 export type RemoteInstallModelId = 'relay' | 'kingud'
 
@@ -35,7 +39,7 @@ export type RemoteInstallModel = {
   readonly versionFilename: string
   readonly installCompleteFilename: string
   /** Files whose absence means a torn install, so the probe forces a re-deploy. */
-  requiredArtifacts(isWindows: boolean): string[]
+  requiredArtifacts(host: RemoteHostPlatform): string[]
 }
 
 export const RELAY_INSTALL_MODEL: RemoteInstallModel = {
@@ -44,7 +48,7 @@ export const RELAY_INSTALL_MODEL: RemoteInstallModel = {
   nativeDepsPackageName: 'kingu-relay',
   versionFilename: RELAY_VERSION_FILENAME,
   installCompleteFilename: RELAY_INSTALL_COMPLETE_FILENAME,
-  requiredArtifacts: (isWindows) => relayArtifactFilenames(isWindows)
+  requiredArtifacts: (host) => relayArtifactFilenames(isWindowsRemoteHost(host))
 }
 
 export const KINGUD_INSTALL_MODEL: RemoteInstallModel = {
@@ -53,7 +57,8 @@ export const KINGUD_INSTALL_MODEL: RemoteInstallModel = {
   nativeDepsPackageName: 'kingu-kingud',
   versionFilename: KINGUD_VERSION_FILENAME,
   installCompleteFilename: KINGUD_INSTALL_COMPLETE_FILENAME,
-  requiredArtifacts: (isWindows) => kingudArtifactFilenames(isWindows ? 'win32' : '')
+  // libc changes no file name, so `<os>-<arch>` names every slot file.
+  requiredArtifacts: (host) => kingudArtifactFilenames(`${host.os}-${host.arch}`)
 }
 
 export const REMOTE_INSTALL_MODELS: readonly RemoteInstallModel[] = [
@@ -95,6 +100,12 @@ export function remoteInstallVersionDirRegex(model: RemoteInstallModel): RegExp 
   return new RegExp(`^${model.dirPrefix}-(${VERSION_PATTERN})$`)
 }
 
+/** A strictly named leftover of one model's interrupted GC rename; safe to delete on sight. */
+export function remoteInstallGcTombstoneRegex(model: RemoteInstallModel): RegExp {
+  assertSafeDirPrefix(model.dirPrefix)
+  return new RegExp(`^${model.dirPrefix}-(${VERSION_PATTERN})${TOMBSTONE_PATTERN}$`)
+}
+
 /** What the remote listing is allowed to return: live dirs plus their tombstones. */
 export function remoteInstallListingRegexSource(model: RemoteInstallModel): string {
   assertSafeDirPrefix(model.dirPrefix)
@@ -102,15 +113,18 @@ export function remoteInstallListingRegexSource(model: RemoteInstallModel): stri
 }
 
 /**
- * Which model owns a directory found in `~/.kingu-remote/`, or null for anything neither
- * model created.
+ * Which owner a directory found in `~/.kingu-remote/` belongs to, or null for anything no
+ * owner created.
  *
- * This is the answer to §06 falsifier 1's first half: **the model that created a directory
- * owns it, and nothing else may delete it.** A relay GC pass that saw `kingud-0.1.0+abc`
- * would be looking at the live install of a peer whose lifecycle it has no view into — the
- * SSH-execution-boundary collapse in directory form.
+ * Design D10: **the model that created a directory owns it, and nothing else may delete it**
+ * (amended only in the release after the two-step hand-over). A relay GC pass that saw
+ * `kingud-0.1.0+abc` would be looking at the live install of a peer whose lifecycle it has no
+ * view into — the SSH-execution-boundary collapse in directory form.
  */
-export function remoteInstallDirOwner(dirName: string): RemoteInstallModelId | null {
+export function remoteInstallDirOwner(dirName: string): RemoteInstallDirOwner | null {
+  if (dirName === KINGUD_RUNTIMES_DIRNAME) {
+    return 'runtimes'
+  }
   for (const model of REMOTE_INSTALL_MODELS) {
     if (new RegExp(remoteInstallListingRegexSource(model)).test(dirName)) {
       return model.id
@@ -124,11 +138,17 @@ export function remoteInstallGcPermits(model: RemoteInstallModel, dirName: strin
   return remoteInstallDirOwner(dirName) === model.id
 }
 
-export type RemoteInstallInventory = Record<RemoteInstallModelId | 'unknown', string[]>
+/**
+ * `runtimes` is the shared Node store (design D5). No version-dir model owns it, so neither
+ * model's GC can list or delete it; only `remote-node-runtime-store-gc.ts` collects inside it.
+ */
+export type RemoteInstallDirOwner = RemoteInstallModelId | 'runtimes'
+
+export type RemoteInstallInventory = Record<RemoteInstallDirOwner | 'unknown', string[]>
 
 /** Group a raw `~/.kingu-remote/` listing by owning model, for diagnostics and the client's choice. */
 export function inventoryRemoteInstallDirs(dirNames: readonly string[]): RemoteInstallInventory {
-  const inventory: RemoteInstallInventory = { relay: [], kingud: [], unknown: [] }
+  const inventory: RemoteInstallInventory = { relay: [], kingud: [], runtimes: [], unknown: [] }
   for (const name of dirNames) {
     const owner = remoteInstallDirOwner(name)
     if (owner) {

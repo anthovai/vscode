@@ -5,20 +5,24 @@
  * current owner; SIGKILL would skip flushing state and releasing the instance lock.
  */
 import { shellEscape } from './ssh-connection-utils'
-import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { KINGUD_READINESS_FILENAME } from './kingud-remote-launch'
-import { selectKingudSlotRuntimeCommand } from './kingud-remote-runtime'
 import {
-  assertPosixKingudHost as assertPosixHost,
-  KINGUD_PID_FILENAME,
-  posixProcessAliveShellFunction
-} from './kingud-remote-host-support'
+  KINGUD_STOP_REQUEST_FILENAME,
+  KINGUD_STOP_REQUESTS_CAPABILITY
+} from '../../shared/kingud-stop-request'
+import { selectKingudSlotRuntimeCommand } from './kingud-remote-runtime'
+import { KINGUD_PID_FILENAME, posixProcessAliveShellFunction } from './kingud-remote-host-support'
+import { kingudWindowsSlotOpCommand } from './kingud-remote-windows-node'
 
 /**
- * Signal the kingud recorded in a version dir and wait for it to go.
+ * Ask the kingud recorded in a version dir to stop, and wait for it to go.
  *
+ * A build whose readiness advertises `health.stopRequests` is asked through the slot-local
+ * request file, which only that kingud watches; older builds keep receiving SIGTERM. Both need
+ * the readiness PID to corroborate the launcher's PID first, so a reused PID is never stopped.
  * `justLaunched` is only for this client's fixed exec launcher, including pre-readiness exits.
- * Incumbents need their own readiness PID to corroborate the launcher's PID before any signal.
+ * Windows has no graceful signal, so it only ever writes the request file.
  */
 export function stopKingudCommand(
   host: RemoteHostPlatform,
@@ -28,29 +32,46 @@ export function stopKingudCommand(
     | { justLaunched?: false; nodePath: string }
   )
 ): string {
-  assertPosixHost(host)
+  if (isWindowsRemoteHost(host)) {
+    // Windows: stop-request file only; TerminateProcess skips durable shutdown and leaks the instance lock.
+    return kingudWindowsSlotOpCommand(host, remoteInstallDir, 'stop', [
+      remoteInstallDir,
+      String(options.waitSeconds),
+      options.justLaunched === true ? '1' : '0'
+    ])
+  }
   const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, KINGUD_PID_FILENAME))
   const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, KINGUD_READINESS_FILENAME))
+  const requestFile = shellEscape(
+    joinRemotePath(host, remoteInstallDir, KINGUD_STOP_REQUEST_FILENAME)
+  )
   const readRuntimePid = [
     `const r = JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'));`,
     `const pid = r?.type === 'kingu_server_ready' ? r.health?.pid : null;`,
     `if (!Number.isSafeInteger(pid) || pid <= 1) process.exit(1);`,
-    `process.stdout.write(String(pid));`
+    `const mode = r.health?.stopRequests === ${KINGUD_STOP_REQUESTS_CAPABILITY} ? 'request' : 'signal';`,
+    `process.stdout.write(String(pid) + ':' + mode);`
   ].join(' ')
   return [
     posixProcessAliveShellFunction({ refuseUnverifiable: true }),
     `pid=$(cat ${pidFile} 2>/dev/null);`,
     'case "$pid" in "" | *[!0-9]* ) echo NO_PID; exit 0;; esac;',
+    'stop_mode=signal;',
     // Older launchers recorded a waiting shell, whose exit does not prove runtime exit.
     ...(options.justLaunched
       ? []
       : [
-          `runtime_pid=$(${selectKingudSlotRuntimeCommand(host, remoteInstallDir, options.nodePath)}; ` +
+          `runtime_answer=$(${selectKingudSlotRuntimeCommand(host, remoteInstallDir, options.nodePath)}; ` +
             `"$kingud_runtime" -e ${shellEscape(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
-          '[ "$pid" = "$runtime_pid" ] || { echo UNKNOWN; exit 0; };'
+          '[ "$pid" = "${runtime_answer%%:*}" ] || { echo UNKNOWN; exit 0; };',
+          'stop_mode=${runtime_answer#*:};'
         ]),
     'kingud_alive "$pid" || { echo ALREADY_EXITED; exit 0; };',
-    'kill -TERM "$pid" 2>/dev/null || { echo SIGNAL_FAILED; exit 0; };',
+    'if [ "$stop_mode" = request ]; then',
+    `( umask 077; : > ${requestFile} ) 2>/dev/null || { echo SIGNAL_FAILED; exit 0; };`,
+    'else kill -TERM "$pid" 2>/dev/null || { echo SIGNAL_FAILED; exit 0; }; fi;',
+    // Past here the stop may be under way, so a lost or unknown answer must keep the fence.
+    'echo SIGNALED;',
     `i=0; while [ "$i" -lt ${options.waitSeconds} ]; do`,
     'kingud_alive "$pid" || { echo STOPPED; exit 0; };',
     'sleep 1; i=$((i + 1)); done;',
@@ -64,10 +85,23 @@ export type KingudStopOutcome =
   | 'no-pid'
   | 'still-running'
   | 'signal-failed'
+  /** Windows only: the build cannot be asked to stop, and terminating it would skip shutdown. */
+  | 'unsupported'
+  /** Explicitly unknown before any stop was sent: nothing happened. */
   | 'unknown'
+  /** Unknown or unparseable once a stop may have been sent: the host may still be changing. */
+  | 'unconfirmed'
 
 export function parseKingudStopOutcome(output: string): KingudStopOutcome {
-  switch (output.trim().split('\n').pop()?.trim() ?? '') {
+  const lines = output
+    .trim()
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+  const last = lines.at(-1) ?? ''
+  if (last === 'UNKNOWN' && !lines.includes('SIGNALED')) {
+    return 'unknown'
+  }
+  switch (last) {
     case 'STOPPED':
       return 'stopped'
     case 'ALREADY_EXITED':
@@ -78,8 +112,10 @@ export function parseKingudStopOutcome(output: string): KingudStopOutcome {
       return 'still-running'
     case 'SIGNAL_FAILED':
       return 'signal-failed'
+    case 'UNSUPPORTED':
+      return 'unsupported'
     default:
-      return 'unknown'
+      return 'unconfirmed'
   }
 }
 

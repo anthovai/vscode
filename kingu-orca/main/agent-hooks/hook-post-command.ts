@@ -18,6 +18,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}-H "X-Kingu-Agent-Hook-Token: \${KINGU_AGENT_HOOK_TOKEN}" \\`,
     `  ${indent}-H "X-Kingu-Agent-Hook-Meta-Encoding: base64" \\`,
     `  ${indent}-H "X-Kingu-Agent-Hook-Meta: \${kingu_hook_metadata}" \\`,
+    `  ${indent}-H "X-Kingu-Agent-Process: \${kingu_agent_process:-}" \\`,
     `  ${indent}--data-binary @-`,
     'else',
     `  printf '%s' "$payload" | ${curlCommand} -sS -X POST "http://127.0.0.1:\${KINGU_AGENT_HOOK_PORT}/hook/${source}" \\`,
@@ -31,6 +32,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}--data-urlencode "worktreeId=\${KINGU_WORKTREE_ID}" \\`,
     `  ${indent}--data-urlencode "env=\${KINGU_AGENT_HOOK_ENV}" \\`,
     `  ${indent}--data-urlencode "version=\${KINGU_AGENT_HOOK_VERSION}" \\`,
+    `  ${indent}--data-urlencode "agentProcess=\${kingu_agent_process:-}" \\`,
     `  ${indent}--data-urlencode "payload@-"`,
     'fi'
   ]

@@ -98,14 +98,6 @@ describe('buildSetupRunnerCommand', () => {
       shell: 'windows'
     })
   })
-
-  it('still uses bash for a POSIX runner launched from a POSIX pane', () => {
-    expect(
-      buildSetupRunnerCommand('C:\\repo\\.git\\kingu\\setup-runner.sh', 'windows', {
-        family: 'posix'
-      })
-    ).toBe('bash /c/repo/.git/kingu/setup-runner.sh')
-  })
 })
 
 describe('buildSetupRunnerCommand cmd metacharacter guard', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { evaluateKingudActivation } from './kingud-activation-gate'
+import { classifyKingudHostUnavailable } from '../kingud/kingud-host-unavailable'
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { KingudHealth, TerminalDaemonHealth } from '../kingud/kingud-health'
 
@@ -85,6 +86,8 @@ describe('evaluateKingudActivation', () => {
       EXPECTED
     )
     expect(verdict).toMatchObject({ decision: 'reject', code: 'kingud_activation_daemon_absent' })
+    // A cold daemon start is transient: the host must stay eligible for the next connect's deploy.
+    expect(classifyKingudHostUnavailable({ code: 'kingud_activation_daemon_absent' })).toBeNull()
   })
 
   it('refuses a degraded daemon, whose fresh terminals would not survive a restart', () => {

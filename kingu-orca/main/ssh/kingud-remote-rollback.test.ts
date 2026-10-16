@@ -1,24 +1,67 @@
+import type * as ExecCommandModule from './ssh-relay-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RecordFile from './kingud-remote-record-file'
+import type * as InstallLock from './ssh-relay-install-lock'
+import type * as TerminalBarrier from './kingud-rollback-terminal-barrier'
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({
-  execCommand: vi.fn(),
-  isUnconfirmedSshCommandTermination: () => false
+vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: vi.fn()
 }))
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
 vi.mock('./ssh-relay-install-transfers', () => ({
   writeRelayFile: vi.fn().mockResolvedValue(undefined),
   uploadRelayDirectory: vi.fn().mockResolvedValue(undefined)
 }))
+vi.mock('./ssh-relay-install-lock', async (importOriginal) => ({
+  ...(await importOriginal<typeof InstallLock>()),
+  acquireInstallLock: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('./kingud-remote-record-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof RecordFile>()),
+  writeAtomicKingudRemoteRecord: vi.fn().mockResolvedValue(undefined)
+}))
 
-import { execCommand } from './ssh-relay-deploy-helpers'
-import { writeRelayFile } from './ssh-relay-install-transfers'
+const barrier = vi.hoisted(() => {
+  const state: { log: string[] | null; state: 'retired' | 'unproven' } = {
+    log: null,
+    state: 'retired'
+  }
+  return state
+})
+// The managed stop and its terminal barrier are proven in kingud-activation-crash-recovery.test.ts.
+vi.mock('./kingud-rollback-terminal-barrier', async (importOriginal) => ({
+  ...(await importOriginal<typeof TerminalBarrier>()),
+  readKingudRollbackBarrierTarget: async (_options: unknown, version: string) => ({
+    state: 'ready',
+    context: {
+      version,
+      runtimeId: 'r1',
+      instance: { pid: 1, startedAtMs: 1, nonce: 'n', lockPath: '/l' }
+    }
+  }),
+  stopIncumbentBehindTerminalBarrier: async (
+    _options: unknown,
+    _id: string,
+    context: { version: string }
+  ) => {
+    barrier.log?.push(`stop:${context.version}`)
+    return barrier.state === 'retired'
+      ? { state: 'retired' }
+      : { state: 'unproven', reason: 'A terminal started after the census.' }
+  }
+}))
+
+import { execCommand } from './ssh-relay-exec-command'
+import { writeAtomicKingudRemoteRecord } from './kingud-remote-record-file'
 import { rollbackKingud, type KingudRollbackOptions } from './kingud-remote-rollback'
 import {
   emptyKingudActivationRecord,
   type KingudActivationRecord
 } from './kingud-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import type { SshConnection } from './ssh-connection'
+import { isReadinessRead } from './kingud-activation-host-test-harness'
+import { isSnapshotCaptureCommand } from './kingud-snapshot-capture-command'
 
 const mockExec = vi.mocked(execCommand)
 const ACTIVE = '0.2.0+bb01'
@@ -71,35 +114,65 @@ function readyLine(version: string): string {
   })
 }
 
-function scriptHost(
-  log: string[],
-  overrides: { restore?: string; readinessAtMs?: number } = {}
-): void {
+type HostOverrides = {
+  restores?: string[]
+  readinessAtMs?: number
+  targetReady?: boolean
+  snapshot?: string
+  comparison?: string
+}
+
+function scriptHost(log: string[], overrides: HostOverrides = {}): void {
+  barrier.log = log
+  barrier.state = 'retired'
+  const restores = [...(overrides.restores ?? [])]
   mockExec.mockImplementation(async (_conn, command: string) => {
     const text = String(command)
-    if (text.includes('state.tar') && text.includes('test -f') && !text.includes('tar -C')) {
-      return 'PRESENT'
+    if (text.startsWith('tail -c')) {
+      return text.includes(TARGET) ? 'kingud: listen EADDRINUSE 127.0.0.1\n' : ''
     }
-    if (text.includes('find ') && text.includes('stat')) {
+    if (text.includes('__KINGUD_RECORD_PRESENT__')) {
+      return text.includes('transaction.json')
+        ? '__KINGUD_RECORD_ABSENT__\n'
+        : `__KINGUD_RECORD_PRESENT__\n${JSON.stringify(record())}`
+    }
+    if (text.includes('__KINGUD_BUILD_HASH__')) {
+      return `__KINGUD_BUILD_HASH__ ${BUILD_HASH}\n`
+    }
+    if (text.includes('echo PRESENT')) {
+      return overrides.snapshot ?? 'PRESENT'
+    }
+    if (text.includes('stat -c %Y')) {
       return 'UNKNOWN'
     }
     if (text.includes('kill -TERM')) {
       log.push(`stop:${text.includes(ACTIVE) ? ACTIVE : TARGET}`)
       return 'STOPPED'
     }
+    if (text.includes('verdict=UNCHANGED')) {
+      log.push('compare')
+      return overrides.comparison ?? 'CHANGED'
+    }
+    if (isSnapshotCaptureCommand(text)) {
+      log.push('rescue')
+      return 'CAPTURED'
+    }
     if (text.includes('tar -C') && text.includes('-xf')) {
-      log.push('restore')
-      return overrides.restore ?? 'RESTORED'
+      log.push(text.includes('rollback-rescue-') ? 'restore-rescue' : 'restore')
+      return restores.shift() ?? 'RESTORED'
     }
     if (text.includes('nohup')) {
       log.push(`launch:${text.includes(ACTIVE) ? ACTIVE : TARGET}`)
       return '9999'
     }
-    if (text.startsWith('cat ') && text.includes('.kingud-readiness')) {
+    if (isReadinessRead(text) && text.includes('.kingud-readiness')) {
       if (overrides.readinessAtMs !== undefined && Date.now() < overrides.readinessAtMs) {
         return ''
       }
-      return readyLine(TARGET)
+      if (text.includes(ACTIVE)) {
+        return readyLine(ACTIVE)
+      }
+      return overrides.targetReady === false ? '' : readyLine(TARGET)
     }
     return ''
   })
@@ -107,7 +180,7 @@ function scriptHost(
 
 function options(overrides: Partial<KingudRollbackOptions> = {}): KingudRollbackOptions {
   return {
-    conn: {} as SshConnection,
+    conn: Object.create(null),
     host: getRemoteHostPlatform('linux-x64'),
     remoteHome: '/home/u',
     record: record(),
@@ -115,8 +188,9 @@ function options(overrides: Partial<KingudRollbackOptions> = {}): KingudRollback
     userDataDir: '/home/u/.kingu',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0 },
+    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
     targetBuildHash: BUILD_HASH,
+    targetDaemonProtocol: { protocolVersion: 3, previousProtocolVersions: [1, 2] },
     readinessTimeoutMs: 50,
     sleep: async () => {},
     now: () => new Date('2026-02-02T00:00:00.000Z'),
@@ -136,7 +210,7 @@ describe('rollbackKingud', () => {
     expect(result).toMatchObject({ outcome: 'rolled-back', target: TARGET })
     // Restoring under a running kingud would replace the store beneath a process holding it;
     // starting first would let the older build migrate the newer build's state.
-    expect(log).toEqual([`stop:${ACTIVE}`, 'restore', `launch:${TARGET}`])
+    expect(log).toEqual([`stop:${ACTIVE}`, 'rescue', 'restore', `launch:${TARGET}`])
   })
 
   it('allows rollback startup time after a slow bundled preflight', async () => {
@@ -155,7 +229,7 @@ describe('rollbackKingud', () => {
       )
       expect(result.outcome).toBe('rolled-back')
       expect(elapsedMs).toBe(100_000)
-      expect(log).toEqual([`stop:${ACTIVE}`, 'restore', `launch:${TARGET}`])
+      expect(log).toEqual([`stop:${ACTIVE}`, 'rescue', 'restore', `launch:${TARGET}`])
     } finally {
       clock.mockRestore()
     }
@@ -165,57 +239,95 @@ describe('rollbackKingud', () => {
     const log: string[] = []
     scriptHost(log)
     const result = await rollbackKingud(
-      options({ census: { liveSessions: 3, startedSinceActivation: 2 } })
+      options({ census: { liveSessions: 3, startedSinceActivation: 2, daemonProtocolVersion: 3 } })
     )
     expect(result).toMatchObject({
       outcome: 'refused',
       code: 'kingud_rollback_orphans_live_terminals'
     })
     expect(log).toEqual([])
-    expect(vi.mocked(writeRelayFile)).not.toHaveBeenCalled()
+    expect(vi.mocked(writeAtomicKingudRemoteRecord)).not.toHaveBeenCalled()
   })
 
   it('refuses when the snapshot is gone from the host', async () => {
     const log: string[] = []
-    mockExec.mockImplementation(async (_conn, command: string) =>
-      String(command).includes('state.tar') ? 'ABSENT' : ''
-    )
+    scriptHost(log, { snapshot: 'ABSENT' })
     const result = await rollbackKingud(options())
     expect(result).toMatchObject({ outcome: 'refused', code: 'kingud_rollback_snapshot_missing' })
     expect(log).toEqual([])
   })
 
-  it('does not start the old build when the restore failed', async () => {
+  it('does not read a lost snapshot probe as a missing snapshot', async () => {
     const log: string[] = []
-    scriptHost(log, { restore: 'FAILED' })
+    scriptHost(log, { snapshot: '' })
     const result = await rollbackKingud(options())
-    expect(result).toMatchObject({ outcome: 'failed', code: 'kingud_rollback_restore_failed' })
-    expect(log).toEqual([`stop:${ACTIVE}`, 'restore'])
-    expect(result.outcome === 'failed' && result.reason).toContain('Do NOT start the older build')
+    expect(result).toMatchObject({
+      outcome: 'refused',
+      code: 'kingud_rollback_snapshot_unverifiable'
+    })
+    expect(log).toEqual([])
   })
 
-  it('leaves the record naming the newer version when the target fails to come up', async () => {
+  it('puts the rescued state and the newer build back when the restore failed', async () => {
     const log: string[] = []
-    scriptHost(log)
-    mockExec.mockImplementation(async (_conn, command: string) => {
-      const text = String(command)
-      if (text.includes('state.tar') && text.includes('test -f') && !text.includes('tar -C')) {
-        return 'PRESENT'
-      }
-      if (text.includes('kill -TERM')) {
-        return 'STOPPED'
-      }
-      if (text.includes('tar -C') && text.includes('-xf')) {
-        return 'RESTORED'
-      }
-      // The target never publishes readiness.
-      return ''
-    })
+    scriptHost(log, { restores: ['FAILED'] })
+    const result = await rollbackKingud(options())
+    expect(result).toMatchObject({ outcome: 'failed', code: 'kingud_rollback_restore_failed' })
+    expect(log).toEqual([
+      `stop:${ACTIVE}`,
+      'rescue',
+      'restore',
+      'restore-rescue',
+      `launch:${ACTIVE}`
+    ])
+    expect(result.outcome === 'failed' && result.reason).toContain('is serving again')
+  })
+
+  it('keeps the newer state when a failed target may have changed it, until an operator accepts', async () => {
+    const log: string[] = []
+    scriptHost(log, { targetReady: false })
     const result = await rollbackKingud(options())
     expect(result).toMatchObject({ outcome: 'failed', code: 'kingud_activation_no_readiness' })
+    expect(result.outcome === 'failed' && result.reason).toContain('Recover to restore')
+    expect(result.outcome === 'failed' && result.reason).toContain(
+      'Last lines of kingud.log:\nkingud: listen EADDRINUSE'
+    )
+    expect(log).toEqual([
+      `stop:${ACTIVE}`,
+      'rescue',
+      'restore',
+      `launch:${TARGET}`,
+      `stop:${TARGET}`,
+      'compare'
+    ])
     // Until the target is proven serving, `active` must still name the version an operator
     // would have to bring back.
-    expect(vi.mocked(writeRelayFile)).not.toHaveBeenCalled()
+    expect(
+      vi
+        .mocked(writeAtomicKingudRemoteRecord)
+        .mock.calls.some((call) => String(call[1]).endsWith('kingud-active.json'))
+    ).toBe(false)
+  })
+
+  it('puts the newer build back unasked when a failed target left the restored state untouched', async () => {
+    const log: string[] = []
+    scriptHost(log, { targetReady: false, comparison: 'UNCHANGED' })
+    const result = await rollbackKingud(options())
+    expect(result.outcome === 'failed' && result.reason).toContain('is serving again')
+    expect(log.slice(-3)).toEqual(['compare', 'restore-rescue', `launch:${ACTIVE}`])
+    const compare = mockExec.mock.calls
+      .map((call) => String(call[1]))
+      .find((command) => command.includes('verdict=UNCHANGED'))
+    expect(compare).not.toContain('rollback-rescue-')
+  })
+
+  it('keeps the newer state and restarts the newer build when work appeared after the census', async () => {
+    const log: string[] = []
+    scriptHost(log)
+    barrier.state = 'unproven'
+    const result = await rollbackKingud(options())
+    expect(result).toMatchObject({ outcome: 'refused', code: 'kingud_rollback_terminals_at_stop' })
+    expect(log).toEqual([`stop:${ACTIVE}`, `launch:${ACTIVE}`])
   })
 
   it('records the rollback only after the target answers healthy', async () => {
@@ -223,9 +335,9 @@ describe('rollbackKingud', () => {
     scriptHost(log)
     await rollbackKingud(options())
     const written = vi
-      .mocked(writeRelayFile)
-      .mock.calls.find((call) => String(call[2]).endsWith('kingud-active.json'))
-    expect(JSON.parse(String(written?.[3]))).toMatchObject({
+      .mocked(writeAtomicKingudRemoteRecord)
+      .mock.calls.find((call) => String(call[1]).endsWith('kingud-active.json'))
+    expect(JSON.parse(String(written?.[2]))).toMatchObject({
       active: TARGET,
       previous: null,
       snapshot: null

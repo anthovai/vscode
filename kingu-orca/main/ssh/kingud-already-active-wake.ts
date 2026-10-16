@@ -1,0 +1,14 @@
+import { wakeStoppedManagedKingud } from './kingud-managed-wake'
+import type { KingudSlotOptions } from './kingud-recovery-slot'
+
+/**
+ * After a deploy found its own version already active: it launches nothing, and that slot may have
+ * stopped since (a kill, a host reboot), so start it on proven exit. True when this call started it.
+ */
+export async function wakeAlreadyActiveKingud(options: KingudSlotOptions): Promise<boolean> {
+  const wake = await wakeStoppedManagedKingud(options)
+  if (wake.outcome === 'recovery-refused') {
+    throw new Error(wake.reason)
+  }
+  return wake.outcome === 'started'
+}

@@ -51,6 +51,25 @@ describe('normalizeGitRemoteUrl', () => {
 })
 
 describe('deriveGitRemoteIdentity', () => {
+  it.each(['blob:none', 'blob:limit=1024', 'tree:0'])(
+    'prefers a partial-clone origin with filter %s over contributor remotes',
+    (filter) => {
+      expect(
+        deriveGitRemoteIdentity(
+          [
+            'amoaba\thttps://github.com/AmoabaKelvin/kingu.git (fetch)',
+            `origin\thttps://github.com/anthovai/kingu-intelligence.git (fetch) [${filter}]`,
+            'origin\thttps://github.com/another/kingu.git (push)'
+          ].join('\r\n')
+        )
+      ).toEqual({
+        canonicalKey: 'github.com/anthovai/kingu-intelligence',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/anthovai/kingu-intelligence.git'
+      })
+    }
+  )
+
   it('prefers upstream, then origin, then the first named remote', () => {
     expect(
       deriveGitRemoteIdentity(

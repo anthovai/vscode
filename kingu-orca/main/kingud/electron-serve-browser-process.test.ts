@@ -1,22 +1,35 @@
+import type { ProcessSpec } from '@kingu/process-host/process-spec'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcessModule from '../../shared/child-process/run-process'
-import type { RuntimeBrowserCommandHost } from '../runtime/kingu-runtime-browser'
+import type * as RunProcessModule from '@kingu/process-host'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 
-const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
+const { spawnProcessMock } = vi.hoisted(() => ({
+  spawnProcessMock: vi.fn<(spec: ProcessSpec) => ReturnType<typeof RunProcessModule.spawnProcess>>()
+}))
 
 // Why wrap rather than fake: the provider must still go through the real spawn
 // path (argv/env handling, a real pid to signal); only the program is swapped
 // for a stub that speaks the sidecar's serve protocol.
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+vi.mock('@kingu/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcessModule>()),
   spawnProcess: spawnProcessMock
 }))
 
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
+import { startKingudBrowserProvider } from './kingud-browser-startup'
+import { resolveKingudBrowserProvider } from './kingud-browser-provider'
+import {
+  createRuntimeBrowserCommands,
+  setRuntimeBrowserCommandsFactory
+} from '../runtime/runtime-browser-commands-factory'
+
+vi.mock('./kingud-browser-provider', () => ({ resolveKingudBrowserProvider: vi.fn() }))
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-kingud-electron-sidecar.cjs')
 const INSTALLED_EXECUTABLE = join('/Applications', 'Kingu.app', 'Contents', 'MacOS', 'Kingu')
@@ -91,8 +104,8 @@ async function startProvider(): Promise<ElectronServeBrowserProcess> {
   return processHandle
 }
 
-function spawnSpec(): RunProcessModule.ProcessSpec {
-  return spawnProcessMock.mock.calls[0][0] as RunProcessModule.ProcessSpec
+function spawnSpec(): ProcessSpec {
+  return spawnProcessMock.mock.calls[0][0]
 }
 
 beforeEach(async () => {
@@ -103,11 +116,9 @@ beforeEach(async () => {
   started = []
   await writeFile(logPath, '')
   await setControl({})
-  const actual = await vi.importActual<typeof RunProcessModule>(
-    '../../shared/child-process/run-process'
-  )
+  const actual = await vi.importActual<typeof RunProcessModule>('@kingu/process-host')
   spawnProcessMock.mockReset()
-  spawnProcessMock.mockImplementation((spec: RunProcessModule.ProcessSpec) =>
+  spawnProcessMock.mockImplementation((spec: ProcessSpec) =>
     actual.spawnProcess({
       ...spec,
       program: process.execPath,
@@ -126,16 +137,68 @@ afterEach(async () => {
   for (const processHandle of started) {
     await processHandle.stop()
   }
+  setRuntimeBrowserCommandsFactory(null)
   vi.unstubAllEnvs()
   await rm(harnessRoot, { recursive: true, force: true })
 })
 
 describe('ElectronServeBrowserProcess start-up', () => {
+  it('opens an owner IPC channel for automatic browser cleanup after parent loss', async () => {
+    await startProvider()
+    expect(spawnSpec().stdio).toEqual(['pipe', 'pipe', 'pipe', 'ipc'])
+    expect(spawnSpec().serialization).toBe('json')
+    expect(spawnSpec().env?.[BROWSER_SIDECAR_OWNER_ENV]).toBe('1')
+  })
+
+  it('does not launch when startup is already cancelled', async () => {
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    await expect(processHandle.start(AbortSignal.abort())).rejects.toThrow()
+    expect(spawnProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('cancels readiness polling and cleans up the unready sidecar', async () => {
+    await setControl({ capabilities: [['runtime.v1']] })
+    const controller = new AbortController()
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    const starting = processHandle.start(controller.signal)
+    const outcome = starting.then(
+      () => ({ rejected: false }),
+      () => ({ rejected: true })
+    )
+    try {
+      await vi.waitFor(async () => expect(await sidecarRequests()).not.toHaveLength(0), {
+        timeout: 10_000
+      })
+    } finally {
+      controller.abort()
+      await outcome
+    }
+    expect(await outcome).toEqual({ rejected: true })
+    expect(processHandle.isAvailable()).toBe(false)
+    const userDataPath = (spawnSpec().args ?? [])
+      .find((arg) => arg.startsWith('--user-data-dir='))!
+      .slice('--user-data-dir='.length)
+    const metadata = JSON.parse(await readFile(join(userDataPath, 'kingu-runtime.json'), 'utf8'))
+    await processHandle.stop()
+    expect(existsSync(userDataPath)).toBe(false)
+    expect(() => process.kill(metadata.pid, 0)).toThrow()
+  })
+
   it('launches the installed app in headless serve mode without kingud browser env', async () => {
     for (const key of AGENT_BROWSER_ENVIRONMENT_KEYS) {
       vi.stubEnv(key, `leaked-${key}`)
     }
     vi.stubEnv('KINGU_HARNESS_UNRELATED', 'preserved')
+    for (const key of ['KINGU_E2E_USER_DATA_DIR', 'KINGU_USER_DATA', 'KINGU_USER_DATA_PATH']) {
+      vi.stubEnv(key, harnessRoot)
+    }
+    const isolatedHome = join(harnessRoot, 'home')
+    vi.stubEnv('KINGU_E2E_HOME_DIR', isolatedHome)
+    vi.stubEnv('HOME', isolatedHome)
+    vi.stubEnv('XDG_DATA_HOME', join(isolatedHome, 'data'))
+    vi.stubEnv('XDG_STATE_HOME', join(isolatedHome, 'state'))
 
     const processHandle = await startProvider()
 
@@ -143,7 +206,14 @@ describe('ElectronServeBrowserProcess start-up', () => {
     expect(spec.program).toBe(INSTALLED_EXECUTABLE)
     const args = [...(spec.args ?? [])]
     expect(args).toEqual(
-      expect.arrayContaining(['--serve', '--serve-port', '--serve-json', '--serve-no-pairing'])
+      expect.arrayContaining([
+        '--serve',
+        '--serve-port',
+        '--serve-json',
+        '--serve-no-pairing',
+        // The sidecar is a headless serve too, so on Linux it must not inherit Wayland.
+        ...headlessServeOzonePlatformSwitches(process.platform)
+      ])
     )
     const port = Number(args[args.indexOf('--serve-port') + 1])
     expect(Number.isInteger(port) && port > 0 && port < 65_536).toBe(true)
@@ -153,7 +223,22 @@ describe('ElectronServeBrowserProcess start-up', () => {
       expect(spec.env).not.toHaveProperty(key)
     }
     expect(spec.env?.KINGU_HARNESS_UNRELATED).toBe('preserved')
+    for (const key of ['KINGU_USER_DATA', 'KINGU_USER_DATA_PATH']) {
+      expect(spec.env).not.toHaveProperty(key)
+    }
+    expect(spec.env?.KINGU_E2E_USER_DATA_DIR).toBe(userDataArg?.slice('--user-data-dir='.length))
+    expect(spec.env?.KINGU_E2E_HOME_DIR).toBe(isolatedHome)
+    expect(spec.env?.HOME).toBe(isolatedHome)
+    expect(spec.env?.XDG_DATA_HOME).toBe(join(isolatedHome, 'data'))
+    expect(spec.env?.XDG_STATE_HOME).toBe(join(isolatedHome, 'state'))
+    expect(args).toEqual(expect.arrayContaining(['--password-store=basic', '--use-mock-keychain']))
     expect(processHandle.isAvailable()).toBe(true)
+  })
+
+  it('marks the launch as the kingud sidecar so the installed app hands user opens on', async () => {
+    await startProvider()
+
+    expect(spawnSpec().env?.KINGU_KINGUD_SIDECAR).toBe('1')
   })
 
   it('keeps polling until the sidecar advertises browser.headless.v1', async () => {
@@ -334,4 +419,31 @@ describe('ElectronServeBrowserProcess command routing', () => {
       commands.browserTabCreate({ worktree: 'wt-a', page: 'provisional-page-1' })
     ).resolves.toEqual({ browserPageId: 'provisional-page-1' })
   })
+})
+
+it('forwards tab commands through startup to the Electron sidecar', async () => {
+  const browser = await startProvider()
+  vi.mocked(resolveKingudBrowserProvider).mockResolvedValueOnce({
+    kind: 'electron',
+    factory: (commandHost) => browser.createCommands(commandHost),
+    isAvailable: () => browser.isAvailable(),
+    stop: () => browser.stop()
+  })
+  const startup = startKingudBrowserProvider({ userDataPath: harnessRoot })
+  await startup.ready
+  try {
+    const commands = createRuntimeBrowserCommands(host)
+    await commands.browserTabCreate({ worktree: 'wt-a' })
+    await commands.browserTabList({ worktree: 'wt-a' })
+    expect((await browserRequests()).map((request) => request.method)).toEqual([
+      'browser.tabCreate',
+      'browser.tabList'
+    ])
+    const providerCommands = browser.createCommands(host)
+    expect('browserTabList' in providerCommands).toBe(true)
+    expect('then' in providerCommands).toBe(false)
+    expect(Symbol.iterator in providerCommands).toBe(false)
+  } finally {
+    await startup.stop()
+  }
 })

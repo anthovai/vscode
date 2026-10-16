@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runWslProcess } from './wsl-runner'
 import { invalidateWslGuestEnvironment } from './wsl-guest-environment'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@kingu/process-host'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 
 /**

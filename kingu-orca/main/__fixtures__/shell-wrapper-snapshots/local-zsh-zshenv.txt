@@ -45,6 +45,40 @@ __kingu_osc133_preexec() {
   # which prints a warning above every command under warn_create_global.
   builtin typeset -g __kingu_in_command=1
 }
+__kingu_deferred_line_init() {
+  builtin emulate -L zsh
+  (( ${+functions[__kingu_deferred_init]} )) || return 0
+  local __kingu_direct_line_init=0
+  [[ "${widgets[zle-line-init]:-}" == user:__kingu_deferred_line_init ]] && __kingu_direct_line_init=1
+  __kingu_deferred_init
+  if (( __kingu_direct_line_init && ${+widgets[zle-line-init]} )); then
+    zle zle-line-init "$@"
+  elif [[ "${widgets[zle-line-init]:-}" == user:__kingu_prompt_mark ]]; then
+    local __kingu_prev_line_init_fn=""
+    __kingu_prompt_mark "$@"
+  fi
+}
+# Why: scheduled callbacks run after user prompt hooks without copying their function metadata.
+__kingu_deferred_sched_init() {
+  local __kingu_prompt_status=$?
+  builtin emulate -L zsh
+  (( ${+functions[__kingu_deferred_init]} )) && __kingu_deferred_init
+  builtin unset __kingu_deferred_sched_armed
+  builtin unfunction __kingu_deferred_sched_init
+  return $__kingu_prompt_status
+}
+__kingu_arm_deferred_line_init() {
+  builtin emulate -L zsh
+  if [[ "${widgets[zle-line-init]:-}" != user:__kingu_deferred_line_init ]]; then
+    if (( ${+widgets[zle-line-init]} )); then
+      zle -A zle-line-init __kingu_saved_line_init
+    fi
+    zle -N zle-line-init __kingu_deferred_line_init
+  fi
+  if (( ! $+__kingu_deferred_sched_armed )) && builtin zmodload -F zsh/sched b:sched 2>/dev/null; then
+    builtin sched +0 __kingu_deferred_sched_init && builtin typeset -g __kingu_deferred_sched_armed=1
+  fi
+}
 __kingu_deferred_init() {
   # Why first: this body runs after the user's own config, so it would otherwise
   # inherit whatever options that config left set. Under NO_UNSET an unset
@@ -54,8 +88,17 @@ __kingu_deferred_init() {
   (( $+_kingu_deferred_init_done )) && return 0
   builtin typeset -g _kingu_deferred_init_done=1
   builtin typeset -g precmd_functions
+  if (( ${+widgets[__kingu_saved_line_init]} )); then
+    if [[ "${widgets[zle-line-init]:-}" == user:__kingu_deferred_line_init ]]; then
+      zle -A __kingu_saved_line_init zle-line-init
+    fi
+    zle -D __kingu_saved_line_init
+  elif [[ "${widgets[zle-line-init]:-}" == user:__kingu_deferred_line_init ]]; then
+    zle -D zle-line-init
+  fi
   if __kingu_has_feature markers; then
     precmd_functions=(${precmd_functions:/__kingu_deferred_init/__kingu_osc133_precmd})
+    (( ${precmd_functions[(Ie)__kingu_osc133_precmd]} )) || precmd_functions+=(__kingu_osc133_precmd)
     preexec_functions=(__kingu_osc133_preexec ${preexec_functions[@]})
   else
     precmd_functions=(${precmd_functions:#__kingu_deferred_init})
@@ -66,6 +109,12 @@ __kingu_deferred_init() {
     else
       printf 'Kingu CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$KINGU_WSL_CLI_DIR/${KINGU_CLI_COMMAND:-}" >&2
     fi
+  fi
+  if [ -n "${KINGU_CLI_BIN_DIR:-}" ]; then
+    case "${PATH:-}" in
+      "$KINGU_CLI_BIN_DIR"|"$KINGU_CLI_BIN_DIR":*) ;;
+      *) export PATH="$KINGU_CLI_BIN_DIR${PATH:+:$PATH}" ;;
+    esac
   fi
   if __kingu_has_feature overlay; then
     # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
@@ -78,6 +127,14 @@ __kingu_deferred_init() {
     }
     __kingu_restore_agent_teams_path
     [[ -n "${KINGU_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${KINGU_OPENCODE_CONFIG_DIR}"
+    if [[ -n "${KINGU_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
+      export XDG_DATA_HOME="${KINGU_DATA_ACCOUNT_DATA_HOME}"
+      export XDG_STATE_HOME="${KINGU_DATA_ACCOUNT_STATE_HOME}"
+      if [[ "${KINGU_DATA_ACCOUNT_PROVIDER:-}" == opencode ]]; then
+        export OPENCODE_AUTH_CONTENT=""
+        export OPENCODE_DB="opencode.db"
+      fi
+    fi
     [[ -n "${KINGU_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${KINGU_MIMOCODE_HOME}"
     # Why: OMP does not auto-load Kingu's managed status extension; wrap only
     # interactive launch invocations so subcommands such as `omp config` keep
@@ -143,22 +200,57 @@ __kingu_deferred_init() {
 
     # Why: Codex must keep using Kingu's runtime CODEX_HOME after rc files.
     [[ -n "${KINGU_CODEX_HOME:-}" ]] && export CODEX_HOME="${KINGU_CODEX_HOME}"
-    # Why: a typed alias expands inside the shell, after pane launch prep.
-    # Why unalias inside the substitution: an alias named codex makes command -v
-    # report the alias text, and the subshell leaves the user's own alias intact.
-    # Why || : twice — zsh alone aborts inside the substitution, but every shell's
-    # assignment adopts its exit status, so an absent codex trips set -e in bash too.
-    __kingu_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-    if [[ -n "${KINGU_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${KINGU_CODEX_LAUNCH_PREFLIGHT}" && -n "${__kingu_codex_binary:-}" && -x "${__kingu_codex_binary}" ]]; then
-      # Why the function reserved word: it suppresses alias expansion of the name,
-      # which otherwise rewrites this header at parse time and aborts the whole file.
-      function codex {
-        "${KINGU_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
-        command codex "$@"
-      }
-    fi
-    unset __kingu_codex_binary
   fi
+  # Why: a typed alias expands inside the shell, after pane launch prep.
+  # Why unalias inside the substitution: an alias named codex makes command -v
+  # report the alias text, and the subshell leaves the user's own alias intact.
+  # Why || : twice — zsh alone aborts inside the substitution, but every shell's
+  # assignment adopts its exit status, so an absent codex trips set -e in bash too.
+  __kingu_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+  if [[ -n "${__kingu_codex_binary:-}" && -x "${__kingu_codex_binary}" ]]; then
+    # Why the function reserved word: it suppresses alias expansion of the name,
+    # which otherwise rewrites this header at parse time and aborts the whole file.
+    function codex {
+      # Why local: zsh's warn_create_global warns for each global a function creates.
+      local __kingu_codex_arg __kingu_codex_isolate="${KINGU_CODEX_ISOLATE:-1}"
+      if [[ -n "${KINGU_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${KINGU_CODEX_LAUNCH_PREFLIGHT}" ]]; then
+        "${KINGU_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+      fi
+      for __kingu_codex_arg in "$@"; do
+        case "$__kingu_codex_arg" in agents|queue|--no-daemon|--remote|--remote=*) __kingu_codex_isolate=0 ;; esac
+      done
+      # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
+      if [[ "$__kingu_codex_isolate" != 0 ]]; then
+        case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
+      fi
+      command codex "$@"
+    }
+  fi
+  unset __kingu_codex_binary
+  __kingu_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
+  if [[ -n "${KINGU_CLAUDE_PROFILE_POINTER:-}" && -n "${__kingu_claude_binary:-}" && -x "${__kingu_claude_binary}" ]]; then
+    function claude {
+      local __kingu_claude_home __kingu_claude_pointer="${KINGU_CLAUDE_PROFILE_POINTER:-}"
+      # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
+      case "$__kingu_claude_pointer" in '~/'*) __kingu_claude_pointer="${HOME:-}/${__kingu_claude_pointer#??}" ;; esac
+      __kingu_claude_home="$(cat "$__kingu_claude_pointer" 2>/dev/null || :)"
+      if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${KINGU_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+        command claude "$@"; return
+      fi
+      # Why: Kingu's value replaced the user's own at spawn, so System default restores theirs.
+      if [ -z "$__kingu_claude_home" ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ -n "${KINGU_CLAUDE_USER_CONFIG_DIR:-}" ]; then
+        ( unset KINGU_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$KINGU_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+      fi
+      if [ -z "$__kingu_claude_home" ]; then
+        ( unset CLAUDE_CONFIG_DIR KINGU_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      fi
+      case "$__kingu_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
+      # Why -m 700: matches the folder Kingu's setup creates; a credentials folder stays private.
+      [ -d "$__kingu_claude_home" ] || mkdir -p -m 700 -- "$__kingu_claude_home" 2>/dev/null
+      ( export CLAUDE_CONFIG_DIR="$__kingu_claude_home" KINGU_CLAUDE_INJECTED_CONFIG_DIR="$__kingu_claude_home"; command claude "$@" )
+    }
+  fi
+  unset __kingu_claude_binary
   if [[ -n "${_kingu_histfile:-}" ]]; then
     HISTFILE="$_kingu_histfile"
   fi
@@ -200,13 +292,17 @@ __kingu_deferred_init() {
   # the permanent hook has not run yet and the first prompt would lose its mark.
   __kingu_has_feature markers && __kingu_osc133_precmd
   builtin unset _kingu_shell_features _kingu_histfile
-  builtin unfunction __kingu_deferred_init __kingu_has_feature
+  (( $+__kingu_deferred_sched_armed )) || builtin unfunction __kingu_deferred_sched_init
+  builtin unfunction __kingu_deferred_init __kingu_has_feature __kingu_arm_deferred_line_init
 }
 {
   builtin typeset _kingu_user_zshenv="${ZDOTDIR-$HOME}/.zshenv"
   [[ ! -r "$_kingu_user_zshenv" ]] || builtin source -- "$_kingu_user_zshenv"
 } always {
   builtin unset _kingu_user_zshenv
-  builtin typeset -ag precmd_functions
-  (( ${precmd_functions[(Ie)__kingu_deferred_init]} )) || precmd_functions+=(__kingu_deferred_init)
+  if (( ! $+_kingu_deferred_init_done )); then
+    builtin typeset -ag precmd_functions
+    (( ${precmd_functions[(Ie)__kingu_deferred_init]} )) || precmd_functions+=(__kingu_deferred_init)
+    __kingu_arm_deferred_line_init
+  fi
 }

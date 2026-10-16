@@ -11,36 +11,45 @@ import {
   type KingudProfilePreflightResponse
 } from '../../shared/kingud-profile-preflight'
 import { readKingudArtifactIdentity } from './kingud-artifact-identity'
-import { resolveKingudInstallRoot } from './kingud-app-paths'
-import { KINGUD_VERSION_FILENAME, kingudBunRuntimeFilename } from '../../shared/kingud-artifacts'
-import { KINGUD_BUN_VERSION } from '../../shared/kingud-bun-runtime'
-import { runProcess } from '../../shared/child-process/run-process'
-import { preflightKingudBunNativeRuntime } from './kingud-bun-native-preflight'
-import { KingudBundledRuntimeError } from './kingud-bundled-runtime'
+import { KINGUD_EXIT_CONFIGURATION } from './kingud-configuration-exit'
+import {
+  KINGUD_SERVER_ENTRY_FILENAME,
+  KINGUD_VERSION_FILENAME
+} from '../../shared/kingud-artifacts'
+import { KINGUD_NODE_RUNTIME_IDENTITY } from '../../shared/kingud-node-runtime-identity'
+import { runProcess } from '@kingu/process-host'
+import { preflightKingudNativeRuntime } from './kingud-runtime-native-preflight'
+import { kingudCompileCacheEnv } from './kingud-compile-cache'
+import {
+  isRunningAsBundledKingudRuntime,
+  KingudBundledRuntimeError,
+  resolveBundledKingudSlot
+} from './kingud-bundled-runtime'
 
 /** Check every packaged start before a profile index, data-root lock or import is touched. */
 export async function preflightBundledKingudStartup(): Promise<void> {
-  if (!process.versions.bun) {
+  const directory = resolveBundledKingudSlot()
+  if (!isRunningAsBundledKingudRuntime(directory)) {
     return
   }
-  const directory = resolveKingudInstallRoot()
   const identity = await readInstalledVersion(directory)
   const nonce = randomUUID()
   // Keep disposable SQLite ownership and native state out of the serving process.
   const result = await runProcess({
-    program: join(directory, kingudBunRuntimeFilename(process.platform)),
-    args: [join(directory, 'kingud.js'), KINGUD_STARTUP_PREFLIGHT_FLAG, nonce],
-    env: { ...process.env, KINGU_BACKGROUND_LAUNCH: '1' },
+    program: process.execPath,
+    args: [join(directory, KINGUD_SERVER_ENTRY_FILENAME), KINGUD_STARTUP_PREFLIGHT_FLAG, nonce],
+    // The preflight compiles the same bundle again, so it shares the server's code cache.
+    env: { ...process.env, KINGU_BACKGROUND_LAUNCH: '1', ...kingudCompileCacheEnv(directory) },
     timeoutMs: KINGUD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,
     terminationBarrier: true
   })
   if (result.code !== 0 || result.timedOut || result.outputTruncated) {
-    const Failure = result.code === 78 ? KingudBundledRuntimeError : Error
+    const Failure = result.code === KINGUD_EXIT_CONFIGURATION ? KingudBundledRuntimeError : Error
     throw new Failure(`The bundled Kingu runtime failed readiness: ${result.stderr}`)
   }
   try {
-    parseKingudProfilePreflight(result.stdout, nonce, KINGUD_BUN_VERSION, identity)
+    parseKingudProfilePreflight(result.stdout, nonce, KINGUD_NODE_RUNTIME_IDENTITY, identity)
   } catch (cause) {
     throw new KingudBundledRuntimeError('The bundled runtime returned invalid readiness identity', {
       cause
@@ -54,23 +63,25 @@ export async function runKingudProfilePreflight(
   options: { nativeFeatures?: boolean } = {}
 ): Promise<void> {
   const checkedNonce = z.string().uuid().parse(nonce)
+  const directory = resolveBundledKingudSlot()
   let artifactVersion: string
   try {
-    artifactVersion = await readKingudArtifactIdentity(resolveKingudInstallRoot())
+    artifactVersion = await readKingudArtifactIdentity(directory)
   } catch (cause) {
     throw new KingudBundledRuntimeError('The bundled Kingu artifacts are incomplete or altered', {
       cause
     })
   }
   const result = await preflightProfileStateRuntime()
-  if (process.versions.bun) {
-    await preflightKingudBunNativeRuntime(options)
+  // Why only inside the pinned runtime: a host Node rollback launcher never serves this slot.
+  if (isRunningAsBundledKingudRuntime(directory)) {
+    await preflightKingudNativeRuntime(options)
   }
   const response: KingudProfilePreflightResponse = {
     type: 'kingu_profile_state_ready',
     nonce: checkedNonce,
-    runtime: process.versions.bun ? 'bun' : 'node',
-    runtimeVersion: process.versions.bun ?? process.versions.node,
+    runtime: 'node',
+    runtimeVersion: process.versions.node,
     artifactVersion,
     ...result
   }

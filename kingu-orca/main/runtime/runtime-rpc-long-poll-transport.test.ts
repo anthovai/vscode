@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +7,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { KinguRuntimeService } from './kingu-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { classifyRuntimeLongPoll, KinguRuntimeRpcServer } from './runtime-rpc'
+import { classifyRuntimeLongPoll } from './runtime-rpc'
+import { createLongPollServer as createServer } from './runtime-rpc-long-poll-server.test-fixture'
 import {
   sendRequest,
   openFramedSession,
@@ -44,6 +46,49 @@ describe('KinguRuntimeRpcServer', () => {
     ).toBe('wait')
   })
 
+  it.each(['agent.launch', 'agent.launchReplay'])(
+    'keeps a prompted %s alive while it waits for the agent to be ready',
+    (method) => {
+      const prompt = { text: 'fix the build', delivery: 'submit' }
+      expect(
+        classifyRuntimeLongPoll({
+          id: 'req_launch',
+          authToken: 'token',
+          method,
+          params: { prompt }
+        })
+      ).toBe('wait')
+      // An existing workspace without a prompt remains a short call.
+      expect(
+        classifyRuntimeLongPoll({ id: 'req_launch', authToken: 'token', method, params: {} })
+      ).toBeNull()
+    }
+  )
+
+  it.each(['agent.launch', 'agent.launchReplay'])(
+    'keeps unprompted %s workspace setup alive',
+    (method) => {
+      expect(
+        classifyRuntimeLongPoll({
+          id: 'req_setup',
+          authToken: 'token',
+          method,
+          params: {
+            target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
+          }
+        })
+      ).toBe('wait')
+      expect(
+        classifyRuntimeLongPoll({
+          id: 'req_existing',
+          authToken: 'token',
+          method,
+          params: { target: { kind: 'existing', worktree: 'id:wt-7' } }
+        })
+      ).toBeNull()
+    }
+  )
+
   it('keeps agent-prompt submission sockets alive during verification', () => {
     expect(
       classifyRuntimeLongPoll({
@@ -66,7 +111,7 @@ describe('KinguRuntimeRpcServer', () => {
   it('rejects oversized RPC frames instead of buffering them indefinitely', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
     const runtime = new KinguRuntimeService()
-    const server = new KinguRuntimeRpcServer({ runtime, userDataPath })
+    const server = createServer({ runtime, userDataPath })
 
     await server.start()
 
@@ -104,10 +149,47 @@ describe('KinguRuntimeRpcServer', () => {
   // Exercise the real socket (not a mock) so we catch buffer/flush regressions
   // that a unit-level test would miss.
   describe('long-poll transport (§3.1)', () => {
+    it.each(['agent.launch', 'agent.launchReplay'])(
+      'emits keepalives over the socket while unprompted %s setup blocks',
+      async (method) => {
+        const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
+        const runtime = new KinguRuntimeService()
+        const server = createServer({ runtime, userDataPath, keepaliveIntervalMs: 30 })
+        vi.spyOn(server['dispatcher'], 'dispatch').mockImplementation(async (request) => {
+          await sleep(120)
+          return {
+            id: request.id,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: runtime.getRuntimeId() }
+          }
+        })
+        await server.start()
+        try {
+          const metadata = readRuntimeMetadata(userDataPath)
+          const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+            id: 'req_setup',
+            authToken: metadata!.authToken,
+            method,
+            params: {
+              target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
+            }
+          })
+          await session.done
+          expect(
+            session.frames.filter((frame) => frame._keepalive === true).length
+          ).toBeGreaterThanOrEqual(2)
+          expect(session.frames.filter((frame) => frame.ok !== undefined)).toHaveLength(1)
+        } finally {
+          await server.stop()
+        }
+      }
+    )
+
     it('emits keepalives while orchestration.workerStart blocks', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
       const runtime = new KinguRuntimeService()
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 30
@@ -152,7 +234,7 @@ describe('KinguRuntimeRpcServer', () => {
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       // Why: 50ms keepalive lets us collect ≥3 frames within a 300ms wait
       // window without slowing the suite.
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 50
@@ -204,7 +286,7 @@ describe('KinguRuntimeRpcServer', () => {
       })
       const task = db.createTask({ spec: 'Wait for an answer', runId: run.id })
       createRootDispatch(db, task.id, 'term_asker', askerPaneKey)
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 50
@@ -247,7 +329,7 @@ describe('KinguRuntimeRpcServer', () => {
     it('emits keepalive frames while terminal.wait blocks and returns its structured timeout', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
       const runtime = new KinguRuntimeService()
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 30
@@ -318,7 +400,7 @@ describe('KinguRuntimeRpcServer', () => {
     it('emits keepalive frames while agent-prompt verification blocks', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
       const runtime = new KinguRuntimeService()
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 30
@@ -357,7 +439,7 @@ describe('KinguRuntimeRpcServer', () => {
     it('releases terminal.wait long-poll slot when the client closes mid-wait', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
       const runtime = new KinguRuntimeService()
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 1000,
@@ -436,7 +518,7 @@ describe('KinguRuntimeRpcServer', () => {
       runtime.setOrchestrationDb(db)
       // A consuming check now requires a live pane; these transport tests only need it to block.
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 1000,
@@ -498,7 +580,7 @@ describe('KinguRuntimeRpcServer', () => {
       runtime.setOrchestrationDb(db)
       // A consuming check now requires a live pane; these transport tests only need it to block.
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 1000,
@@ -540,7 +622,7 @@ describe('KinguRuntimeRpcServer', () => {
       runtime.setOrchestrationDb(db)
       // A consuming check now requires a live pane; these transport tests only need it to block.
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 1000,
@@ -601,7 +683,7 @@ describe('KinguRuntimeRpcServer', () => {
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
       seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2', 'term_w3'])
       // Why: cap 4 → ask sub-cap 2, so 4 concurrent asks can only take half the budget.
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 1000,
@@ -713,7 +795,7 @@ describe('KinguRuntimeRpcServer', () => {
       runtime.setOrchestrationDb(db)
       // A consuming check now requires a live pane; these transport tests only need it to block.
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 1000,
@@ -764,7 +846,7 @@ describe('KinguRuntimeRpcServer', () => {
       // RPC would show up; `status.get` returns in <10ms so no keepalive
       // should ever fire. Locks in the "keepalive is long-poll-only" invariant
       // so a future refactor can't silently re-broaden the timer.
-      const server = new KinguRuntimeRpcServer({
+      const server = createServer({
         runtime,
         userDataPath,
         keepaliveIntervalMs: 10
@@ -799,7 +881,7 @@ describe('KinguRuntimeRpcServer', () => {
       // AbortController in the transport's in-flight set.
       const userDataPath = mkdtempSync(join(tmpdir(), 'kingu-runtime-rpc-'))
       const runtime = new KinguRuntimeService()
-      const server = new KinguRuntimeRpcServer({ runtime, userDataPath })
+      const server = createServer({ runtime, userDataPath })
       await server.start()
 
       // Force the dispatcher to throw a non-envelope error.

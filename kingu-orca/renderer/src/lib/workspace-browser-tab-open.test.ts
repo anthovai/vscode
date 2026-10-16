@@ -24,7 +24,7 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.getState() }
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: (...args: unknown[]) => mocks.createRemote(...args)
 }))
 
@@ -96,6 +96,7 @@ describe('openWorkspaceBrowserTab', () => {
       {
         activate: true,
         browserRuntimeEnvironmentId: null,
+        executionHostId: 'ssh:ssh-target',
         focusAddressBar: false,
         sessionProfileId: 'ssh-profile',
         targetGroupId: 'group-1',
@@ -118,6 +119,7 @@ describe('openWorkspaceBrowserTab', () => {
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
       url: 'https://github.com/acme/kingu/pull/456',
+      afterTabId: 'source-unified-tab',
       intent: { kind: 'url' },
       focusOnCreate: false,
       selectWorktree: false
@@ -126,7 +128,7 @@ describe('openWorkspaceBrowserTab', () => {
     expect(createBrowserTab).toHaveBeenCalledWith(
       WORKSPACE_ID,
       'https://github.com/acme/kingu/pull/456',
-      expect.objectContaining({ activate: false })
+      expect.objectContaining({ activate: false, afterTabId: 'source-unified-tab' })
     )
   })
 
@@ -202,6 +204,7 @@ describe('openWorkspaceBrowserTab', () => {
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
       url: 'https://gitlab.com/acme/kingu/-/merge_requests/77',
+      afterTabId: 'source-unified-tab',
       intent: { kind: 'url' },
       focusOnCreate: false,
       selectWorktree: false
@@ -209,6 +212,7 @@ describe('openWorkspaceBrowserTab', () => {
 
     expect(mocks.createRemote).toHaveBeenCalledWith(
       expect.objectContaining({
+        clientAfterTabId: 'source-unified-tab',
         focusOnCreate: false,
         selectWorktree: false,
         url: 'https://gitlab.com/acme/kingu/-/merge_requests/77'
@@ -593,5 +597,118 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.createRemote.mockResolvedValue(false)
     await expect(openWorkspaceBrowserTab(request)).rejects.toThrow('Unable to search with Kagi.')
     expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('links from a managed server reached over SSH', () => {
+  function sshDeployedRuntimeState(
+    kingudDeployment: Record<string, unknown>,
+    settings: Record<string, unknown> = {}
+  ): Record<string, unknown> {
+    return {
+      ...ownerState(toRuntimeExecutionHostId('kingud-env')),
+      runtimeEnvironments: [{ id: 'kingud-env', kingudDeployment }],
+      // Headless kingud advertises no screencast backend.
+      runtimeStatusByEnvironmentId: new Map([
+        ['kingud-env', { status: { capabilities: [] }, checkedAt: 1 }]
+      ]),
+      settings,
+      createBrowserTab: vi.fn(),
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+  }
+  const sshDeployment = {
+    kind: 'ssh',
+    sshTargetId: 'ssh-target',
+    sshTargetGeneration: 2,
+    localPort: 41000,
+    remotePort: 41001
+  }
+
+  it('opens the link in an SSH-routed desktop tab the runtime workspace still owns', async () => {
+    mocks.state = sshDeployedRuntimeState(sshDeployment)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'kingud-env')).toBe(
+      true
+    )
+    await openWorkspaceBrowserTab({
+      workspaceId: WORKSPACE_ID,
+      url: 'http://localhost:3000/',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'kingud-env'
+    })
+
+    expect(mocks.state.createBrowserTab).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      'http://localhost:3000/',
+      expect.objectContaining({
+        browserRuntimeEnvironmentId: null,
+        executionHostId: toRuntimeExecutionHostId('kingud-env')
+      })
+    )
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+  })
+
+  it('keeps a screencast-capable deployment on its runtime browser', async () => {
+    mocks.state = {
+      ...sshDeployedRuntimeState(sshDeployment),
+      ...browserCapableRuntime('kingud-env')
+    }
+
+    await openWorkspaceBrowserTab({
+      workspaceId: WORKSPACE_ID,
+      url: 'http://localhost:3000/',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'kingud-env'
+    })
+
+    expect(mocks.createRemote).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: 'kingud-env', waitForRegistration: true })
+    )
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['SSH browser routing is off', sshDeployment, { browserSshWorkspaceRoutingEnabled: false }],
+    [
+      'the user browses this host from this device',
+      sshDeployment,
+      { browserSshWorkspaceRoutingDisabledTargetIds: ['ssh-target'] }
+    ],
+    ['the server is a WSL deployment', { kind: 'wsl', distro: 'Ubuntu' }, {}]
+  ])('offers only the system browser when %s', async (_label, deployment, settings) => {
+    mocks.state = sshDeployedRuntimeState(deployment, settings)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'kingud-env')).toBe(
+      false
+    )
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'http://localhost:3000/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'kingud-env'
+      })
+    ).rejects.toThrow('Unable to open URL.')
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+  })
+
+  it('does not lend the SSH route to a link asserting another runtime', () => {
+    mocks.state = sshDeployedRuntimeState(sshDeployment)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'other-env')).toBe(
+      false
+    )
+  })
+
+  it('offers no in-app browser from the paired web client', () => {
+    mocks.pairedWeb = true
+    mocks.state = sshDeployedRuntimeState(sshDeployment)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'kingud-env')).toBe(
+      false
+    )
   })
 })

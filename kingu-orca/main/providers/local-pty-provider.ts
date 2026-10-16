@@ -1,5 +1,10 @@
 import type * as pty from 'node-pty'
-import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type {
+  IPtyProvider,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from './pty-provider-contract'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -14,6 +19,11 @@ import {
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtyProcessInspection } from './pty-process-inspection'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import {
+  _resetPtyOwnerHostColorsForTest,
+  setPtyOwnerHostColors
+} from '../../shared/pty-owner-color-query-colors'
 import {
   advanceLoadGeneration,
   clearPtyState,
@@ -118,8 +128,13 @@ export class LocalPtyProvider implements IPtyProvider {
   clearBuffer(id: string): Promise<void> {
     return clearLocalPtyBuffer(id)
   }
+  // A direct PTY keeps no terminal model of its own.
+  async resetInputModes(_id: string): Promise<void> {}
   closeStartupQueryAuthority(id: string): number {
     return closeLocalPtyStartupQueryAuthority(id)
+  }
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    setPtyOwnerHostColors(colors)
   }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
@@ -222,4 +237,5 @@ export function _resetLocalPtyProviderStateForTest(): void {
     clearPtyState(id)
   }
   resetLoadGeneration()
+  _resetPtyOwnerHostColorsForTest()
 }

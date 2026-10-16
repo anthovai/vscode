@@ -1,7 +1,7 @@
 import type { KinguProfileAuthStatus } from '../../shared/kingu-profiles'
 import type { ActiveKinguProfileState } from './profile-index-store'
 import { getKinguCloudAuthConfig, isKinguCloudDevAuthEnabled } from './profile-cloud-auth-config'
-import { readKinguCloudSession } from './profile-cloud-session-store'
+import { readCloudSession } from './profile-cloud-session-owner'
 
 export function getKinguProfileAuthStatusFromProfile(
   active: ActiveKinguProfileState,
@@ -21,7 +21,7 @@ export function getKinguProfileAuthStatusFromProfile(
     }
   }
 
-  const session = readKinguCloudSession(active.profile.id, userDataPath)
+  const session = readCloudSession(active.profile.id, userDataPath)
   if (!configured) {
     return {
       activeProfileId: active.profile.id,

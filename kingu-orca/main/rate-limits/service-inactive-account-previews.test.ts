@@ -39,6 +39,14 @@ vi.mock('./opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: vi.fn()
 }))
 
+vi.mock('./zcode-usage-fetcher', () => ({
+  fetchZcodeRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
 vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
@@ -70,7 +78,7 @@ describe('RateLimitService', () => {
 
   it('aborts inactive Claude preview fetches on stop', async () => {
     const service = new RateLimitService()
-    const account = { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    const account = { id: 'account-1' }
     const capturedSignals: { claude?: AbortSignal } = {}
     service.setInactiveClaudeAccountsResolver(() => [account])
     vi.mocked(fetchManagedAccountUsage).mockImplementation(
@@ -128,6 +136,8 @@ describe('RateLimitService', () => {
 
   it('passes WSL Codex managed homes into inactive account rate-limit fetches', async () => {
     const service = new RateLimitService()
+    const networkProxySettings = { httpProxyUrl: 'http://proxy.fixture.invalid:8080' }
+    service.setNetworkProxySettingsResolver(() => networkProxySettings)
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\kingu\\codex-accounts\\a\\home'
     service.setInactiveCodexAccountsResolver(() => [
@@ -140,7 +150,7 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         codexHomePath: wslCodexHome,
-        allowPtyFallback: false,
+        networkProxySettings,
         signal: expect.any(AbortSignal)
       })
     )
@@ -205,7 +215,7 @@ describe('RateLimitService', () => {
 
   it('allows usage-panel Fable supplements for inactive Claude account previews', async () => {
     const service = new RateLimitService()
-    const account = { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    const account = { id: 'account-1' }
     service.setInactiveClaudeAccountsResolver(() => [account])
     vi.mocked(fetchManagedAccountUsage).mockResolvedValueOnce(okProvider('claude', 33, Date.now()))
 
@@ -223,9 +233,7 @@ describe('RateLimitService', () => {
   it('does not start overlapping inactive Claude preview fetches', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
-    service.setInactiveClaudeAccountsResolver(() => [
-      { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
-    ])
+    service.setInactiveClaudeAccountsResolver(() => [{ id: 'account-1' }])
     vi.mocked(fetchManagedAccountUsage).mockReturnValueOnce(accountFetch.promise)
 
     const firstFetch = service.fetchInactiveClaudeAccountsOnOpen()
@@ -394,12 +402,11 @@ describe('RateLimitService', () => {
   it('does not recache an inactive Claude account removed during fetch-on-open', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
-    let inactiveAccounts = [{ id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }]
+    let inactiveAccounts = [{ id: 'account-1' }]
     service.setInactiveClaudeAccountsResolver(() => inactiveAccounts)
     service.setClaudeAuthPreparationResolver(async () => ({
       configDir: '/tmp/.claude',
       envPatch: {},
-      stripAuthEnv: false,
       provenance: 'system'
     }))
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
@@ -413,7 +420,7 @@ describe('RateLimitService', () => {
     ])
 
     service.evictInactiveClaudeCache('account-1')
-    inactiveAccounts = [{ id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }]
+    inactiveAccounts = [{ id: 'account-1' }]
     await service.refreshForClaudeAccountChange('account-1')
     expect(service.getState().inactiveClaudeAccounts[0]?.accountId).toBe('account-1')
 
@@ -428,13 +435,10 @@ describe('RateLimitService', () => {
   it('does not overwrite inactive Claude cache from a stale same-id fetch', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
-    service.setInactiveClaudeAccountsResolver(() => [
-      { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
-    ])
+    service.setInactiveClaudeAccountsResolver(() => [{ id: 'account-1' }])
     service.setClaudeAuthPreparationResolver(async () => ({
       configDir: '/tmp/.claude',
       envPatch: {},
-      stripAuthEnv: false,
       provenance: 'system'
     }))
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))

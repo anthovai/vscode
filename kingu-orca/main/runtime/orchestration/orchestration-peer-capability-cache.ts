@@ -1,7 +1,6 @@
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { BoundedMap } from '../../../shared/bounded-map'
-import type { KinguRuntimeService } from '../kingu-runtime'
 
 const DEFAULT_MAX_PEERS = 128
 
@@ -271,10 +270,10 @@ export class OrchestrationPeerCapabilityCache {
   }
 }
 
-const cachesByRuntime = new WeakMap<KinguRuntimeService, OrchestrationPeerCapabilityCache>()
+const cachesByRuntime = new WeakMap<WeakKey, OrchestrationPeerCapabilityCache>()
 
 export function getOrchestrationPeerCapabilityCache(
-  runtime: KinguRuntimeService
+  runtime: WeakKey
 ): OrchestrationPeerCapabilityCache {
   let cache = cachesByRuntime.get(runtime)
   if (!cache) {

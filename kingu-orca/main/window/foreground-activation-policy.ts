@@ -9,6 +9,7 @@ import { app as electronApp, type BrowserWindow } from 'electron'
  * can use KINGU_E2E_FOREGROUND=1 only without an explicit background request.
  * The hosted-Xvfb terminal benchmark explicitly presents after startup; see tests/AGENTS.md.
  * This policy still suppresses its automatic reveals and foreground activation.
+ * kingud's browser sidecar (KINGU_KINGUD_SIDECAR=1) is held to the same explicit request.
  */
 
 type ActivationPolicyApp = {
@@ -16,12 +17,21 @@ type ActivationPolicyApp = {
   setActivationPolicy: (policy: 'accessory' | 'prohibited' | 'regular') => void
 }
 
-/** Reads KINGU_BACKGROUND_LAUNCH, KINGU_E2E_FOREGROUND, KINGU_E2E_HEADLESS, KINGU_E2E_HEADFUL. */
+/** Reads KINGU_BACKGROUND_LAUNCH, KINGU_KINGUD_SIDECAR, KINGU_E2E_FOREGROUND, KINGU_E2E_HEADLESS, KINGU_E2E_HEADFUL. */
 type PolicyEnv = Readonly<Record<string, string | undefined>>
+
+/** kingud's headless browser provider: a serve process on a throwaway profile that no user drives. */
+export function isKingudSidecarLaunch(env: PolicyEnv = process.env): boolean {
+  return env.KINGU_KINGUD_SIDECAR === '1'
+}
+
+function isExplicitBackgroundLaunch(env: PolicyEnv): boolean {
+  return env.KINGU_BACKGROUND_LAUNCH === '1' || isKingudSidecarLaunch(env)
+}
 
 /** True when this process must not steal focus, raise windows, or activate the app. */
 export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
-  if (env.KINGU_BACKGROUND_LAUNCH === '1') {
+  if (isExplicitBackgroundLaunch(env)) {
     return true
   }
   if (env.KINGU_E2E_FOREGROUND === '1') {
@@ -33,7 +43,7 @@ export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
 /** Suppresses automatic presentation on launch; this is not a query of current window visibility. */
 export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
   return (
-    env.KINGU_BACKGROUND_LAUNCH === '1' ||
+    isExplicitBackgroundLaunch(env) ||
     (isBackgroundLaunch(env) && env.KINGU_E2E_HEADLESS === '1' && env.KINGU_E2E_HEADFUL !== '1')
   )
 }

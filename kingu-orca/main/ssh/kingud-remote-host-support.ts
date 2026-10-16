@@ -3,9 +3,9 @@
  * discovered at runtime.
  *
  * The install transaction is host-agnostic — it is the relay's, and the relay runs on
- * Windows. The launch, liveness and stop path is not: it uses `nohup`, a redirected stdout,
- * `kill -0` and `ps`. Emitting a PowerShell-shaped approximation of that would produce a
- * deploy that reports success on a host where nothing is running.
+ * Windows. Every managed-kingud operation runs on Windows through the host script
+ * (`kingud-windows-host-script.ts`); the guard below remains only on POSIX command builders
+ * that the Windows paths never call.
  */
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -13,9 +13,8 @@ export class KingudRemoteLaunchUnsupportedError extends Error {
   readonly code = 'kingud_remote_launch_unsupported_host'
   constructor(hostLabel: string) {
     super(
-      `Deploying kingud to a ${hostLabel} host is not implemented. The install transaction is ` +
-        'host-agnostic, but the launch and readiness path is POSIX-only: it uses nohup, a ' +
-        'redirected stdout and `kill -0` liveness. Use the relay for this host.'
+      `This kingud command does not run on a ${hostLabel} host. The install transaction is ` +
+        'host-agnostic, but this step is a POSIX command with a separate Windows path.'
     )
     this.name = 'KingudRemoteLaunchUnsupportedError'
   }
@@ -27,8 +26,17 @@ export function assertPosixKingudHost(host: RemoteHostPlatform): void {
   }
 }
 
+/** Stdout of the launched candidate: exactly one `kingu_server_ready` line, then nothing. */
+export const KINGUD_READINESS_FILENAME = '.kingud-readiness'
+/** Stderr, including the bind-exposure line and every supervision message. */
+export const KINGUD_LOG_FILENAME = 'kingud.log'
+// Why a cap: the readiness file is candidate-written stdout, and a runaway writer must not be read whole.
+export const KINGUD_READINESS_MAX_BYTES = 256 * 1024
+
 /** PID of the launched kingud, written into its own version dir at launch. */
 export const KINGUD_PID_FILENAME = '.kingud-pid'
+/** Windows' `.kingud-pid`: `{"pid":N,"creationTimeMs":M|null}`, since a PID alone is no identity there. */
+export const KINGUD_WINDOWS_PROCESS_FILENAME = '.kingud-process.json'
 
 /**
  * A shell function answering whether a PID is a *running* process.

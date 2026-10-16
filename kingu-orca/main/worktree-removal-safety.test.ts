@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { homedir } from 'node:os'
+
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import {
-  canCleanupUnregisteredKinguLeftoverDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
   getRegisteredDeletableWorktree,
-  isDangerousWorktreeRemovalPath,
-  isWorktreePathMissing
+  isDangerousWorktreeRemovalPath
 } from './worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME, executionHostRemovalHome } from './worktree-removal-home-guard'
 
@@ -350,208 +348,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
   })
 })
 
-describe('isWorktreePathMissing', () => {
-  it('does not treat an unreadable path as absent', async () => {
-    await expect(
-      isWorktreePathMissing('/workspaces/locked', async () => {
-        throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
-      })
-    ).resolves.toBe(false)
-  })
-})
-
-describe('canCleanupUnregisteredKinguLeftoverDirectory', () => {
-  const repo = { path: '/repos/main' }
-  const ownedMeta = { kinguCreatedAt: 1, kinguCreationSource: 'runtime' as const }
-  const baseArgs = {
-    meta: ownedMeta,
-    worktreePath: '/workspaces/kingu-owned',
-    runtimeWorktreePath: '/workspaces/kingu-owned',
-    repo,
-    runtimeRepoPath: repo.path,
-    registeredWorktrees: [makeGitWorktree(repo.path, true)],
-    home: CLIENT_REMOVAL_HOME
-  }
-
-  it('rejects unregistered existing targets that are files or symlinks', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        statPath: makeStatPath(['/workspaces/kingu-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        statPath: async (path) => {
-          if (path === '/workspaces/kingu-owned') {
-            return { type: 'symlink' }
-          }
-          throw missingPath(path)
-        },
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('rejects unregistered leftover directories with a .git marker', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        statPath: makeStatPath(['/workspaces/kingu-owned/.git'], ['/workspaces/kingu-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('rejects no-marker cleanup when only the Kingu path shape matches', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        meta: undefined,
-        statPath: makeStatPath([], ['/workspaces/kingu-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('checks dangerous paths in the original path space before runtime translation', async () => {
-    const homePath = homedir()
-    const runtimeHomePath = homePath
-      .replace(/^([A-Za-z]):/, (_match, drive: string) => `/mnt/${drive.toLowerCase()}`)
-      .replace(/\\/g, '/')
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: homePath,
-        runtimeWorktreePath: runtimeHomePath,
-        repo: { path: 'C:\\repos\\main' },
-        runtimeRepoPath: '/mnt/c/repos/main',
-        registeredWorktrees: [makeGitWorktree('C:\\repos\\main', true)],
-        statPath: makeStatPath([], [runtimeHomePath]),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('checks dangerous POSIX runtime home paths before no-marker cleanup', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: '/home/dev',
-        runtimeWorktreePath: '/home/dev',
-        repo: { path: '/repos/main' },
-        runtimeRepoPath: '/repos/main',
-        registeredWorktrees: [makeGitWorktree('/repos/main', true)],
-        statPath: makeStatPath([], ['/home/dev']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).not.toHaveBeenCalled()
-  })
-
-  it('rejects unregistered leftover directories that still answer git status', async () => {
-    const isGitRepository = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        statPath: makeStatPath([], ['/workspaces/kingu-owned']),
-        isGitRepository
-      })
-    ).resolves.toBe(false)
-
-    expect(isGitRepository).toHaveBeenCalledWith('/workspaces/kingu-owned')
-  })
-
-  it('rejects unregistered leftover directories that contain a registered child worktree', async () => {
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        registeredWorktrees: [
-          makeGitWorktree(repo.path, true),
-          makeGitWorktree('/workspaces/kingu-owned/child')
-        ],
-        statPath: makeStatPath([], ['/workspaces/kingu-owned']),
-        isGitRepository: vi.fn().mockResolvedValue(false)
-      })
-    ).rejects.toThrow(
-      'Refusing to delete worktree because it contains another registered worktree: /workspaces/kingu-owned/child'
-    )
-  })
-
-  it('uses runtime paths for filesystem proof and original paths for nested worktree checks', async () => {
-    const statPath = vi.fn(async (path: string) => {
-      if (path === '/mnt/c/workspaces/kingu-owned') {
-        return { type: 'directory' }
-      }
-      throw missingPath(path)
-    })
-    const isGitRepository = vi.fn().mockResolvedValue(false)
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: 'C:\\workspaces\\kingu-owned',
-        runtimeWorktreePath: '/mnt/c/workspaces/kingu-owned',
-        repo: { path: 'C:\\repos\\main' },
-        runtimeRepoPath: '/mnt/c/repos/main',
-        registeredWorktrees: [
-          makeGitWorktree('C:\\repos\\main', true),
-          makeGitWorktree('C:\\workspaces\\kingu-owned-sibling')
-        ],
-        statPath,
-        isGitRepository
-      })
-    ).resolves.toBe(true)
-
-    expect(statPath).toHaveBeenCalledWith('/mnt/c/workspaces/kingu-owned')
-    expect(statPath).toHaveBeenCalledWith('/mnt/c/workspaces/kingu-owned/.git')
-    expect(statPath).not.toHaveBeenCalledWith('C:\\workspaces\\kingu-owned')
-    expect(isGitRepository).toHaveBeenCalledWith('/mnt/c/workspaces/kingu-owned')
-  })
-
-  it('rejects translated-runtime cleanup when original path contains a registered child', async () => {
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...baseArgs,
-        worktreePath: 'C:\\workspaces\\kingu-owned',
-        runtimeWorktreePath: '/mnt/c/workspaces/kingu-owned',
-        repo: { path: 'C:\\repos\\main' },
-        runtimeRepoPath: '/mnt/c/repos/main',
-        registeredWorktrees: [
-          makeGitWorktree('C:\\repos\\main', true),
-          makeGitWorktree('C:\\workspaces\\kingu-owned\\child')
-        ],
-        statPath: makeStatPath([], ['/mnt/c/workspaces/kingu-owned']),
-        isGitRepository: vi.fn().mockResolvedValue(false)
-      })
-    ).rejects.toThrow(
-      'Refusing to delete worktree because it contains another registered worktree: C:\\workspaces\\kingu-owned\\child'
-    )
-  })
-})
-
 describe('isDangerousWorktreeRemovalPath on an execution host', () => {
   // #18275: these verdicts are about the machine that runs the delete. The
   // client home is `homedir()` here — a macOS/Linux path that recognises none
@@ -731,32 +527,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => 
         orphan.statPath,
         orphan.readPath
       )
-    ).resolves.toBe(true)
-  })
-
-  it('refuses the leftover-directory cleanup while the host home is unanswered', async () => {
-    const leftoverArgs = {
-      meta: { kinguCreatedAt: 1, kinguCreationSource: 'ssh' as const },
-      worktreePath: '/srv/homes/alice',
-      runtimeWorktreePath: '/srv/homes/alice',
-      repo: { path: '/opt/src/repo' },
-      runtimeRepoPath: '/opt/src/repo',
-      registeredWorktrees: [],
-      statPath: makeStatPath([], ['/srv/homes/alice']),
-      isGitRepository: vi.fn().mockResolvedValue(false)
-    }
-
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...leftoverArgs,
-        home: executionHostRemovalHome(null)
-      })
-    ).resolves.toBe(false)
-    await expect(
-      canCleanupUnregisteredKinguLeftoverDirectory({
-        ...leftoverArgs,
-        home: executionHostRemovalHome('/srv/homes/bob')
-      })
     ).resolves.toBe(true)
   })
 })

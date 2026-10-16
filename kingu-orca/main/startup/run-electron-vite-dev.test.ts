@@ -102,7 +102,7 @@ function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     }
   }
   delete env.ELECTRON_EXEC_PATH
-  return { ...env, ...extra }
+  return { ...env, KINGU_SKIP_DEV_STORAGE_RECLAIM: '1', ...extra }
 }
 
 /**

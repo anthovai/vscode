@@ -1,3 +1,4 @@
+import { isAgentInjectingInput } from './agent-input-injection'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
@@ -67,6 +68,10 @@ export function setupGuestShortcutForwarding(args: {
   }
 
   const handler = (event: Electron.Event, input: Electron.Input): void => {
+    // Why: agent-injected keys must not run Kingu shortcuts or grab actions (#20595).
+    if (isAgentInjectingInput(guest)) {
+      return
+    }
     const keybindings = getKeybindings?.()
     if (
       input.type === 'keyDown' &&

@@ -27,6 +27,11 @@ import {
   runEffects
 } from './floating-terminal-panel-render-probe'
 
+vi.mock('zustand/react/shallow', () => ({
+  // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
+  useShallow: (selector: unknown) => selector
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
@@ -35,6 +40,25 @@ vi.mock('react', async () => {
 
 vi.mock('@/store', async () => {
   return (await import('./floating-terminal-panel-test-module-mocks')).createAppStoreModule()
+})
+
+// The probe checks element names and props without mounting these workspace children.
+vi.mock('@/components/tab-group/WorkspaceTabDragLayer', async () => {
+  return (
+    await import('./floating-terminal-panel-component-stubs')
+  ).createWorkspaceTabDragLayerModule()
+})
+
+vi.mock('@/components/tab-group/TabGroupSplitNodeTree', async () => {
+  return (
+    await import('./floating-terminal-panel-component-stubs')
+  ).createTabGroupSplitNodeTreeModule()
+})
+
+vi.mock('@/components/WorkspacePaneOverlayLayers', async () => {
+  return (
+    await import('./floating-terminal-panel-component-stubs')
+  ).createWorkspacePaneOverlayLayersModule()
 })
 
 vi.mock('@/components/tab-bar/TabBar', async () => {
@@ -103,10 +127,28 @@ vi.mock('@/components/terminal/useTerminalSaveDialog', async () => {
   ).createTerminalSaveDialogModule()
 })
 
-vi.mock('@/runtime/web-runtime-session', async () => {
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', async () => {
   return (
     await import('./floating-terminal-panel-test-module-mocks')
-  ).createWebRuntimeSessionModule()
+  ).createWebRuntimeTabLifecycleModule()
+})
+
+vi.mock('@/runtime/web-runtime-browser-creation', async () => {
+  return (
+    await import('./floating-terminal-panel-test-module-mocks')
+  ).createWebRuntimeBrowserCreationModule()
+})
+
+vi.mock('@/runtime/web-runtime-terminal-creation', async () => {
+  return (
+    await import('./floating-terminal-panel-test-module-mocks')
+  ).createWebRuntimeTerminalCreationModule()
+})
+
+vi.mock('@/runtime/web-runtime-session-environment', async () => {
+  return (
+    await import('./floating-terminal-panel-test-module-mocks')
+  ).createWebRuntimeSessionEnvironmentModule()
 })
 
 vi.mock('@/lib/connection-context', async () => {
@@ -202,9 +244,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined
+      undefined,
+      { id: expect.any(String) }
     )
-    // Why: createTab itself activates the new tab within the floating group.
     expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
@@ -299,9 +341,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined
+      undefined,
+      { id: expect.any(String) }
     )
-    // Why: createTab itself activates the new tab within the floating group.
     expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
@@ -549,6 +591,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
     state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
     state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: terminalTab.id }
+    // Real state keeps tabs and layout together; the surface mounts only with both.
+    state.layoutByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId } }
     state.tabBarOrderByWorktree = {
       [FLOATING_TERMINAL_WORKTREE_ID]: [
         terminalUnifiedTab.id,

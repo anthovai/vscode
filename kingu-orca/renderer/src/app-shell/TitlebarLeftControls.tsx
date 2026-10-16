@@ -1,4 +1,4 @@
-import { isMac } from './app-window-chrome'
+import { hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
 /**
@@ -23,7 +23,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         layout.leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
       }`}
     >
-      {isMac && !layout.isFullScreen ? <div className="titlebar-traffic-light-pad" /> : null}
+      {hasMacTrafficLights && !layout.isFullScreen ? <div className="titlebar-traffic-light-pad" /> : null}
     </div>
   )
 }

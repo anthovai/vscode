@@ -18,7 +18,7 @@ export function createPtySpawnCommitDependencies(
     getLocalPtyStartupPromise: unexpectedPreflight,
     getLocalPtyProviderStartupPromise: unexpectedPreflight,
     adoptStablePane: unexpectedPreflight,
-    assertFolderWorkspacePtyPathUsable: unexpectedPreflight,
+    assertWorkspaceAcceptsNewPty: unexpectedPreflight,
     resolvePtySpawnStartupCwd: unexpectedPreflight,
     localStartupCwdDirectoryExists: unexpectedPreflight,
     prepareCodexResumeHome: unexpectedPreflight,
@@ -37,7 +37,6 @@ export function createPtySpawnCommitDependencies(
     sendPtyExitToRenderer: unexpectedPreflight,
     finishPtyShutdown: unexpectedPreflight,
     retiredRejectedPtyIds: new Map(),
-    reversibleStopOwnersByPtyId: new Map(),
     get mainWindow() {
       return unexpectedPreflight()
     }

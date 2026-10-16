@@ -4,7 +4,7 @@ const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
 // The cheap reader goes through Kingu's single child-process entry point (windowsHide, argv
 // encoding, tree termination); mock at that seam rather than node:child_process.
-vi.mock('./child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@kingu/process-host', () => ({ runProcess: runProcessMock }))
 
 import {
   getCheapProcessTableSnapshot,

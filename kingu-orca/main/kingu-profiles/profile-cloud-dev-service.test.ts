@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -128,10 +128,14 @@ describe('Kingu cloud dev auth service', () => {
 
   it('signs out locally without calling the cloud logout endpoint', async () => {
     await connectCurrentKinguProfile(userDataPath)
+    const regionCache = join(userDataPath, 'kingu-relay-region-preference.json')
+    writeFileSync(regionCache, '{}')
 
     const result = await signOutCurrentKinguProfile(userDataPath)
 
     expect(result.status).toBe('signed-out')
+    // Why: sign-out must remove what Relay use left behind.
+    expect(existsSync(regionCache)).toBe(false)
     expect(revokeKinguCloudSessionMock).not.toHaveBeenCalled()
     expect(getCurrentKinguProfileAuthStatus(userDataPath)).toMatchObject({
       configured: true,

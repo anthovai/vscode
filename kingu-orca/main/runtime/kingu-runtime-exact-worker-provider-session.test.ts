@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
-import { KinguRuntimeWithGetTerminalInteractiveWait } from './kingu-runtime-get-terminal-interactive-wait'
+import { KinguRuntimeWithGetTerminalInteractiveWait } from './terminal/wait/terminal-interactive-wait'
 
 const PANE_KEY = 'tab:worker'
 const PTY_ID = 'pty-wsl'

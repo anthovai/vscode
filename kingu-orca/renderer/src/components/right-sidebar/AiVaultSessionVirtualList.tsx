@@ -31,6 +31,7 @@ export function AiVaultSessionVirtualList({
   groups,
   collapsedGroups,
   loading,
+  scanProgressShown = false,
   sessionsCount,
   filteredSessionsCount,
   noAgentsSelected,
@@ -50,6 +51,7 @@ export function AiVaultSessionVirtualList({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   onCopyResume,
   onCopyId,
   onCopyPath,
@@ -62,6 +64,8 @@ export function AiVaultSessionVirtualList({
   groups: readonly AiVaultSessionListGroup[]
   collapsedGroups: ReadonlySet<string>
   loading: boolean
+  /** The progress strip above names the scan, so the list does not repeat it. */
+  scanProgressShown?: boolean
   sessionsCount: number
   filteredSessionsCount: number
   noAgentsSelected: boolean
@@ -81,6 +85,7 @@ export function AiVaultSessionVirtualList({
   onResume: (session: AiVaultSession, worktreeId: string) => void
   onContinueInNewSession: (session: AiVaultSession, worktreeId: string) => void
   onResumeInNewChat: (session: AiVaultSession, worktreeId: string) => void
+  onResumeInNewCli: (session: AiVaultSession, worktreeId: string) => void
   onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void
   onCopyPath: (session: AiVaultSession) => void
@@ -171,7 +176,9 @@ export function AiVaultSessionVirtualList({
         ref={listScrollRef}
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-sleek"
       >
-        {loading && sessionsCount === 0 ? <SessionLoadingState /> : null}
+        {loading && sessionsCount === 0 ? (
+          <SessionLoadingState showLabel={!scanProgressShown} />
+        ) : null}
 
         {!loading && sessionsCount === 0 && !error ? (
           <EmptyState
@@ -227,6 +234,7 @@ export function AiVaultSessionVirtualList({
                 onResume={onResume}
                 onContinueInNewSession={onContinueInNewSession}
                 onResumeInNewChat={onResumeInNewChat}
+                onResumeInNewCli={onResumeInNewCli}
                 onCopyResume={onCopyResume}
                 onCopyId={onCopyId}
                 onCopyPath={onCopyPath}

@@ -18,8 +18,8 @@ import { spawn } from 'node:child_process'
 import {
   forceTerminateProcessTree,
   signalProcessTree
-} from '../shared/child-process/process-tree-termination'
-import { createOutputSink } from '../shared/child-process/bounded-output-sink'
+} from '@kingu/process-host/process-tree-termination'
+import { createOutputSink } from '@kingu/process-host/bounded-output-sink'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
 

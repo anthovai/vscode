@@ -1,11 +1,25 @@
+import type * as ExecCommandModule from './ssh-relay-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { parseKingudLinuxLibc, resolveKingudDeploymentTarget } from './kingud-deployment-target'
+import {
+  parseGlibcVersion,
+  parseKingudLinuxLibc,
+  resolveKingudDeploymentTargetFacts
+} from './kingud-deployment-target'
 import { SshConnection } from './ssh-connection'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execCommand } from './ssh-relay-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn() }))
+vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: vi.fn()
+}))
+
+async function resolveKingudDeploymentTarget(
+  options: Parameters<typeof resolveKingudDeploymentTargetFacts>[0]
+): Promise<string> {
+  return (await resolveKingudDeploymentTargetFacts(options)).target
+}
 beforeEach(() => vi.mocked(execCommand).mockReset())
 
 describe('deployment C library selection', () => {
@@ -75,4 +89,41 @@ describe('deployment C library selection', () => {
       expect(() => parseKingudLinuxLibc(output)).toThrow('Could not identify')
     }
   )
+
+  it.each([
+    ['ldd (Ubuntu GLIBC 2.31-0ubuntu9.16) 2.31\nCopyright (C) 2020', { major: 2, minor: 31 }],
+    ['ldd (GNU libc) 2.17', { major: 2, minor: 17 }],
+    ['glibc 2.28', { major: 2, minor: 28 }],
+    ['ldd (GNU libc) unknown', null]
+  ])('reads glibc major.minor from %j', (output, expected) => {
+    expect(parseGlibcVersion(output)).toEqual(expected)
+  })
+
+  it('returns the glibc version with the target, from either probe', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    const host = getRemoteHostPlatform('linux-arm64')
+    vi.mocked(execCommand).mockResolvedValueOnce('ldd (Debian GLIBC 2.36-9+deb12u4) 2.36')
+    await expect(resolveKingudDeploymentTargetFacts({ conn, host })).resolves.toEqual({
+      target: 'linux-arm64-glibc',
+      glibc: { major: 2, minor: 36 }
+    })
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('ldd: not found')
+      .mockResolvedValueOnce('glibc 2.27')
+    await expect(resolveKingudDeploymentTargetFacts({ conn, host })).resolves.toEqual({
+      target: 'linux-arm64-glibc',
+      glibc: { major: 2, minor: 27 }
+    })
+  })
+
+  it('reports no glibc on musl and non-Linux hosts', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    vi.mocked(execCommand).mockResolvedValueOnce('musl libc (x86_64)\nVersion 1.2.5')
+    await expect(
+      resolveKingudDeploymentTargetFacts({ conn, host: getRemoteHostPlatform('linux-x64') })
+    ).resolves.toEqual({ target: 'linux-x64-musl', glibc: null })
+    await expect(
+      resolveKingudDeploymentTargetFacts({ conn, host: getRemoteHostPlatform('darwin-arm64') })
+    ).resolves.toEqual({ target: 'darwin-arm64', glibc: null })
+  })
 })

@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   assignee_handle     TEXT,
   assignee_pane_key   TEXT,
   -- Bare Kingu session id the agent is addressed by, when it has one (today only structured
-  -- sessions); for a /clear'd chat, its lineage root's. Not its session:<id> address.
+  -- sessions); for a /clear'd chat, its lineage root's. Not its kingu_session_id:<id> address.
   assignee_kingu_session_id TEXT,
   capability_hash     TEXT,
   process_incarnation TEXT,

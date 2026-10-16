@@ -11,7 +11,7 @@ import {
 import { getLinearUsageExamples } from '@/lib/linear-usage-examples'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 
-const UPDATE_COMMAND = 'npx skills update kingu-linear --global'
+const UPDATE_COMMAND = KINGU_LINEAR_SKILL_INSTALL_COMMAND
 
 const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[],

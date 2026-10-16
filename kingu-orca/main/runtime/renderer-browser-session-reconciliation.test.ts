@@ -3,8 +3,8 @@ import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { KinguRuntimeWithCloseStructuredAgentSessionTab } from './kingu-runtime-close-structured-agent-session-tab'
-import { KinguRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from './kingu-runtime-reconcile-headless-mobile-session-browser-tabs'
+import { KinguRuntimeWithCloseStructuredAgentSessionTab } from './session-tabs/structured-session-tab-close'
+import { KinguRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from './session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs'
 
 const rendererPage: RuntimeMobileSessionBrowserTab = {
   type: 'browser',

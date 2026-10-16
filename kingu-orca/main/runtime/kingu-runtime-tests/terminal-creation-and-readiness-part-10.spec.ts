@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  KinguRuntimeService,
-  RpcDispatcher,
-  TERMINAL_METHODS
-} from '../kingu-runtime-test-mocks.spec'
+import { KinguRuntimeService } from '../kingu-runtime-test-mocks.spec'
+import { RpcDispatcher, TERMINAL_METHODS } from '../kingu-runtime-test-mocks/terminal-rpc.spec'
 import { makeRpcRequest, store, syncSinglePty } from '../kingu-runtime-test-fixtures.spec'
 
 describe('KinguRuntimeService', () => {

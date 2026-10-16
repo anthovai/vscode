@@ -214,7 +214,6 @@ export function createWorktreeContextMenuModuleMock(): Record<string, unknown> {
   return {
     default: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
-    CLOSE_ALL_CONTEXT_MENUS_EVENT: 'kingu:test-close-context-menus',
     WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-kingu-context-menu-scope'
   }
 }

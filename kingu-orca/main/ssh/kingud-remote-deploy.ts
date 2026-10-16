@@ -2,55 +2,46 @@
  * Activate installed bytes only after the candidate proves healthy. A rejected candidate
  * allows restarting the incumbent only when profile state is provably unchanged; otherwise
  * preserve current state and the prelaunch snapshot for explicit recovery.
+ *
+ * Every activation runs under the host's activation fence and journal
+ * (`kingud-activation-lock.ts`), so an interrupted one is recoverable to exactly one slot.
  */
-import type { SshConnection } from './ssh-connection'
-import { KINGUD_STARTUP_READINESS_TIMEOUT_MS } from '../../shared/kingud-profile-preflight'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { logKingudActivationOutcome } from './kingud-activation-outcome-log'
+import { join } from 'node:path'
+import type { KingudHostTransport } from './kingud-host-transport'
 import { KINGUD_INSTALL_MODEL } from './remote-install-model'
-import { writeRelayFile } from './ssh-relay-install-transfers'
-import { computeRemoteInstallDir, readLocalFullVersion } from './ssh-relay-versioned-install'
-import { RELAY_REMOTE_DIR } from './relay-protocol'
-import {
-  KINGUD_STATE_SNAPSHOT_DIR,
-  serializeKingudActivationRecord,
-  withActivatedVersion,
-  type KingudActivationRecord,
-  type KingudStateSnapshot
-} from './kingud-activation-record'
-import { kingudActivationPath, readKingudActivationRecord } from './kingud-activation-record-store'
-import { evaluateKingudActivation, type KingudActivationVerdict } from './kingud-activation-gate'
-import { planKingudUpdate, type KingudTerminalCensus } from './kingud-update-plan'
-import {
-  KINGUD_LOG_FILENAME,
-  kingudLaunchCommand,
-  parseKingudReadinessOutput,
-  readKingudReadinessCommand
-} from './kingud-remote-launch'
-import { rejectedKingudStateRecoveryRefusal, stopOutgoingKingud } from './kingud-remote-deploy-stop'
-import {
-  captureKingudStateSnapshotCommand,
-  kingudSnapshotDirName,
-  parseKingudSnapshotCapture
-} from './kingud-state-snapshot'
-import {
-  kingudStopFreedTheHost,
-  parseKingudStopOutcome,
-  stopKingudCommand
-} from './kingud-remote-process-control'
-import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
-import { computeLocalKingudBuildHash } from './kingud-local-build-hash'
-import { preflightInstalledKingud } from './kingud-remote-preflight'
-import { assertPosixKingudHost } from './kingud-remote-host-support'
+import { computeRemoteInstallDir, readLocalFullVersion } from './remote-versioned-install'
+import { readKingudActivationRecord } from './kingud-activation-record-store'
+import type { KingudActivationRecord } from './kingud-activation-record'
+import type { KingudActivationVerdict } from './kingud-activation-gate'
+import type { KingudTerminalCensus } from './kingud-update-plan'
+import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { installKingudBundle } from './kingud-remote-install'
-import { materializeKingudArtifact } from './kingud-artifact-materializer'
-import { resolveKingudDeploymentTarget } from './kingud-deployment-target'
+import { getAppEnvironment } from '../../shared/app-environment'
+import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
+import { KINGUD_STARTUP_READINESS_TIMEOUT_MS } from '../../shared/kingud-profile-preflight'
+import { materializeKingudArtifact } from '../kingud/kingud-artifact-materializer'
+import { readKingudBundleTarget } from './kingud-deployment-target'
+import { resolveKingudRuntimeTarget } from './kingud-runtime-target'
+import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
+import {
+  kingudActivationFenceExists,
+  resolveKingudActivationReadinessTimeout,
+  withKingudActivationLock
+} from './kingud-activation-lock'
+import { activateInstalledKingud } from './kingud-installed-activation'
+import { kingudActivationFenceRefusal } from './kingud-activation-fence-hold'
 
 export type KingudDeployOptions = {
-  conn: SshConnection
+  conn: KingudHostTransport
   host: RemoteHostPlatform
   remoteHome: string
   /** An already assembled bundle; otherwise materialize the packaged template for this host. */
   localKingudDir?: string
+  /** The bundle's runtime target; read from `localKingudDir` or probed when absent. */
+  target?: NodeRuntimeTarget
+  /** Where the pinned runtime archive is cached; defaults beside the kingud artifact cache. */
+  runtimeCacheRoot?: string
   nodePath: string
   userDataDir: string
   bindHost: string
@@ -61,8 +52,27 @@ export type KingudDeployOptions = {
    * that guessed zero from silence would be the "loss of contact means death" mistake.
    */
   census: KingudTerminalCensus
+  /**
+   * The record `census` was counted against; defaults to the one read before upload. A different
+   * incumbent found under the fence makes the census unverifiable rather than wrongly zero.
+   */
+  censusRecord?: KingudActivationRecord
+  /**
+   * Counts again under the fence just before the incumbent stops, so a terminal opened during
+   * the upload still defers the update. Called only while the incumbent is the one counted.
+   */
+  recountCensus?: () => Promise<KingudTerminalCensus>
   force?: boolean
+  /** The Kingu app version activating, recorded so an older client never downgrades the host. */
+  appVersion?: string
+  /**
+   * Re-applies the caller's version policy to the record read under the host fence, since another
+   * desktop can activate or stop a build while this one uploads. A reason refuses the activation.
+   */
+  admitRecord?: (record: KingudActivationRecord, candidateVersion: string) => string | null
   readinessTimeoutMs?: number
+  /** WSL only; SSH hosts always re-hash the runtime (see `installKingudBundle`). */
+  recordedNodeRuntimeProbe?: boolean
   now?: () => Date
   sleep?: (ms: number) => Promise<void>
   signal?: AbortSignal
@@ -73,242 +83,61 @@ export type KingudDeployResult =
   | { outcome: 'already-active'; fullVersion: string }
   | { outcome: 'installed-not-activated'; fullVersion: string; code: string; reason: string }
 
-const READINESS_POLL_MS = 500
-const STOP_WAIT_SECONDS = 20
-
-function exec(options: KingudDeployOptions, command: string): Promise<string> {
-  return execCommand(options.conn, command, {
-    wrapCommand: options.host.commandDialect !== 'powershell',
-    signal: options.signal
-  })
-}
-
-function baseDir(options: KingudDeployOptions): string {
-  return joinRemotePath(options.host, options.remoteHome, RELAY_REMOTE_DIR)
-}
-
-async function captureSnapshot(
-  options: KingudDeployOptions,
-  fullVersion: string,
-  outgoingVersion: string | null,
-  takenAt: Date
-): Promise<KingudStateSnapshot | null> {
-  // The caller has already stopped the outgoing runtime. This is required once profile state
-  // includes SQLite: a tar of a live WAL, main database, and SHM file is not a SQLite backup.
-  const dirName = kingudSnapshotDirName(fullVersion, takenAt.getTime())
-  const snapshotDir = joinRemotePath(
-    options.host,
-    baseDir(options),
-    KINGUD_STATE_SNAPSHOT_DIR,
-    dirName
-  )
-  const capture = parseKingudSnapshotCapture(
-    await exec(
-      options,
-      captureKingudStateSnapshotCommand(options.host, options.userDataDir, snapshotDir)
-    )
-  )
-  if (capture === 'failed') {
-    throw new Error(
-      `Could not snapshot ${options.userDataDir} before activating ${fullVersion}. Kingu's ` +
-        'persisted state carries no schema version, so without a snapshot a rollback has no ' +
-        'way back. Refusing to activate.'
-    )
-  }
-  // Empty profiles need no rollback snapshot.
-  if (capture === 'empty') {
-    return null
-  }
-  return {
-    dirName,
-    takenBeforeVersion: fullVersion,
-    readableByVersion: outgoingVersion,
-    takenAt: takenAt.toISOString()
-  }
-}
-
-async function launchAndAwaitReadiness(
-  options: KingudDeployOptions,
-  remoteInstallDir: string,
-  fullVersion: string
-): Promise<ReturnType<typeof parseKingudReadinessOutput>> {
-  await exec(
-    options,
-    kingudLaunchCommand(options.host, { ...options, remoteInstallDir, fullVersion })
-  )
-  const deadline = Date.now() + (options.readinessTimeoutMs ?? KINGUD_STARTUP_READINESS_TIMEOUT_MS)
-  const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
-  let last = parseKingudReadinessOutput('')
-  while (Date.now() < deadline) {
-    options.signal?.throwIfAborted()
-    last = parseKingudReadinessOutput(
-      await exec(options, readKingudReadinessCommand(options.host, remoteInstallDir))
-    )
-    if (last.state !== 'pending') {
-      return last
-    }
-    await sleep(READINESS_POLL_MS)
-  }
-  return last
-}
-
-/** Restart the incumbent only when the candidate left shared state unchanged. */
-async function restoreIncumbent(
-  options: KingudDeployOptions,
-  record: KingudActivationRecord,
-  candidateDir?: string,
-  snapshot?: KingudStateSnapshot | null
-): Promise<string> {
-  if (candidateDir) {
-    const stopped = parseKingudStopOutcome(
-      await exec(
-        options,
-        stopKingudCommand(options.host, candidateDir, {
-          waitSeconds: STOP_WAIT_SECONDS,
-          justLaunched: true
-        })
-      )
-    )
-    if (!kingudStopFreedTheHost(stopped)) {
-      return `The candidate itself did not stop (${stopped}); the host may still be serving the rejected build.`
-    }
-  }
-  if (!record.active) {
-    return 'No previous version was active, so this host is now serving nothing.'
-  }
-  if (candidateDir) {
-    const snapshotDir = snapshot
-      ? joinRemotePath(options.host, baseDir(options), KINGUD_STATE_SNAPSHOT_DIR, snapshot.dirName)
-      : undefined
-    const refusal = await rejectedKingudStateRecoveryRefusal(options, record.active, snapshotDir)
-    if (refusal) {
-      return refusal
-    }
-  }
-  const incumbentDir = computeRemoteInstallDir(
-    KINGUD_INSTALL_MODEL,
-    options.remoteHome,
-    record.active
-  )
-  const parsed = await launchAndAwaitReadiness(options, incumbentDir, record.active)
-  return parsed.state === 'ready'
-    ? `kingud ${record.active} was restarted and is serving again.`
-    : `kingud ${record.active} was relaunched but has not published readiness; this host may be down.`
-}
-
 /** Activate on a healthy verdict; retain changed candidate state for explicit recovery. */
-export async function deployKingud(input: KingudDeployOptions): Promise<KingudDeployResult> {
-  assertPosixKingudHost(input.host)
+export async function deployKingud(
+  input: KingudDeployOptions,
+  retryClearedFence = true
+): Promise<KingudDeployResult> {
+  const target =
+    input.target ??
+    (input.localKingudDir
+      ? readKingudBundleTarget(input.localKingudDir)
+      : await resolveKingudRuntimeTarget(input))
   const options = {
     ...input,
+    target,
+    readinessTimeoutMs: resolveKingudActivationReadinessTimeout(
+      input.readinessTimeoutMs,
+      KINGUD_STARTUP_READINESS_TIMEOUT_MS
+    ),
+    nodeRuntimeArchive: () =>
+      materializeNodeRuntimeArchive(
+        target,
+        input.runtimeCacheRoot ?? join(getAppEnvironment().getPath('userData'), 'kingud-artifacts'),
+        { signal: input.signal }
+      ),
     localKingudDir:
-      input.localKingudDir ??
-      (await materializeKingudArtifact(await resolveKingudDeploymentTarget(input), {
-        signal: input.signal
-      }))
+      input.localKingudDir ?? (await materializeKingudArtifact(target, { signal: input.signal }))
   }
-  const now = options.now ?? ((): Date => new Date())
   const fullVersion = readLocalFullVersion(options.localKingudDir)
   const remoteDir = computeRemoteInstallDir(KINGUD_INSTALL_MODEL, options.remoteHome, fullVersion)
-  const record = await readKingudActivationRecord(options)
+  const held = async (): Promise<KingudDeployResult> => {
+    const { cleared, ...refusal } = await kingudActivationFenceRefusal(options, 'update')
+    // Once: a second abandoned fence means something keeps leaving them, so report it.
+    if (cleared && retryClearedFence) {
+      return deployKingud({ ...input, target, localKingudDir: options.localKingudDir }, false)
+    }
+    return { outcome: 'installed-not-activated', fullVersion, ...refusal }
+  }
+  // Fail fast before upload; the activation re-reads both under the fence.
+  const preUploadRecord = await readKingudActivationRecord(options)
+  const censusRecord = options.censusRecord ?? preUploadRecord
+  // An unanswered probe only skips this shortcut: the fence acquisition itself still decides.
+  if (await kingudActivationFenceExists(options).catch(() => false)) {
+    return held()
+  }
 
   await installKingudBundle(options, fullVersion, remoteDir)
 
-  const plan = planKingudUpdate({
-    record,
-    candidateVersion: fullVersion,
-    census: options.census,
-    ...(options.force !== undefined ? { force: options.force } : {})
-  })
-  if (plan.action === 'noop') {
-    return { outcome: 'already-active', fullVersion }
-  }
-  if (plan.action === 'defer') {
-    return {
-      outcome: 'installed-not-activated',
-      fullVersion,
-      code: plan.code,
-      reason: plan.reason
-    }
-  }
-
-  try {
-    await preflightInstalledKingud({
-      ...options,
-      remoteInstallDir: remoteDir,
-      fullVersion
-    })
-  } catch (error) {
-    options.signal?.throwIfAborted()
-    return {
-      outcome: 'installed-not-activated',
-      fullVersion,
-      code: 'kingud_candidate_preflight_failed',
-      reason: `Candidate profile preflight failed; the incumbent was not stopped: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    }
-  }
-
-  if (record.active) {
-    const stopped = await stopOutgoingKingud(options, record.active)
-    if (!kingudStopFreedTheHost(stopped)) {
-      return {
-        outcome: 'installed-not-activated',
-        fullVersion,
-        code: 'kingud_outgoing_stop_incomplete',
-        reason:
-          `Could not verify that kingud ${record.active} exited (${stopped}). ` +
-          'No snapshot was taken and the candidate was not started. Kingu requires matching ' +
-          'runtime readiness before signaling an incumbent and confirmed exit before snapshotting.'
-      }
-    }
-  }
-
-  // A live SQLite WAL is not a backup boundary: tar can observe the main file, WAL and SHM
-  // at different points and restore a set SQLite cannot recover. Stop the incumbent first so
-  // its final durable flush has completed before capturing the pre-activation state.
-  let snapshot: KingudStateSnapshot | null = null
-  if (record.active) {
-    try {
-      snapshot = await captureSnapshot(options, fullVersion, record.active, now())
-    } catch (error) {
-      const restored = await restoreIncumbent(options, record).catch(
-        (restartError: unknown) =>
-          `The incumbent could not be restarted: ${
-            restartError instanceof Error ? restartError.message : String(restartError)
-          }`
-      )
-      throw new Error(
-        `${error instanceof Error ? error.message : String(error)} The incumbent was stopped ` +
-          `before snapshotting; ${restored}`
-      )
-    }
-  }
-
-  const parsed = await launchAndAwaitReadiness(options, remoteDir, fullVersion)
-  const verdict = evaluateKingudActivation(parsed.state === 'ready' ? parsed.readiness : null, {
-    buildHash: computeLocalKingudBuildHash(options.localKingudDir),
-    fullVersion
-  })
-  if (verdict.decision === 'reject') {
-    const restored = await restoreIncumbent(options, record, remoteDir, snapshot)
-    return {
-      outcome: 'installed-not-activated',
-      fullVersion,
-      code: verdict.code,
-      reason:
-        `${verdict.reason} Candidate stderr is at ` +
-        `${joinRemotePath(options.host, remoteDir, KINGUD_LOG_FILENAME)}. ${restored}`
-    }
-  }
-
-  await writeRelayFile(
-    options.conn,
-    options.host,
-    kingudActivationPath(options.host, options.remoteHome),
-    serializeKingudActivationRecord(withActivatedVersion(record, fullVersion, snapshot, now())),
-    { signal: options.signal }
+  return logKingudActivationOutcome(
+    `update to ${fullVersion}`,
+    () =>
+      withKingudActivationLock(
+        options,
+        (lock) =>
+          activateInstalledKingud({ ...options, censusRecord }, fullVersion, remoteDir, lock),
+        held
+      ),
+    ['installed-and-activated', 'already-active']
   )
-  return { outcome: 'installed-and-activated', fullVersion, verdict }
 }

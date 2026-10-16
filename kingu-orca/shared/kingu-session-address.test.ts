@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  KINGU_SESSION_ADDRESS_PREFIX,
   formatKinguSessionAddress,
   isKinguSessionId,
   parseKinguSessionAddress
@@ -8,11 +7,10 @@ import {
 import { testKinguSessionId } from './kingu-session-address-test-fixture'
 
 const SESSION_ID = testKinguSessionId('0b7e4c2a-5f1d-4e8a-9c3b-2d6f8a1e4b70')
-const ADDRESS = `session:${SESSION_ID}`
+const ADDRESS = `kingu_session_id:${SESSION_ID}`
 
 describe('Kingu session address', () => {
-  it('addresses an Kingu session id as session:<id> and parses the bare id back', () => {
-    expect(KINGU_SESSION_ADDRESS_PREFIX).toBe('session:')
+  it('addresses an Kingu session id as kingu_session_id:<id> and parses the bare id back', () => {
     expect(formatKinguSessionAddress(SESSION_ID)).toBe(ADDRESS)
     expect(parseKinguSessionAddress(ADDRESS)).toBe(SESSION_ID)
     const parsed = parseKinguSessionAddress(ADDRESS)
@@ -32,12 +30,17 @@ describe('Kingu session address', () => {
     ['the Run mailbox namespace', 'run:run_123'],
     ['the Dispatch mailbox namespace', 'dispatch:ctx_123'],
     ['an empty prefix', `:${SESSION_ID}`],
-    ['an empty id', 'session:'],
-    ['an id with a separator', `session:${SESSION_ID}:extra`],
-    ['an id the session predicate rejects', 'session:short'],
+    ['an empty id', 'kingu_session_id:'],
+    ['an id with a separator', `kingu_session_id:${SESSION_ID}:extra`],
+    ['an id the session predicate rejects', 'kingu_session_id:short'],
     ['a terminal handle', 'term_4f2c9a']
   ])('refuses %s', (_label, value) => {
     expect(parseKinguSessionAddress(value)).toBeNull()
+  })
+
+  it('no longer reads the retired session:<id> spelling as a session, as an address or a bare id', () => {
+    expect(parseKinguSessionAddress(`session:${SESSION_ID}`)).toBeNull()
+    expect(isKinguSessionId(`session:${SESSION_ID}`)).toBe(false)
   })
 
   it.each([
@@ -47,7 +50,7 @@ describe('Kingu session address', () => {
   ])('never treats %s as an Kingu session id', (_label, handle) => {
     // Handles share the session-id charset, so the session-record predicate alone would accept them.
     expect(isKinguSessionId(handle)).toBe(false)
-    expect(parseKinguSessionAddress(`session:${handle}`)).toBeNull()
+    expect(parseKinguSessionAddress(`kingu_session_id:${handle}`)).toBeNull()
   })
 
   it('validates an Kingu session id with the session-record predicate', () => {

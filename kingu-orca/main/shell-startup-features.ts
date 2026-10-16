@@ -26,6 +26,7 @@ export type ShellStartupFeature = (typeof SHELL_STARTUP_FEATURES)[number]
 
 /** Spawn-env keys that mean this pane carries an Kingu overlay the wrapper must re-apply. */
 const OVERLAY_ENV_KEYS = [
+  'KINGU_DATA_ACCOUNT_DATA_HOME',
   'KINGU_OPENCODE_CONFIG_DIR',
   'KINGU_MIMOCODE_HOME',
   'KINGU_OMP_STATUS_EXTENSION',

@@ -1,29 +1,48 @@
-import type { IPtyProvider } from '../../../providers/types'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
-import { getProviderForPty, localProvider } from '../provider/registry'
+import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
   writeRefused,
   writeUnverifiable,
+  isSettledWrite,
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
-export function writePtyFromRuntimeController(ptyId: string, data: string): boolean
+type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
+
 export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
+  inputKind: TerminalInputKind
+): boolean
+export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
+  ptyId: string,
+  data: string,
+  inputKind: TerminalInputKind,
   options: { waitForSettlement: true }
 ): WriteSettlement | Promise<WriteSettlement>
 export function writePtyFromRuntimeController(
+  deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
+  inputKind: TerminalInputKind,
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
+  const observeAcceptedInput = (): void => {
+    if (inputKind === 'driving' && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
+      deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
+    }
+  }
   let provider: IPtyProvider
   try {
     provider = getProviderForPty(ptyId)
@@ -36,15 +55,28 @@ export function writePtyFromRuntimeController(
     if (!provider.writeWithSettlement) {
       return writeRefused('provider_cannot_settle')
     }
+    deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
     try {
-      return provider.writeWithSettlement(ptyId, data)
+      const result = provider.writeWithSettlement(ptyId, data)
+      const observe = (settlement: WriteSettlement): WriteSettlement => {
+        if (settlement.outcome === 'accepted') {
+          observeAcceptedInput()
+        }
+        return settlement
+      }
+      return isSettledWrite(result) ? observe(result) : result.then(observe)
     } catch {
       // A synchronous throw cannot prove the transport took nothing.
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
+  deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
   try {
-    return provider.write(ptyId, data) !== false
+    const accepted = provider.write(ptyId, data) !== false
+    if (accepted) {
+      observeAcceptedInput()
+    }
+    return accepted
   } catch {
     return false
   }
@@ -57,13 +89,12 @@ export async function probePtyLivenessFromRuntimeController(
   try {
     // Why: no locally routed provider can authoritatively answer for a
     // remote host's PTY, so remote-scoped ids stay unknown, never absent.
-    if (ptyId.startsWith('remote:')) {
+    if (isRemoteRuntimePtyId(ptyId)) {
       return null
     }
-    const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
     // Why: during cold start the daemon swap is in flight; the pre-swap
     // fallback would answer absent for every daemon-owned id.
-    const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
+    const startupPromise = deps.getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
     if (startupPromise) {
       await startupPromise
     }
@@ -86,7 +117,7 @@ export async function attachPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
 ): Promise<boolean> {
-  if (ptyOwnership.get(ptyId) != null || parseAppSshPtyId(ptyId)) {
+  if (resolvePtyExecutionHost(ptyId) !== LOCAL_EXECUTION_HOST_ID) {
     return false
   }
   let provider: IPtyProvider
@@ -179,6 +210,21 @@ export async function clearBufferFromRuntimeController(
   }
 }
 
+export async function resetInputModesFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): Promise<void> {
+  // Why: a remote client's reset must also ground this host window's view of the pane.
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:resetInputModes:request', { ptyId })
+  }
+  try {
+    await getProviderForPty(ptyId).resetInputModes(ptyId)
+  } catch {
+    /* best effort: an older daemon or relay rejects the request */
+  }
+}
+
 const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 
@@ -189,11 +235,10 @@ export function hasPtyFromRuntimeController(
   try {
     // Why: no locally routed provider can authoritatively answer for a
     // remote host's PTY, so remote-scoped ids stay unknown, never absent.
-    if (ptyId.startsWith('remote:')) {
+    if (isRemoteRuntimePtyId(ptyId)) {
       return null
     }
-    const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
-    const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
+    const startupPromise = deps.getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
     if (startupPromise && !settledLocalPtyProviderStartups.has(startupPromise)) {
       // Why: a sync probe cannot wait out the cold-start daemon swap the way
       // probePtyLiveness does, and the pre-swap provider's "no PTY" for a

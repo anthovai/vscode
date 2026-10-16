@@ -1,7 +1,7 @@
 import type { KinguCloudAuthConfig } from '../../kingu-profiles/profile-cloud-auth-config'
 import { ensureActiveKinguProfile } from '../../kingu-profiles/profile-index-store'
 import { readFreshKinguCloudSession } from '../../kingu-profiles/profile-cloud-session-refresh'
-import type { RelayAuthContext } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 
 export async function readRelayAuthContext(
   authConfig: KinguCloudAuthConfig,

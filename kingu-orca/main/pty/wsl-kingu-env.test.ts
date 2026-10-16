@@ -64,6 +64,7 @@ describe('addKinguWslInteropEnv', () => {
       KINGU_CLI_COMMAND: 'kingu-ide',
       KINGU_WSL_CLI_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Kingu\\wsl-managed-cli\\hash',
       KINGU_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Kingu\\resources\\bin\\kingu.exe',
+      KINGU_CODEX_ISOLATE: '0',
       KINGU_OMP_FRESH_CONFIG: 'C:\\Kingu\\fresh-session.yml',
       KINGU_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\kingu-agent-status.ts',
       KINGU_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\kingu-agent-status.ts',
@@ -80,7 +81,10 @@ describe('addKinguWslInteropEnv', () => {
       KINGU_WSL_HOOK_INSTANCE: 'testinstance',
       KINGU_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
       KINGU_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
-      KINGU_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
+      KINGU_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu',
+      KINGU_RUNTIME_SOURCE_ID: '11111111-1111-4111-8111-111111111111',
+      KINGU_RUNTIME_SOURCE_INCARNATION: 'runtime-a',
+      KINGU_RUNTIME_SOURCE_PROFILE_PATH: 'C:\\Users\\a\\AppData\\Roaming\\kingu'
     }
 
     addKinguWslInteropEnv(env)
@@ -90,6 +94,7 @@ describe('addKinguWslInteropEnv', () => {
     expect(env.WSLENV).toContain('KINGU_CLI_COMMAND/u')
     expect(env.WSLENV).toContain('KINGU_WSL_CLI_DIR/p')
     expect(env.WSLENV).toContain('KINGU_CODEX_LAUNCH_PREFLIGHT/p')
+    expect(env.WSLENV).toContain('KINGU_CODEX_ISOLATE/u')
     expect(env.WSLENV).toContain('KINGU_OMP_STATUS_EXTENSION/p')
     expect(env.WSLENV).toContain('KINGU_OMP_FRESH_CONFIG/p')
     expect(env.WSLENV).not.toContain('KINGU_PRIME_AGENT_STATUS_EXTENSION')
@@ -107,6 +112,9 @@ describe('addKinguWslInteropEnv', () => {
     expect(env.WSLENV).toContain('KINGU_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u')
     expect(env.WSLENV).toContain('KINGU_ORCHESTRATION_COMPATIBILITY_HOST_ID/u')
     expect(env.WSLENV).toContain('KINGU_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u')
+    expect(env.WSLENV).toContain('KINGU_RUNTIME_SOURCE_ID/u')
+    expect(env.WSLENV).toContain('KINGU_RUNTIME_SOURCE_INCARNATION/u')
+    expect(env.WSLENV).toContain('KINGU_RUNTIME_SOURCE_PROFILE_PATH/u')
   })
 
   it('overwrites caller host evidence with native runtime WSL authority', () => {
@@ -203,14 +211,6 @@ describe('addKinguWslInteropEnv', () => {
     addKinguWslInteropEnv(env)
 
     expect(env.WSLENV).toBe('KINGU_SHELL_READY_ROOT/p:KINGU_WORKSPACE_NAME/u')
-  })
-
-  it('does not register setup vars that are absent from the env', () => {
-    const env: Record<string, string> = { KINGU_TERMINAL_HANDLE: 'term_wsl' }
-
-    addKinguWslInteropEnv(env)
-
-    expect(env.WSLENV).toBe('KINGU_TERMINAL_HANDLE/u:KINGU_SHELL_READY_ROOT/p')
   })
 
   it('crosses the inline-image protocol hint into the guest untranslated (/u)', () => {

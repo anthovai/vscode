@@ -1,9 +1,8 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
-import { getConnectionIdFromState } from '@/lib/connection-context'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -15,7 +14,6 @@ type LaunchAgentSessionContinuationArgs = {
   prompt: string
   worktreeId: string
   groupId?: string | null
-  workspacePath: string
   initialCwd?: string | null
   launchSource: LaunchSource
 }
@@ -23,14 +21,7 @@ type LaunchAgentSessionContinuationArgs = {
 export async function detectAgentSessionContinuationAgents(
   worktreeId: string
 ): Promise<TuiAgent[]> {
-  const state = useAppStore.getState()
-  const connectionId = getConnectionIdFromState(state, worktreeId)
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  return connectionId
-    ? state.ensureRemoteDetectedAgents(connectionId)
-    : runtimeEnvironmentId
-      ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
-      : state.ensureDetectedAgents(worktreeId)
+  return ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
 }
 
 async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promise<boolean> {
@@ -73,7 +64,6 @@ export async function launchAgentSessionContinuation({
   prompt,
   worktreeId,
   groupId,
-  workspacePath,
   initialCwd,
   launchSource
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
@@ -81,15 +71,13 @@ export async function launchAgentSessionContinuation({
     return false
   }
 
-  const connectionId = getConnectionIdFromState(useAppStore.getState(), worktreeId)
-  await preflightAgentTrust({ agent, workspacePath, connectionId })
-
   const label = getAgentLabel(agent)
   // Why: the paste helper writes blind when the agent's composer was never observed, so a
   // written prompt is not a delivered one. Claiming success there is how the whole handoff
   // could vanish silently (#22479).
   let deliveryUnconfirmed = false
   const result = launchAgentInNewTab({
+    requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),

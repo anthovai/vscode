@@ -6,6 +6,7 @@ import { readGitCommandFailureText } from '../../shared/git-command-failure-text
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import type { WorktreeCheckoutProgressListener } from './worktree-checkout-progress'
 
 export type AddWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
@@ -30,6 +31,8 @@ export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
   checkoutExistingBranch?: boolean
+  /** Progress of the checkout `git worktree add` performs; never called for `--no-checkout`. */
+  onCheckoutProgress?: WorktreeCheckoutProgressListener
   suggestLocalBaseRefUpdate?: boolean
   remoteTrackingBase?: {
     base: string
@@ -42,6 +45,8 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
   forceBranchDelete?: boolean
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
+  /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
+  checkoutDeleteSignal?: AbortSignal
 }
 
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); ample for an ordinary large checkout, but not one behind a slow content filter (#12696).

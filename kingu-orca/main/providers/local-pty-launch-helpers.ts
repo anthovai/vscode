@@ -9,7 +9,8 @@ const PANE_IDENTITY_ENV_KEYS = [
   'KINGU_PANE_KEY',
   'KINGU_TAB_ID',
   'KINGU_WORKTREE_ID',
-  'KINGU_AGENT_LAUNCH_TOKEN'
+  'KINGU_AGENT_LAUNCH_TOKEN',
+  'JCODE_RUNTIME_DIR'
 ] as const
 
 export function getDefaultCwd(): string {

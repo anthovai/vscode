@@ -1,6 +1,10 @@
+import type * as ExecCommandModule from './ssh-relay-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn() }))
+vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
+  execCommand: vi.fn()
+}))
 vi.mock('./ssh-relay-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
@@ -9,16 +13,27 @@ vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: vi.fn(),
   writeRelayFile: vi.fn()
 }))
+vi.mock('./kingud-remote-node-runtime', () => ({
+  ensureRemoteKingudNodeRuntime: vi.fn().mockResolvedValue(undefined)
+}))
 
-import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import type { KingudHostTransport } from './kingud-host-transport'
+import { execCommand } from './ssh-relay-exec-command'
 import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
 import { installKingudBundle } from './kingud-remote-install'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
+import { acquireInstallLock } from './ssh-relay-install-lock'
+import {
+  initKingudHeldFenceTokenFile,
+  KINGUD_HELD_FENCE_TOKENS_FILE_NAME
+} from './kingud-held-fence-tokens'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: All connection operations are mocked.
-const conn = {} as SshConnection
+const conn = {} as KingudHostTransport
 const mockExec = vi.mocked(execCommand)
 const mockUpload = vi.mocked(uploadRelayDirectory)
 const mockWrite = vi.mocked(writeRelayFile)
@@ -49,7 +64,14 @@ describe.each([
   ]
   const install = (signal?: AbortSignal): Promise<void> =>
     installKingudBundle(
-      { conn, host, localKingudDir: '/local/kingud', signal },
+      {
+        conn,
+        host,
+        localKingudDir: '/local/kingud',
+        target: host.os === 'win32' ? 'win32-x64' : 'linux-x64-glibc',
+        nodeRuntimeArchive: async () => '/cache/node-archive',
+        signal
+      },
       fullVersion,
       remoteDir
     )
@@ -155,4 +177,57 @@ describe.each([
       expect(mockWrite).not.toHaveBeenCalled()
     }
   )
+})
+
+// BUG-23: the relaunch proves a lock its own quit left only while the token is still recorded.
+describe('the install lock token', () => {
+  const host = getRemoteHostPlatform('linux-x64')
+  const install = (): Promise<void> =>
+    installKingudBundle(
+      {
+        conn,
+        host,
+        localKingudDir: '/local/kingud',
+        target: 'linux-x64-glibc',
+        nodeRuntimeArchive: async () => '/cache/node-archive'
+      },
+      fullVersion,
+      '/home/u/.kingu-remote/kingud-version'
+    )
+
+  function bindStore(): () => string {
+    const dir = mkdtempSync(join(tmpdir(), 'kingud-install-token-'))
+    initKingudHeldFenceTokenFile(join(dir, 'kingu-data.json'))
+    return () => {
+      try {
+        return readFileSync(join(dir, KINGUD_HELD_FENCE_TOKENS_FILE_NAME), 'utf-8')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  }
+
+  function lockToken(): string {
+    return vi.mocked(acquireInstallLock).mock.calls.at(-1)?.[3]?.owner?.token ?? ''
+  }
+
+  it('is written into the lock and dropped once the lock is removed', async () => {
+    const read = bindStore()
+    await install()
+    expect(lockToken()).not.toBe('')
+    expect(read()).not.toContain(lockToken())
+  })
+
+  it('is kept when a quit cut the lock removal short', async () => {
+    const read = bindStore()
+    mockUpload.mockRejectedValueOnce(new Error('aborted by quit'))
+    mockExec.mockImplementation(async (_conn, command) => {
+      if (command.includes('.install-lock')) {
+        throw new Error('Not connected')
+      }
+      return ''
+    })
+    await expect(install()).rejects.toThrow('aborted by quit')
+    expect(read()).toContain(lockToken())
+  })
 })

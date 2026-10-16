@@ -7,6 +7,7 @@ import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeResultOutcome } from './claude-result-outcome'
+import type { ClaudeCommandTurn } from './claude-command-turn'
 
 export type ClaudeCurrentTurn = {
   sessionId: string
@@ -15,17 +16,25 @@ export type ClaudeCurrentTurn = {
   /** Host clock at the send that opened the turn; absent when the provider
    *  resumed on its own and no send of Kingu's names this turn. */
   requestedAt?: number
-  /** Provider key of the user echo, or the lifecycle row itself when provider
-   *  output opened a turn with no user row to receive its timing. */
+  /** Provider key of the user echo; the send's own key when output the CLI
+   *  wrote for a started send came before its echo; or the lifecycle row itself
+   *  when the provider resumed on its own. */
   userItemId: string
+  /** Present when the turn is the host's record of a conversation command. */
+  command?: ClaudeCommandTurn
+}
+
+/** The row a turn's lifecycle lives on: the host's record for a command, else the lane's own. */
+export function claudeCurrentTurnIdentity(turn: ClaudeCurrentTurn): AgentJournalItemIdentity {
+  return turn.command?.identity ?? claudeTurnLifecycleIdentity(turn.sessionId, turn.turnId)
 }
 
 export type ClaudeTurnEnd = {
   state: 'completed' | 'interrupted'
   completedAt: number
-  /** Only an end the PROVIDER reported carries one. An end the host inferred —
-   *  the child going away, a new turn superseding this one — leaves it absent,
-   *  which reads as unknown rather than claiming the turn worked. */
+  /** An end the provider reported carries its verdict, and a turn a newer one
+   *  replaced carries `superseded`. The child going away leaves it absent, which
+   *  reads as unknown rather than claiming the turn worked. */
   outcome?: AgentJournalTurnOutcome
   /** The SDK's own measured turn duration; only a result frame carries one. */
   durationMs?: number
@@ -36,14 +45,16 @@ export type ClaudeTurnEnd = {
  *  is still a turn the host watched finish, and only `outcome` says it failed. */
 export function claudeTurnEndForResult(
   message: Record<string, unknown>,
-  completedAt: number
+  completedAt: number,
+  leftToStop = false
 ): ClaudeTurnEnd {
-  const outcome = claudeResultOutcome(message)
+  const outcome = claudeResultOutcome(message, leftToStop)
   const durationMs = message.duration_ms
   return {
-    state: outcome === 'cancellation' ? 'interrupted' : 'completed',
+    // No verdict: an interrupted end, which a person's Stop of it makes their cancellation.
+    state: outcome === undefined || outcome === 'cancellation' ? 'interrupted' : 'completed',
     completedAt,
-    outcome,
+    ...(outcome !== undefined ? { outcome } : {}),
     ...(typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs >= 0
       ? { durationMs }
       : {})
@@ -84,7 +95,7 @@ export function claudeTurnLifecycleItem(
   // already carried, because both are built from the same open turn.
   const requested = requestedAt === undefined ? {} : { requestedAt }
   return {
-    identity: claudeTurnLifecycleIdentity(sessionId, turnId),
+    identity: claudeCurrentTurnIdentity(turn),
     body: agentJournalTurnBody(
       end
         ? {

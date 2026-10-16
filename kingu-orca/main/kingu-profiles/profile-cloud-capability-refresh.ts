@@ -2,19 +2,14 @@ import type { RefreshCurrentKinguProfileAuthResult } from '../../shared/kingu-pr
 import { getKinguCloudAuthConfig, isKinguCloudDevAuthEnabled } from './profile-cloud-auth-config'
 import { getKinguProfileAuthStatusFromProfile } from './profile-cloud-auth-status'
 import { refreshKinguCloudCapabilities } from './profile-cloud-client'
-import { linkKinguProfileToCloud } from './profile-cloud-index'
-import { ensureActiveKinguProfile, getKinguProfileListState } from './profile-index-store'
+import { ensureActiveKinguProfile } from './profile-index-store'
 import { refreshDevKinguCloudProfile } from './profile-cloud-dev-service'
 import {
-  captureCloudSessionMutation,
-  cloudSessionIdentity,
-  recordCloudSessionIdentityMutationIfCurrent
-} from './profile-cloud-session-mutation'
+  commitCloudSessionCapabilities,
+  takeCloudSessionTicket,
+  type CloudSessionTicket
+} from './profile-cloud-session-owner'
 import { runWithFreshKinguCloudSession } from './profile-cloud-session-refresh'
-import {
-  readKinguCloudSession,
-  saveKinguCloudSessionIfCurrent
-} from './profile-cloud-session-store'
 
 export async function refreshCurrentKinguProfileAuth(
   userDataPath: string
@@ -41,59 +36,33 @@ export async function refreshCurrentKinguProfileAuth(
     return { status: 'unconfigured', auth: auth() }
   }
   try {
-    const identity = cloudSessionIdentity(active.profile.id, active.profile.cloud)
-    let mutationSnapshot = captureCloudSessionMutation(identity, userDataPath)
+    const cloud = active.profile.cloud
+    let ticket: CloudSessionTicket | undefined
     const operation = await runWithFreshKinguCloudSession(
       configState.config,
       active,
       userDataPath,
-      (session) => refreshKinguCloudCapabilities(configState.config, session)
+      (session) => {
+        // Why: take the ticket at request time, after any refresh; that refresh may relink.
+        ticket = takeCloudSessionTicket(active.profile.id, userDataPath)
+        return refreshKinguCloudCapabilities(configState.config, session)
+      }
     )
-    if (operation.status !== 'ok') {
+    if (operation.status !== 'ok' || !ticket) {
       return { status: 'reconnect-required', auth: auth() }
     }
     const refresh = operation.value
-    if (refresh.cloud) {
-      const refreshedIdentity = cloudSessionIdentity(active.profile.id, refresh.cloud)
-      if (
-        refreshedIdentity.cloudUserId !== identity.cloudUserId ||
-        refreshedIdentity.cloudProfileId !== identity.cloudProfileId
-      ) {
-        throw new Error('kingu_cloud_identity_changed_during_capability_refresh')
-      }
-      if (refreshedIdentity.organizationId !== identity.organizationId) {
-        const advanced = recordCloudSessionIdentityMutationIfCurrent(
-          refreshedIdentity,
-          userDataPath,
-          mutationSnapshot
-        )
-        if (!advanced) {
-          return { status: 'reconnect-required', auth: auth() }
-        }
-        mutationSnapshot = advanced
-      }
-    }
-    const session = readKinguCloudSession(active.profile.id, userDataPath)
-    if (session.status !== 'found') {
-      return { status: 'reconnect-required', auth: auth() }
-    }
     if (
-      saveKinguCloudSessionIfCurrent(
-        active.profile.id,
-        userDataPath,
-        {
-          ...session.session,
-          organizations: refresh.organizations ?? session.session.organizations,
-          capabilities: refresh.capabilities
-        },
-        mutationSnapshot
-      ) === null
+      refresh.cloud &&
+      (refresh.cloud.userId !== cloud.userId ||
+        refresh.cloud.cloudProfileId !== cloud.cloudProfileId)
     ) {
+      throw new Error('kingu_cloud_identity_changed_during_capability_refresh')
+    }
+    const list = commitCloudSessionCapabilities(active.profile.id, userDataPath, ticket, refresh)
+    if (!list) {
       return { status: 'reconnect-required', auth: auth() }
     }
-    const list = refresh.cloud
-      ? linkKinguProfileToCloud(active.profile.id, refresh.cloud, userDataPath)
-      : getKinguProfileListState(userDataPath)
     return {
       status: 'refreshed',
       auth: getKinguProfileAuthStatusFromProfile(

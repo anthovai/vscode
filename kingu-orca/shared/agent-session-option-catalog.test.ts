@@ -52,6 +52,7 @@ describe('agent session option catalog', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
+        request_id: 'kingu-model-discovery',
         response: {
           models: [
             {

@@ -11,95 +11,55 @@
  * Chromium proves available at startup.
  */
 import process from 'node:process'
-import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
-import { setSecretStore, type SecretStore } from '../../shared/secret-store'
+import { getAppEnvironment } from '../../shared/app-environment'
 import type { ServeReadiness } from '../server/serve-readiness'
-import {
-  resolveKingudInstallRoot,
-  resolveKingudPath,
-  resolveUserDataPath
-} from './kingud-app-paths'
+import { resolveKingudInstallRoot, resolveUserDataPath } from './kingud-app-paths'
+import { prepareKingudCliLauncher } from './kingud-cli-launcher'
+import { installKingudHostAdapters, runKingudQuitHandlers } from './kingud-host-adapters'
 import { describeKingudBindExposure, resolveKingudBindHost } from './kingud-bind-address'
 import {
   flushKingudProfileStoreForShutdown,
   installKingudShutdownSignals,
   startKingudWithHost
 } from './kingud-lifecycle'
-import { parseArgs } from './kingud-command-arguments'
+import { KINGUD_USAGE, parseArgs } from './kingud-command-arguments'
+import type { KingudRuntimeCleanup } from './kingud-runtime-lifetime'
+import { installKingudStopRequestListeners } from './kingud-stop-request-listener'
+import { prepareKingudManagedStop } from './kingud-managed-stop-admission'
+import type { KingudManagedStopContext } from '../../shared/kingud-stop-request'
+import { beginKingudIdleExit, bindKingudIdleShutdown } from './kingud-managed-idle-exit-host'
+import { kingudAutomationsKeepHostBusy, startKingudAutomations } from './kingud-automations'
 import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
+import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
+import { adoptWslHostLoginEnvironment } from './kingud-wsl-host-login-environment'
 
 export { parseArgs }
 
-let runKingudQuitHandlers = (): void => {}
-
-function createNodeAppEnvironment(): AppEnvironment {
-  const quitHandlers: (() => void)[] = []
-  // The main signal handler awaits runtime and browser teardown before process.exit.
-  // Keep will-quit callbacks synchronous, but never let them pre-empt that async barrier.
-  runKingudQuitHandlers = (): void => {
-    for (const handler of quitHandlers.splice(0)) {
-      try {
-        handler()
-      } catch (error) {
-        console.error('[kingud] shutdown handler failed:', error)
-      }
-    }
-  }
-  return {
-    getPath: resolveKingudPath,
-    getAppPath: () => resolveKingudInstallRoot(),
-    getVersion: () => process.env.KINGU_VERSION ?? '0.0.0-kingud',
-    // Why still true: consumers read this as "production build, not a dev checkout" —
-    // it gates HTTPS-only skill downloads, the real CLI command name, and shell-PATH
-    // hydration. Answering false to satisfy a path resolver would relax a security
-    // posture. Layout questions must ask whether the app root is an asar archive
-    // instead (see parcel-watcher-entry-path.ts).
-    isPackaged: () => true,
-    onWillQuit: (handler) => quitHandlers.push(handler),
-    exit: (code = 0) => process.exit(code),
-    // Why []: there are no Chromium processes on this host to measure.
-    getAppMetrics: () => []
-  }
-}
-
-/**
- * Why not silently plaintext: `isEncryptionAvailable() === false` already makes every
- * caller fall back to unsealed storage, which is a security posture, not a detail.
- * `describeProtectionGap()` gives the reason a client can surface.
- */
-function createNodeSecretStore(): SecretStore {
-  return {
-    isEncryptionAvailable: () => false,
-    encryptString: () => {
-      throw new Error('kingud_secret_sealing_unavailable')
-    },
-    decryptString: () => {
-      throw new Error('kingud_secret_sealing_unavailable')
-    },
-    describeProtectionGap: () =>
-      'This host has no OS keyring, so credentials are stored unencrypted. Pair from a desktop to manage secrets, or install and unlock a keyring.'
-  }
-}
-
-export function installKingudHostAdapters(): void {
-  setAppEnvironment(createNodeAppEnvironment())
-  setSecretStore(createNodeSecretStore())
-}
+let closeKingudObservability = (): void => {}
 
 export type KingudOptions = {
   port?: number
   json?: boolean
   noPairing?: boolean
   pairingAddress?: string
+  /** Desktop `kingu serve` parity: a mobile-scoped offer with a terminal QR. */
+  mobilePairing?: boolean
+  /** Lets the paired runtime client drive this machine's desktop (computer.*). */
+  grantDesktopControl?: boolean
+  /** Desktop `kingu serve` parity: print only the ephemeral-VM recipe line. */
+  recipeJson?: boolean
+  projectRoot?: string
   /** Literal IP to bind. Defaults to loopback; see kingud-bind-address.ts. */
   bind?: string
 }
 
 export type KingudHandle = {
   readiness: ServeReadiness
+  /** What an instance-bound stop request must name to stop this process. */
+  managedStop: KingudManagedStopContext
   stop(): Promise<void>
 }
 
@@ -110,89 +70,119 @@ export type KingudHandle = {
  */
 export async function startKingud(options: KingudOptions = {}): Promise<KingudHandle> {
   installKingudHostAdapters()
-  return startKingudWithHost(
-    resolveUserDataPath(),
+  // Why: an kingud started from an Kingu terminal must not fence its own CLI children to that Kingu.
+  stampRuntimeSourceEnv(process.env, null)
+  const userDataPath = resolveUserDataPath()
+  // Why, as on the desktop: an inherited value would aim the CLI-shared Codex home paths elsewhere.
+  process.env.KINGU_USER_DATA_PATH = userDataPath
+  const { readiness, instance, stop } = await startKingudWithHost(
+    userDataPath,
     (registerCleanup) => startKingudRuntime(options, registerCleanup),
-    () => runKingudQuitHandlers()
+    () => {
+      try {
+        runKingudQuitHandlers()
+      } finally {
+        // Last, after every quit handler (even a failing one), so their spans still reach the file.
+        closeKingudObservability()
+        closeKingudObservability = () => {}
+      }
+    }
   )
+  const version = getAppEnvironment().getVersion()
+  return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
 }
 
 async function startKingudRuntime(
   options: KingudOptions,
-  registerCleanup: (cleanup: () => Promise<void>) => void
+  registerCleanup: (cleanup: KingudRuntimeCleanup) => void
 ): Promise<Pick<KingudHandle, 'readiness'>> {
+  // Started first so the login-shell probe overlaps the imports and store startup below.
+  const loginEnvironment = adoptWslHostLoginEnvironment().then(
+    (names) => {
+      if (names.length > 0) {
+        console.info(`[kingud] adopted login-shell variables: ${names.join(', ')}`)
+      }
+    },
+    (error: unknown) => console.warn('[kingud] could not adopt login-shell variables:', error)
+  )
   const { KinguRuntimeService } = await import('../runtime/kingu-runtime')
   const { KinguRuntimeRpcServer } = await import('../runtime/runtime-rpc')
-  const { registerHeadlessPtyRuntime, getLocalPtyProvider, getSshPtyProvider } =
-    await import('../ipc/pty')
-  const { getAppEnvironment } = await import('../../shared/app-environment')
-  const { resolveAdvertisedPairingEndpoint } = await import('../runtime/pairing-endpoint')
+  const { registerHeadlessPtyRuntime } = await import('../ipc/pty/register-headless-runtime')
+  const { getLocalPtyProvider } = await import('../ipc/pty/provider/registry')
+  const { installKingudObservability } = await import('./kingud-observability')
+  closeKingudObservability = installKingudObservability()
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
+  const { servePublishMode } = await import('../server/serve-pairing-readiness')
+  const { buildKingudServeReadiness } = await import('./kingud-serve-readiness')
   const { createKingudProfileStateStartup } = await import('./kingud-profile-state-startup')
   const { startKingudDaemon, stopKingudDaemon } = await import('./kingud-daemon-supervision')
-  const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
+  const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-provider-state')
   const { collectKingudHealth } = await import('./kingud-health')
   // Why importable here: the singleton's module tree never reaches Electron, and kingud supplies
   // its persistence and endpoint paths explicitly below.
   const { agentHookServer } = await import('../agent-hooks/server')
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
+  const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
+  const { startKingudManagedAgentHooks } = await import('./kingud-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
 
-  let rpc: InstanceType<typeof KinguRuntimeRpcServer> | null = null
+  const { disposeWatcherProcessAndWait } = await import('../ipc/parcel-watcher-process')
+
   let profileStoreForShutdown:
     | { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> }
     | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
+  // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush, then daemon.
+  registerCleanup(() => agentHookServer.stop())
+  registerCleanup(() => uninstallHookStatusRepublish())
+  registerCleanup(() => uninstallObservedStatusIdentity())
+  // Why disconnect and not shut down: the daemon must outlive this process, or an kingud
+  // restart goes back to killing every running terminal.
+  registerCleanup(() => stopKingudDaemon())
   registerCleanup(async () => {
-    try {
-      await rpc?.stop()
-    } finally {
-      try {
-        // Stop accepting RPC writes before the final persistence barrier. A SQLite-backed
-        // kingud has no JSON mirror to absorb a debounced write after SIGTERM.
-        if (profileStoreForShutdown) {
-          await flushKingudProfileStoreForShutdown(profileStoreForShutdown)
-        }
-      } finally {
-        try {
-          // Why disconnect and not shut down: the daemon must outlive this process, or an
-          // kingud restart goes back to killing every running terminal.
-          await stopKingudDaemon()
-        } finally {
-          uninstallObservedStatusIdentity()
-          uninstallHookStatusRepublish()
-          agentHookServer.stop()
-        }
-      }
+    // A SQLite-backed kingud has no JSON mirror to absorb a debounced write after SIGTERM.
+    if (profileStoreForShutdown) {
+      await flushKingudProfileStoreForShutdown(profileStoreForShutdown)
     }
   })
+  // Watcher children outlive a disposal that does not wait for them.
+  registerCleanup(() => disposeWatcherProcessAndWait())
   const { DesktopPushService } = await import('../runtime/push/desktop-push-service')
   const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
+  const { startEventLoopDelayProbe } = await import('../diagnostics/event-loop-delay-probe')
+  startEventLoopDelayProbe('kingud', runtimeUserDataPath)
+  // A missing `kingu` command must never keep the server from starting.
+  await prepareKingudCliLauncher().catch((error: unknown) => {
+    console.warn('[kingud] Could not prepare the profile CLI launcher', error)
+  })
+  const idleExitStartup = beginKingudIdleExit(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =
     await createKingudProfileStateStartup(runtimeUserDataPath)
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
-  // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
-  // and the read paths that use `this.store?.x ?? []` quietly answer "empty" instead —
-  // a server that pairs and lists nothing looks healthy and is not.
-  // Why: kingud IS the runtime authority — loading as 'desktop' would classify its
-  // own runtime-scheduled automations as ambiguous mirrors and orphan them.
   profileStoreForShutdown = profileStore
-  // Why: every SSH connect consults this sidecar. Left unbound it reports nothing trusted,
-  // which is safe but silently discards accept records on every launch.
-
   uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
     observedStatusCapture.observe(enriched)
   )
-  if (isAgentStatusHooksEnabled(profileStore.getSettings())) {
-    await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
-  }
+  await agentHookServer.start({
+    env: 'production',
+    userDataPath: runtimeUserDataPath,
+    statusHooksEnabled: isAgentStatusHooksEnabled(profileStore.getSettings())
+  })
+
+  // Before hook reconcile, the daemon and the runtime: each reads or inherits this env.
+  await loginEnvironment
+  startKingudManagedAgentHooks(
+    profileStore,
+    (enabled) => agentHookServer.setStatusHooksEnabled(enabled),
+    registerCleanup
+  )
 
   // Why before the runtime and the PTY handlers: `setLocalPtyProvider` installs the daemon
   // adapter as THE local provider, and the registry's contract is that it lands before
@@ -203,13 +193,36 @@ async function startKingudRuntime(
   // constructed, and the deps hook is only ever called later, from an RPC.
   let sessionSearch: { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null = null
 
+  const { kingudCodexAccountHomes } = await import('./kingud-codex-account-homes')
+  const codexAccountHomes = kingudCodexAccountHomes(
+    () => profileStore.getSettings(),
+    registerCleanup
+  )
+
+  // Why before the runtime: its structured Codex resolvers are constructor deps.
+  const { createKingudAccountServices } = await import('./kingud-account-services')
+  const accountLaunch = createKingudAccountServices({
+    store: profileStore,
+    setClaudeStatusLineListener: (listener) =>
+      agentHookServer.setClaudeStatusLineListener(listener),
+    registerCleanup,
+    clientCodexHomes: codexAccountHomes
+  })
+
   const runtime = new KinguRuntimeService(profileStore, undefined, {
+    getAdditionalAiVaultCodexHomePaths: () => [
+      ...codexAccountHomes.listSessionHomes(),
+      ...(accountLaunch?.listCodexSessionHomes() ?? [])
+    ],
+    // Why absent on a WSL host: a resolver overrides the desktop-pushed CODEX_HOME.
+    ...accountLaunch?.runtimeDeps,
+    // Why here too: kingud serves `worktree.ps` and `agentSession.*`; unwired it lists no agents.
+    ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
+      profileStore.getSettings()
+    ),
     // Why lazy: a daemon swap replaces the provider after construction, so an eager
     // reference would freeze the pre-daemon one.
     getLocalProvider: () => getLocalPtyProvider(),
-    // Why: destructive worktree removal refuses to run without a provider to stop
-    // processes through — correctly, since it cannot otherwise verify the tree is idle.
-    getSshProvider: (connectionId) => getSshPtyProvider(connectionId),
     // Why the daemon predicate and not a constant: kingud now spawns the terminal daemon, so
     // its PTYs DO survive an kingud restart — but only while a daemon that owns fresh
     // sessions is installed. A failed or degraded launch has to answer false, and this reads
@@ -219,30 +232,6 @@ async function startKingudRuntime(
     // what powers serve→desktop promotion. A Node host can never do that, and the
     // constructor's default would advertise it.
     getDesktopWindowStatus: () => 'blocked',
-    // Why here too and not only on the desktop: main's OSC parse is the only producer for a
-    // PTY agent on this host, and the store is the only place `worktree.ps` and the mobile
-    // projection read from — unwired, kingud lists no PTY agents at all.
-    onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
-    // Why here too and not only on the desktop: kingud serves `worktree.ps` and `agentSession.*`,
-    // so without these a headless host publishes its structured chats nowhere and lists no agents.
-    getAgentStatusSnapshot: () =>
-      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
-    getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
-    getAgentProviderSessionRowsForPane: (paneKey) =>
-      agentHookServer.getStatusSnapshotForPane(paneKey),
-    // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
-    // read, so a row observed under one process otherwise acquires whatever process owns the pane now.
-    readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
-    structuredAgentStatusSink: {
-      publish: (summary, subject) => agentHookServer.ingestStructuredStatus(summary, subject),
-      forget: (subject) => agentHookServer.dropStructuredStatus(subject),
-      publishChildWork: (subject, evidence, provider) =>
-        agentHookServer.ingestStructuredChildWork(subject, evidence, provider)
-    },
-    reconcileAgentStatusForEndedProcess: (paneKeys) =>
-      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
-    buildAgentHookPtyEnv: () =>
-      isAgentStatusHooksEnabled(profileStore.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     // Why the dedupe here and not in the instance: `apply` closes and reconstructs
     // unconditionally, so an unchanged value would restart a healthy index.
     applySessionSearchSettings: (before, after) => {
@@ -253,12 +242,26 @@ async function startKingudRuntime(
     }
   })
 
+  accountLaunch?.attachToRuntime(runtime)
+
+  // Why before any launch: a desktop that owns this host's accounts pushed them on an earlier run.
+  const { restoreKingudHostAccountLaunchEnv } =
+    await import('./kingud-host-account-launch-env-store')
+  restoreKingudHostAccountLaunchEnv(runtime, runtimeUserDataPath)
+
   const { installKingudSessionSearchService } = await import('./kingud-session-search')
   sessionSearch = await installKingudSessionSearchService({
     userDataPath: runtimeUserDataPath,
     getSettings: () => profileStore.getSettings()
   })
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
+
+  // Why: this host evaluates its own panes, so it keeps its own rules current.
+  const { startAgentStateRulesLiveUpdates } =
+    await import('../runtime/agent-state-rules/agent-state-rules-live-update')
+  startAgentStateRulesLiveUpdates(profileStore, (rules) =>
+    console.info(`[kingud] agent state rules ${rules.version} (${rules.source})`)
+  )
 
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
   // pane's status row changes, and kingud's whole job is serving paired clients.
@@ -271,15 +274,17 @@ async function startKingudRuntime(
   // same call `--serve` makes, and it threads the store through. Without the store the
   // handlers install fine and every terminal.create then fails at persistence time.
   //
-  // Codex-home and Claude-auth preparation are left unset: both are desktop account
-  // flows. A launch that needs one fails with its own message rather than silently
-  // spawning an unauthenticated agent.
+  // A client-sent Codex account home wins; otherwise this host's own selection applies. A WSL host
+  // has none: its desktop sends the prepared account env.
   await registerHeadlessPtyRuntime(
     runtime,
-    undefined,
+    async (target, launchEnv, context) =>
+      (await codexAccountHomes.selectLaunchHome(target, launchEnv, context)) ??
+      (accountLaunch ? accountLaunch.prepareCodexHome(target, launchEnv, context) : null),
     () => profileStore.getSettings(),
-    undefined,
-    profileStore
+    accountLaunch?.prepareClaudeAuth,
+    profileStore,
+    accountLaunch?.prepareCodexSessionResume
   )
 
   // Why: same post-registration reconciliation `--serve` performs. Skipping it leaves
@@ -290,11 +295,23 @@ async function startKingudRuntime(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
 
+  // Runs after RPC stops (cleanups run reversed); later records save synchronously until exit.
+  registerCleanup(() => runtime.closeNotificationDismissals())
+  // A retry armed during recovery would otherwise write after the final profile flush.
+  registerCleanup(() => runtime.stopLegacyWorkerTerminalRecovery())
+
   // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
   observedStatusCapture.attach(runtime)
+  // Why before the RPC server binds: like `--serve`, the first client must find a ready graph.
+  const { publishHeadlessRuntimeGraph } = await import('../runtime/headless-runtime-graph')
+  publishHeadlessRuntimeGraph(runtime)
+  // Store load skipped moved shell history: only the runtime can tell which worktrees run a shell.
+  void runtime.installPendingKingudMigrationShellHistory().catch((error: unknown) => {
+    console.error('[kingud-migration] installing pending shell history failed:', error)
+  })
 
   const bindHost = resolveKingudBindHost(options.bind)
-  rpc = new KinguRuntimeRpcServer({
+  const rpc = new KinguRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,
     enableWebSocket: true,
@@ -305,7 +322,10 @@ async function startKingudRuntime(
     pinnedBindHost: bindHost,
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
+  // Stops first: no RPC may write while the rest of the runtime is torn down.
+  registerCleanup(() => rpc.stop())
   await rpc.start()
+  startKingudAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,
     runtimeRpc: rpc,
@@ -315,73 +335,44 @@ async function startKingudRuntime(
   getAppEnvironment().onWillQuit(() => pushService?.stop())
   console.error(`[kingud] ${describeKingudBindExposure(bindHost)}`)
 
-  const boundEndpoint = rpc.getWebSocketEndpoint()
-  const advertised = boundEndpoint
-    ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
-    : null
-  const offer = options.noPairing
-    ? ({
-        available: false,
-        reason: 'disabled_by_operator',
-        guidance: 'Restart without --no-pairing to create a client pairing offer.'
-      } as const)
-    : rpc.createPairingOffer({
-        address: options.pairingAddress,
-        name: `CLI ${new Date().toLocaleDateString()}`,
-        scope: 'runtime'
-      })
-
-  const readiness: ServeReadiness = {
+  const readiness = await buildKingudServeReadiness({
+    options,
     runtimeId: runtime.getRuntimeId(),
-    boundEndpoint,
-    advertisedEndpoint: advertised?.ok ? advertised.endpoint : null,
-    // Why 'settled': the WSL CLI reconciliation barrier is a desktop-launch concern.
-    // kingud never runs it, so there is no pending repair a client could race.
-    managedWslCliReconciliation: 'settled',
-    pairing: offer.available
-      ? {
-          available: true,
-          url: offer.pairingUrl,
-          endpoint: offer.endpoint,
-          deviceId: offer.deviceId,
-          webClientUrl: offer.webClientUrl,
-          scope: 'runtime',
-          qr: null
-        }
-      : offer,
-    // Why in the readiness payload: this is the one message a supervisor and a deploy
-    // transaction both read, and a green kingud with a dead daemon is exactly the
-    // looks-healthy-but-useless state they must not activate.
-    health: await collectKingudHealth(getAppEnvironment().getVersion(), profileStateAuthority)
-  }
-
-  await new ServeReadinessPublisher().publish(readiness, {
-    mode: options.json ? 'json' : 'human'
+    rpc,
+    collectHealth: () =>
+      collectKingudHealth(
+        getAppEnvironment().getVersion(),
+        profileStateAuthority,
+        idleExitStartup.previousIdleStop
+      )
   })
 
+  await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
+
+  await idleExitStartup.start({
+    rpc,
+    agentStates: () => agentHookServer.getStatusSnapshot(),
+    hasStagedMigration: () => profileStore.hasStagedKingudMigrationCatalog(),
+    automationsBusy: () => kingudAutomationsKeepHostBusy(profileStore),
+    registerCleanup
+  })
   return { readiness }
 }
 
-/**
- * Exit codes a supervisor can act on. Closed set — see docs/reference/kingud-operations.md.
- *
- * `KINGUD_EXIT_CONFIGURATION` is the load-bearing one: a data root owned by someone else, or
- * held by another kingud, is not fixed by restarting. Restarting on it is the crash-loop the
- * supervision contract has to prevent, so systemd's `RestartPreventExitStatus` needs a code
- * that means "do not retry" and nothing else does.
- */
-export {
-  KINGUD_EXIT_OK,
-  KINGUD_EXIT_FAILED,
-  KINGUD_EXIT_CONFIGURATION,
-  resolveKingudExitCode
-} from './kingud-exit-code'
-
-/** Bounded so a wedged transport cannot hold a supervisor's stop past its own deadline. */
-export { KINGUD_SHUTDOWN_DEADLINE_MS } from './kingud-lifecycle'
-
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const startup = startKingud(parseArgs(argv))
-  installKingudShutdownSignals(async () => (await startup).stop())
-  await startup
+  const options = parseArgs(argv)
+  if (options.help) {
+    console.log(KINGUD_USAGE)
+    return
+  }
+  const startup = startKingud(options)
+  const requestShutdown = installKingudShutdownSignals(async () => (await startup).stop())
+  const handle = await startup
+  // Why after startup: a managed request must name the runtime and instance this run became.
+  installKingudStopRequestListeners(() => requestShutdown('stop request'), {
+    installRoot: resolveKingudInstallRoot(),
+    managedStop: handle.managedStop,
+    beforeManagedStop: prepareKingudManagedStop
+  })
+  bindKingudIdleShutdown(requestShutdown)
 }

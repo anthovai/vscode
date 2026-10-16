@@ -1,4 +1,5 @@
 import { parseDocument } from 'yaml'
+import { isKinguYamlConversionWithinLimit } from './kingu-yaml-merge-expansion'
 import type {
   KinguDefaultTabTemplate,
   KinguHooks,
@@ -209,11 +210,12 @@ export function parseKinguYaml(content: string): KinguHooks | null {
   try {
     const document = parseDocument(content, {
       keepSourceTokens: false,
+      merge: true,
       logLevel: 'silent',
       prettyErrors: false,
       uniqueKeys: true
     })
-    if (document.errors.length > 0) {
+    if (document.errors.length > 0 || !isKinguYamlConversionWithinLimit(document)) {
       return null
     }
     root = document.toJS({ maxAliasCount: MAX_KINGU_YAML_ALIAS_COUNT })

@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES,
-  buildNewWorkspaceFolderSourceOptions,
   buildNewWorkspaceProjectOptions,
-  findActionableFolderProjectGroup,
-  getRepoIdFromNewWorkspaceFolderSourceOptionId,
-  isNewWorkspaceProjectOptionQueryTooLarge,
-  searchNewWorkspaceProjectOptions,
-  type NewWorkspaceProjectOption
+  findActionableFolderProjectGroup
 } from './new-workspace-project-options'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
@@ -392,73 +386,6 @@ describe('buildNewWorkspaceProjectOptions', () => {
       'Builder (ssh:builder-a) · /workspace/merchant',
       'Builder (ssh:builder-b) · /workspace/merchant'
     ])
-  })
-
-  it('filters project options by display name and detail', () => {
-    const options: NewWorkspaceProjectOption[] = [
-      {
-        kind: 'project',
-        id: 'kingu',
-        projectId: 'kingu',
-        displayName: 'Kingu',
-        badgeColor: '#111111',
-        detail: 'anthovai/kingu-intelligence'
-      },
-      {
-        kind: 'project',
-        id: 'docs',
-        projectId: 'docs',
-        displayName: 'Docs',
-        badgeColor: '#222222',
-        detail: 'anthovai/docs'
-      }
-    ]
-
-    expect(searchNewWorkspaceProjectOptions(options, 'docs')).toEqual([options[1]])
-    expect(searchNewWorkspaceProjectOptions(options, 'anthovai/kingu-intelligence')).toEqual([
-      options[0]
-    ])
-  })
-
-  it('rejects oversized pasted searches before reading project options', () => {
-    const oversizedQuery = 'secret-project-option'.repeat(
-      NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES
-    )
-    const throwingOptions = [
-      {
-        id: 'secret',
-        badgeColor: '#111111',
-        get displayName(): string {
-          throw new Error('oversized project option queries must not scan names')
-        },
-        get detail(): string {
-          throw new Error('oversized project option queries must not scan details')
-        }
-      }
-    ] as NewWorkspaceProjectOption[]
-
-    expect(isNewWorkspaceProjectOptionQueryTooLarge(oversizedQuery)).toBe(true)
-    expect(searchNewWorkspaceProjectOptions(throwingOptions, oversizedQuery)).toEqual([])
-  })
-})
-
-describe('buildNewWorkspaceFolderSourceOptions', () => {
-  it('keeps concrete source repos separate even when they are the same logical project', () => {
-    const options = buildNewWorkspaceFolderSourceOptions([
-      repo('local-repo', { displayName: 'kingu', path: '/tmp/kingu' }),
-      repo('ssh-repo', {
-        displayName: 'kingu',
-        path: '/srv/kingu',
-        connectionId: 'ssh:builder'
-      })
-    ])
-
-    expect(options.map((option) => option.id).sort()).toEqual([
-      'folder-source:local-repo',
-      'folder-source:ssh-repo'
-    ])
-    expect(options.map((option) => option.detail).sort()).toEqual(['/srv/kingu', '/tmp/kingu'])
-    expect(getRepoIdFromNewWorkspaceFolderSourceOptionId('folder-source:ssh-repo')).toBe('ssh-repo')
   })
 })
 

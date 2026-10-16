@@ -27,7 +27,8 @@ the UI against it afterwards, in the fork's window, at whatever pace suits.
 | `main/` | `src/main` | The Electron main process: every backend capability |
 | `shared/` | `src/shared` | Types and helpers both processes use |
 | `preload/` | `src/preload` | The renderer bridge |
-| `relay/` | `src/relay` | The remote relay |
+| `relay/` | `src/relay` | The remote relay (removed from the ADE in 2026-10; kept here until nothing reads it) |
+| `packages/` | `src/packages` | The ADE's workspace packages (`@kingu/process-host`), resolved through their `kingu-source` export |
 | `types/` | `src/types` | Ambient declarations |
 | `resources/` | `resources` | Icons, tray images, notification sounds |
 | `renderer/src/i18n/locales/` | same | Translations the main process reads |
@@ -273,8 +274,8 @@ switched off until that is stood up here.
 
 ## Updating from the ADE
 
-The copy here is `anthovai/kingu-intelligence` at **`677f3608b6`** (upstream
-`stablyai/orca` `27b823f934`, 2026-09-27). To move it forward:
+The copy here is `anthovai/kingu-intelligence` at **`d573598a15`** (upstream
+`stablyai/orca` `7909e72d2d`, 2026-10-16). To move it forward:
 
 1. In `kingu-intelligence`, sync upstream: `git merge -s ours --no-commit <upstream>`,
    then `node config/scripts/kingu-sync-upstream.mjs <last-upstream> <upstream>`,
@@ -285,3 +286,6 @@ The copy here is `anthovai/kingu-intelligence` at **`677f3608b6`** (upstream
    file both sides changed. Then update the commit above.
 3. Add any dependency the ADE's renderer gained to `kingu-orca/package.json`, run the
    `generate-*.mjs` scripts, then `build/kingu-brand/rename-*.ts`, and `npm run build-kingu-orca`.
+4. Compare the sidecar entries in `build.mjs` with `MAIN_BUILD_ENTRY_POINTS` in the ADE's
+   `config/build-plugins/main-build-entry-points.ts`, and add any npm package the main bundle
+   cannot resolve to the fork's own `package.json` at the ADE's version.

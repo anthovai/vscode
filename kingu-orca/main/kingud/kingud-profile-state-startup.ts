@@ -5,6 +5,7 @@ import {
   initKinguProfilePaths
 } from '../kingu-profiles/profile-index-store'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
+import { initKingudHeldFenceTokenFile } from '../ssh/kingud-held-fence-tokens'
 import { emitKingudProfileStateAuthoritySelected } from './kingud-profile-state-telemetry'
 
 export type KingudProfileStateProfile = {
@@ -30,6 +31,9 @@ export async function createKingudProfileStateStartup(
 ): Promise<KingudProfileStateStartup> {
   initKinguProfilePaths()
   const profile = ensureActiveKinguProfile(userDataPath)
+  // Why a real Store: without one, persistence-backed RPCs throw and `store?.x ?? []` reads answer
+  // "empty", so a server that pairs and lists nothing looks healthy. As the runtime authority,
+  // kingud must not load as 'desktop', which would orphan its own scheduled automations.
   const result = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
@@ -46,6 +50,7 @@ export async function createKingudProfileStateStartup(
   }
   try {
     initSshHostKeyStoreFile(profile.dataFile)
+    initKingudHeldFenceTokenFile(profile.dataFile)
     emitKingudProfileStateAuthoritySelected(authority)
     return { store: result.store, authority }
   } catch (error) {

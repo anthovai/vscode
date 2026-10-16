@@ -1,20 +1,21 @@
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
-import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
-import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
+import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
+import { wslInteropHealthMonitor } from '../../../wsl/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependKinguCliDirToChildPath } from '../../../cli/kingu-cli-child-path'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
+import { scheduleCodexHookReconcile } from '../../../codex/codex-hook-reconcile'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
@@ -24,12 +25,14 @@ import {
   exposePiManagedExtensionEnv,
   isMimoLaunchCommand,
   resolveMimocodeSourceHome,
-  resolveOpenCodeSourceConfigDir,
   resolvePiAgentSourceDir,
   resolveScopedPiAgentSourceDir,
   restoreOrStripOverlayEnv
 } from './pi-agent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
+import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
+import { applyCodexRemoteViewerClipboardEnv } from './codex-terminal-clipboard'
 
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
@@ -45,14 +48,9 @@ export function buildPtyHostEnv(
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
-  // Why: local path's baseEnv includes process.env but the daemon path doesn't (fork inheritance, not IPC); check both sources so guards stay in lock-step across spawn paths.
-  const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
+  const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
-  const openCodeAgent = selectOpenCodeHookAgent(
-    opts.launchAgent,
-    launchCommandHint,
-    (agent) => opts.agentStatusHooksEnabled && isTuiAgentEnabled(agent, opts.disabledTuiAgents)
-  )
+  applyManagedDataAccountEnvironment(baseEnv, { ...opts, launchCommand: launchCommandHint })
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent
     : opts.launchAgent === undefined
@@ -87,33 +85,13 @@ export function buildPtyHostEnv(
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
-  restoreOrStripOverlayEnv(baseEnv, {
-    primary: 'OPENCODE_CONFIG_DIR',
-    overlay: 'KINGU_OPENCODE_CONFIG_DIR',
-    source: 'KINGU_OPENCODE_SOURCE_CONFIG_DIR',
-    preserveExplicitPrimary: true
-  })
-  delete baseEnv.KINGU_OPENCODE_AGENT
-  if (openCodeAgent) {
-    // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Kingu's status plugin coexist. See docs/opencode-config-dir-collision.md.
-    const openCodeStatusService =
-      openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
-    baseEnv.KINGU_OPENCODE_AGENT = openCodeAgent
-    // WSL owns its config writes; only the guest overlay may enter a WSL pane.
-    if (!opts.isWsl) {
-      Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
-    }
-    if (baseEnv.OPENCODE_CONFIG_DIR) {
-      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
-      baseEnv.KINGU_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
-      if (preexistingOpenCodeConfigDir) {
-        // Why: nested Kingu terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
-        baseEnv.KINGU_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
-      } else {
-        delete baseEnv.KINGU_OPENCODE_SOURCE_CONFIG_DIR
-      }
-    }
-  }
+  const openCodeAgent = applyOpenCodeStatusPluginEnv(
+    id,
+    baseEnv,
+    openCodeConfig,
+    opts,
+    launchCommandHint
+  )
   if (opts.agentStatusHooksEnabled) {
     if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
@@ -261,11 +239,11 @@ export function buildPtyHostEnv(
     // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
     baseEnv.KINGU_CODEX_HOME = opts.selectedCodexHomePath
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({
-      hooksEnabled: opts.codexStatusHooksEnabled ?? opts.agentStatusHooksEnabled,
+      hooksEnabled:
+        opts.agentStatusHooksEnabled && isTuiAgentEnabled('codex', opts.disabledTuiAgents),
       isPackaged: opts.isPackaged,
       isWsl: opts.isWsl,
       managedHomePath: opts.selectedCodexHomePath,
-      userDataPath: opts.userDataPath,
       resourcesPath: opts.resourcesPath
     })
     if (preflightCommand) {
@@ -280,10 +258,16 @@ export function buildPtyHostEnv(
     delete baseEnv.KINGU_CODEX_LAUNCH_PREFLIGHT
   }
 
+  if (!opts.isWsl) {
+    // Why each native spawn: a codex typed in the pane reads ~/.codex, and Codex may have updated since.
+    scheduleCodexHookReconcile()
+  }
+
   // Why: an inherited copy (e.g. Kingu launched from a WSL pane) names another launch's CLI.
   delete baseEnv.KINGU_WSL_CLI_DIR
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `kingu` targets the live dev instance.
   if (opts.isWsl) {
+    wslInteropHealthMonitor.noteActivity(opts.wslDistro ?? null)
     baseEnv.KINGU_USER_DATA_PATH = opts.userDataPath
     // Why: managed WSL registration uses `kingu-ide`; exposing that literal scopes agent guidance to WSL without a bare-kingu shim.
     baseEnv.KINGU_CLI_COMMAND = getWslCliCommandName(opts.isPackaged)
@@ -311,10 +295,18 @@ export function buildPtyHostEnv(
     const cliCommand = opts.isWsl ? getWslCliCommandName(opts.isPackaged) : 'kingu'
     baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
+  // Why the browser-relay flag: both mean a headless runtime whose viewer is another machine.
+  applyCodexRemoteViewerClipboardEnv(baseEnv, {
+    launchAgent: opts.launchAgent,
+    viewerIsRemote: opts.routeBrowserOpensToClient === true
+  })
 
   // Why: must run after the prepends above — they re-read PATH from the unscrubbed
   // process.env when baseEnv carries none, which is the daemon path's normal shape.
   stripLegacyTerminalShimEnv(baseEnv, process.platform)
 
+  if (!opts.isWsl) {
+    ensureOpenCodeStartupPromptForLaunch(baseEnv)
+  }
   return baseEnv
 }

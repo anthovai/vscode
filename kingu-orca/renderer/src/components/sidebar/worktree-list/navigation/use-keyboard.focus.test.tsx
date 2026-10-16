@@ -32,7 +32,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activate(...args)
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
   focusRuntimeTerminalSurface: (...args: unknown[]) => focusRuntime(...args)
 }))
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')
@@ -46,7 +46,6 @@ const rows: HostSectionRow[] = ['a', 'b', 'c'].map((id) => ({
   repo,
   depth: 0,
   groupDepth: 0,
-  lineageTrail: [],
   isLastLineageChild: false,
   lineageChildCount: 0
 }))
@@ -146,7 +145,11 @@ describe('workspace list focus ownership', () => {
     expect(document.activeElement).toBe(list)
     press('ArrowUp')
     expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c', 'b'])
-    expect(activate).toHaveBeenLastCalledWith('b', { executionHostId: 'ssh:fixture' })
+    expect(activate).toHaveBeenLastCalledWith('b', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false,
+      executionHostId: 'ssh:fixture'
+    })
     expect(terminal.focus).not.toHaveBeenCalled()
   })
 

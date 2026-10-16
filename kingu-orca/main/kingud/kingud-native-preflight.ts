@@ -5,7 +5,6 @@
  * testable apart from the detection (what the verdict is).
  */
 import process from 'node:process'
-import { canUseBunPty } from '../daemon/pty-subprocess/bun-pty-process-capabilities'
 import { setRuntimeTerminalUnavailableCause } from '../runtime/native-terminal-availability'
 import { terminalUnavailableMessage } from '../../shared/runtime-types'
 import {
@@ -14,13 +13,7 @@ import {
   probeLocalBuildToolchainHints,
   type NodePtyPreconditionVerdict
 } from './node-pty-precondition'
-
-/**
- * EX_CONFIG. Why not 1: a supervisor that restarts on 1 would restart forever against a
- * host that can never load this binary. This code says "the host is not equipped", which
- * is a different instruction from "it crashed".
- */
-export const KINGUD_NATIVE_PRECONDITION_EXIT_CODE = 78
+import { KINGUD_EXIT_CONFIGURATION } from './kingud-configuration-exit'
 
 export type NativePreflightHooks = {
   check?: () => NodePtyPreconditionVerdict
@@ -38,10 +31,6 @@ export type NativePreflightHooks = {
  * sentence printed here.
  */
 export function runKingudNativePreflight(hooks: NativePreflightHooks = {}): boolean {
-  if (!hooks.check && canUseBunPty()) {
-    setRuntimeTerminalUnavailableCause(null)
-    return true
-  }
   const check = hooks.check ?? checkNodePtyPrecondition
   const warn = hooks.warn ?? ((message: string) => console.warn(message))
   const fail = hooks.fail ?? ((message: string) => console.error(message))
@@ -65,7 +54,7 @@ export function runKingudNativePreflight(hooks: NativePreflightHooks = {}): bool
   if (verdict.status === 'blocked') {
     const hints = (hooks.toolchainHints ?? probeLocalBuildToolchainHints)(verdict.abi.platform)
     fail(`kingud: ${formatNodePtyPreconditionReport(verdict, message, hints)}`)
-    exit(KINGUD_NATIVE_PRECONDITION_EXIT_CODE)
+    exit(KINGUD_EXIT_CONFIGURATION)
     return false
   }
 

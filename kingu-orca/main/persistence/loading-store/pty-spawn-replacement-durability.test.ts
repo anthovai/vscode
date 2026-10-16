@@ -1,5 +1,6 @@
+import { isTerminalSessionStorageCapacityFailure } from '../../../shared/terminal-session-state-save-failure'
 import { afterEach, expect, it, vi } from 'vitest'
-import { deferred, fixture } from './profile-state-delayed-authority-fixture'
+import { deferred, fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { KinguRuntimeService } from '../../runtime/kingu-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
@@ -36,11 +37,17 @@ afterEach(() => {
 
 it.each(
   ['ipc', 'runtime'].flatMap((controller) =>
-    ['save', 'shutdown'].map((replacementDuring) => ({ controller, replacementDuring }))
+    ['save', 'shutdown'].flatMap((replacementDuring) =>
+      ['profile-state-writer-exit', 'ENOSPC'].map((code) => ({
+        controller,
+        replacementDuring,
+        code
+      }))
+    )
   )
 )(
-  'preserves a successor during $replacementDuring when the predecessor $controller save fails',
-  async ({ controller, replacementDuring }) => {
+  'preserves a successor during $replacementDuring when the predecessor $controller save fails with $code',
+  async ({ controller, replacementDuring, code }) => {
     const { store, authority } = await fixture()
     const runtime = new KinguRuntimeService(store)
     runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
@@ -65,26 +72,35 @@ it.each(
       const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
+      await admitRuntimeSpawnPane(store, binding)
       ctx.hostSessionBinding = { store, ...binding }
       shutdown = vi.spyOn(ctx.provider, 'shutdown').mockImplementation(holdShutdown)
       commit = () => commitRuntimePtySpawn(ctx)
     }
     const gate = authority.pause()
-    const pending = expect(commit()).rejects.toThrow('KINGU_TERMINAL_SESSION_STATE_SAVE_FAILED')
+    const pending = commit().catch((error: unknown) => {
+      expect(error).toBeInstanceOf(Error)
+      if (!(error instanceof Error)) {
+        throw error
+      }
+      expect(error.message).toContain('KINGU_TERMINAL_SESSION_STATE_SAVE_FAILED')
+      expect(isTerminalSessionStorageCapacityFailure(error.message)).toBe(code === 'ENOSPC')
+      return 'rejected'
+    })
     await gate.started.promise
     if (replacementDuring === 'shutdown') {
-      gate.finish.reject(new Error('disk full'))
+      gate.finish.reject(Object.assign(new Error('worker exited'), { code }))
       await shutdownStarted.promise
     }
     await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
     runtime.onPtySpawned(binding.ptyId, replacementIncarnation)
     ptyIncarnationById.set(binding.ptyId, replacementIncarnation)
-    ptyOwnership.set(binding.ptyId, 'successor-host')
+    ptyOwnership.set(binding.ptyId, 'ssh:successor-host')
     if (replacementDuring === 'save') {
-      gate.finish.reject(new Error('disk full'))
+      gate.finish.reject(Object.assign(new Error('worker exited'), { code }))
     }
     shutdownFinished.resolve()
-    await pending
+    expect(await pending).toBe('rejected')
     if (replacementDuring === 'save') {
       expect(shutdown).not.toHaveBeenCalled()
     } else {
@@ -94,7 +110,7 @@ it.each(
       })
     }
     expect(ptyIncarnationById.get(binding.ptyId)).toBe(replacementIncarnation)
-    expect(ptyOwnership.get(binding.ptyId)).toBe('successor-host')
+    expect(ptyOwnership.get(binding.ptyId)).toBe('ssh:successor-host')
     await runtime.onPtyExit(binding.ptyId, 0, replacementIncarnation, {
       providerExitObserved: true
     })
@@ -122,6 +138,7 @@ it.each(['ipc', 'runtime'])(
       const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
+      await admitRuntimeSpawnPane(store, binding)
       ctx.hostSessionBinding = { store, ...binding }
       commit = () => commitRuntimePtySpawn(ctx)
     }
@@ -144,3 +161,14 @@ it.each(['ipc', 'runtime'])(
     })
   }
 )
+
+it('does not label an IPC binding ownership refusal as a storage failure', async () => {
+  const { store } = await fixture()
+  const runtime = new KinguRuntimeService(store)
+  const deps = createPtySpawnCommitDependencies(runtime, store)
+  const ctx = createPtyIpcSpawnState(deps, { ...binding, cols: 80, rows: 24 })
+  ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
+  ctx.validatedLeafId = binding.leafId
+  vi.spyOn(store, 'persistPtyBinding').mockResolvedValue(false)
+  await expect(commitPtyIpcSpawn(ctx)).rejects.toThrow('terminal_pane_owner_changed')
+})

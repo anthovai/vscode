@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { KinguRuntimeService } from '../../../../kingu-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { KinguRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../kingu-runtime-get-orchestration-dispatch-authority'
+import { KinguRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
 import { toAgentStatusIpcPayload } from '../../../../../agent-hooks/server/server-status-identity'
 import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status-types'

@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@kingu/process-host'
 
 /** Session-name namespace Kingu gives one daemon per browser tab. */
 export const KINGU_TAB_SESSION_PREFIX = 'kingu-tab-'

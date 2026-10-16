@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@kingu/process-host'
 import {
   isZCodeMissingTuiOutput,
   type ZCodeInteractiveCapability

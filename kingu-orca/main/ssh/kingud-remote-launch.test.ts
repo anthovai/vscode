@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { KINGUD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/kingud-idle-exit'
 
 import {
   KINGUD_READINESS_FILENAME,
@@ -25,7 +26,8 @@ const SPEC = {
   fullVersion: '0.2.0+bb01',
   userDataDir: '/home/u/.kingu',
   bindHost: '127.0.0.1',
-  port: 7777
+  port: 7777,
+  activationRoot: '/home/u/.kingu-remote/.kingud-activation-transaction'
 }
 
 const READY_LINE = JSON.stringify({
@@ -56,6 +58,14 @@ describe('kingudLaunchCommand', () => {
     const command = kingudLaunchCommand(posix, SPEC)
     expect(command).toContain(`KINGU_VERSION '${SPEC.fullVersion}'`.replace(' ', '='))
     expect(command).toContain(`KINGU_USER_DATA='${SPEC.userDataDir}'`)
+  })
+
+  it('names the activation fence on every launch, which enables idle exit', () => {
+    const command = kingudLaunchCommand(posix, SPEC)
+    expect(command).toContain(`${KINGUD_MANAGED_ACTIVATION_ROOT_ENV}='${SPEC.activationRoot}'`)
+    expect(command.indexOf(KINGUD_MANAGED_ACTIVATION_ROOT_ENV)).toBeLessThan(
+      command.indexOf('nohup')
+    )
   })
 
   it('declares the Windows refusal instead of emitting a command that cannot work', () => {
@@ -117,7 +127,8 @@ describe('stopping a running kingud', () => {
     ['STILL_RUNNING', 'still-running', false],
     ['SIGNAL_FAILED', 'signal-failed', false],
     ['UNKNOWN', 'unknown', false],
-    ['', 'unknown', false]
+    ['SIGNALED\nUNKNOWN', 'unconfirmed', false],
+    ['', 'unconfirmed', false]
   ])('parses %s and frees the host = %s', (output, expected, frees) => {
     expect(parseKingudStopOutcome(output)).toBe(expected)
     expect(kingudStopFreedTheHost(parseKingudStopOutcome(output))).toBe(frees)

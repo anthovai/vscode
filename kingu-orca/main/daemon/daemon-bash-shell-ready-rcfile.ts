@@ -1,5 +1,8 @@
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { KINGU_CLI_POSIX_PATH_RESTORE } from '../../shared/kingu-cli-shell-path'
+import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
+import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
 
@@ -34,14 +37,16 @@ __kingu_restore_agent_teams_path() {
   export PATH="\${KINGU_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __kingu_restore_agent_teams_path
+${KINGU_CLI_POSIX_PATH_RESTORE}
 # Why: user startup files may set the default OpenCode config after Kingu's
 # spawn env; restore the Kingu-managed config dir before the first prompt.
 [[ -n "\${KINGU_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${KINGU_OPENCODE_CONFIG_DIR}"
+${MANAGED_DATA_ACCOUNT_POSIX_RESTORE}
 [[ -n "\${KINGU_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${KINGU_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Kingu's runtime CODEX_HOME after profile scripts.
 [[ -n "\${KINGU_CODEX_HOME:-}" ]] && export CODEX_HOME="\${KINGU_CODEX_HOME}"
-${getPosixCodexShellLaunchPreflight()}
+${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command exits — mirrors the zsh daemon wrapper.
 # Without this, bash users (default on most Linux distros) keep a stuck

@@ -26,7 +26,7 @@ export function currentRunCoordinatorKinguSessionIdSql(row: string): string {
     THEN ${row}.coordinator_kingu_session_id END)`
 }
 
-/** The coordinator's `session:<id>` address in SQL; NULL when it has no current Kingu session id. */
+/** The coordinator's `kingu_session_id:<id>` address in SQL; NULL when it has no current Kingu session id. */
 export function currentRunCoordinatorSessionAddressSql(row: string): string {
   return kinguSessionAddressSql(currentRunCoordinatorKinguSessionIdSql(row))
 }

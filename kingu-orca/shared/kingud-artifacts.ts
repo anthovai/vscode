@@ -1,36 +1,121 @@
 /**
- * What a packaged `kingud` directory must contain, declared once — the same single-source
- * treatment `relay-artifacts.ts` gives the relay, for the same reason: the build, the
- * content hash and the remote install probe must not keep three lists that drift.
+ * What a packaged `kingud` directory must contain, declared once: the build, the content hash
+ * and the remote install probe must not keep three lists that drift.
  *
  * Order is load-bearing: the hash concatenates these files in sequence.
  *
  * Keep this file erasable-only TypeScript — build-kingud.mjs imports it directly under
  * Node's type stripping, which rejects enums, namespaces and parameter properties.
  */
+// Bun-era slots only: kept so a client can still launch one for rollback (design D7.1 R5).
 export const KINGUD_BUN_RUNTIME_FILENAME = 'bun-runtime'
 export const KINGUD_WINDOWS_BUN_RUNTIME_FILENAME = 'bun-runtime.exe'
+export const KINGUD_BUILD_TARGET_FILENAME = '.build-target'
 export const KINGUD_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
+/** native/windows-security: secure-file ACLs without spawning icacls. */
+export const KINGUD_WINDOWS_SECURITY_FILENAME = 'windows-security.node'
+/** native/windows-cli-launcher: cmd.exe and .ps1 shims cannot carry every argv intact. */
+export const KINGUD_WINDOWS_CLI_LAUNCHER_FILENAME = 'bin/kingu.exe'
 
 export function kingudBunRuntimeFilename(target: string): string {
-  return target === 'win32' || target.startsWith('win32-')
-    ? KINGUD_WINDOWS_BUN_RUNTIME_FILENAME
-    : KINGUD_BUN_RUNTIME_FILENAME
+  return isWindowsTarget(target) ? KINGUD_WINDOWS_BUN_RUNTIME_FILENAME : KINGUD_BUN_RUNTIME_FILENAME
 }
 
-/** Keep renamed Windows executables in a new content-addressed slot. */
-export function kingudArtifactHashPrefix(target: string): string {
-  return kingudBunRuntimeFilename(target) === KINGUD_WINDOWS_BUN_RUNTIME_FILENAME
-    ? `${KINGUD_WINDOWS_BUN_RUNTIME_FILENAME}\0`
-    : ''
+function isWindowsTarget(target: string): boolean {
+  return target === 'win32' || target.startsWith('win32-')
 }
-export const KINGUD_BUILD_TARGET_FILENAME = '.build-target'
+
+/** A Node slot's server target (e.g. linux-x64-musl); `.build-target` would mark it as Bun. */
+export const KINGUD_SERVER_TARGET_FILENAME = '.server-target'
+
+/**
+ * Marks a slot launched by the pinned Node runtime; its content is that runtime's
+ * executableSha256 (node-runtime-pin.ts), which is how the runtime enters the version hash.
+ * A Node slot must never carry `.build-target`: Bun-era selectors exit 78 on `.build-target`
+ * without `bun-runtime` (design D7.1 R5).
+ */
+export const KINGUD_NODE_RUNTIME_MARKER_FILENAME = '.runtime-node'
+/** Beside the slot dirs and shared across Kingu versions (design D2): `runtimes/node-<sha256>/bin/node`. */
+export const KINGUD_RUNTIMES_DIRNAME = 'runtimes'
+export const KINGUD_NODE_RUNTIME_DIR_PREFIX = 'node-'
+export const KINGUD_NODE_RUNTIME_POSIX_EXECUTABLE = 'bin/node'
+// Upstream's own name and layout: renaming node.exe is the masquerading pattern EDR scores.
+export const KINGUD_NODE_RUNTIME_WINDOWS_EXECUTABLE = 'node.exe'
+
+export function kingudNodeRuntimeExecutable(target: string): string {
+  return isWindowsTarget(target)
+    ? KINGUD_NODE_RUNTIME_WINDOWS_EXECUTABLE
+    : KINGUD_NODE_RUNTIME_POSIX_EXECUTABLE
+}
+
+/** Slot-relative path segments of the runtime a slot's marker names. */
+export function kingudNodeRuntimeRelativePath(target: string, executableSha256: string): string[] {
+  return [
+    '..',
+    KINGUD_RUNTIMES_DIRNAME,
+    `${KINGUD_NODE_RUNTIME_DIR_PREFIX}${executableSha256}`,
+    ...kingudNodeRuntimeExecutable(target).split('/')
+  ]
+}
+
+/** N-API level the slot addons are built for; equals SLOT_NAPI_VERSION in the prebuild script. */
+export const KINGUD_ADDON_NAPI_VERSION = 8
+
+export const KINGUD_NODE_PTY_DIR = 'node_modules/node-pty'
+export const KINGUD_CLI_ENTRY_FILENAME = 'out/cli/index.js'
+export const KINGUD_CLI_PACKAGE_FILENAME = 'out/package.json'
+// Test files and sources stay out; these are every module the runtime path requires.
+export const KINGUD_NODE_PTY_JS_ARTIFACTS = [
+  'package.json',
+  'lib/conpty_console_list_agent.js',
+  'lib/eventEmitter2.js',
+  'lib/index.js',
+  'lib/interfaces.js',
+  'lib/shared/conout.js',
+  'lib/terminal.js',
+  'lib/types.js',
+  'lib/unixTerminal.js',
+  'lib/utils.js',
+  'lib/windowsConoutConnection.js',
+  'lib/windowsPtyAgent.js',
+  'lib/windowsTerminal.js',
+  'lib/worker/conoutSocketWorker.js'
+].map((file) => `${KINGUD_NODE_PTY_DIR}/${file}`)
+
+/** The prebuild slot's files (config/scripts/kingud-prebuild-slot-contents.mjs), relative to build/Release. */
+export function kingudNodePtySlotFiles(target: string): string[] {
+  if (isWindowsTarget(target)) {
+    return [
+      'conpty.node',
+      'conpty_console_list.node',
+      'conpty/conpty.dll',
+      'conpty/OpenConsole.exe'
+    ]
+  }
+  return target.startsWith('darwin-') ? ['pty.node', 'spawn-helper'] : ['pty.node']
+}
+
+export function kingudNodePtyNativeArtifacts(target: string): string[] {
+  return kingudNodePtySlotFiles(target).map(
+    (file) => `${KINGUD_NODE_PTY_DIR}/build/Release/${file}`
+  )
+}
+
 export const KINGUD_PARCEL_WATCHER_ENTRY = 'node_modules/@parcel/watcher/index.js'
 export const KINGUD_PARCEL_WATCHER_NATIVE = 'node_modules/@parcel/watcher/watcher.node'
 export const KINGUD_EMOJI_SHORTCODE_DATASET =
   'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 
 export const KINGUD_VERSION = '0.1.0'
+export const KINGUD_LAUNCHER_FILENAME = 'kingud.js'
+export const KINGUD_SERVER_ENTRY_FILENAME = 'kingud-server.js'
+
+// Equals FOREIGN_SQLITE_READER_ENTRY_FILENAME; that module is not loadable under type stripping.
+export const KINGUD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js'
+/** Worker thread that runs workspace port detection's probe commands off the event loop. */
+export const KINGUD_PORT_SCAN_COMMAND_WORKER_ENTRY = 'port-scan-command-worker-entry.js'
+// Equals AI_VAULT_SERVICE_ENTRY_FILENAME: the forked child that lists agent sessions.
+export const KINGUD_SESSION_SCANNER_SERVICE_ENTRY = 'session-scanner-service-entry.js'
 
 // Kept here because build-kingud.mjs imports this manifest directly under Node type stripping.
 export const KINGUD_RIPGREP_ARTIFACTS = [
@@ -41,6 +126,18 @@ export const KINGUD_RIPGREP_ARTIFACTS = [
   'ripgrep/win32-x64/rg.exe',
   'ripgrep/win32-arm64/rg.exe'
 ] as const
+
+/** Only the target's own ripgrep ships (design D2); both libcs share one static build. */
+export function kingudRipgrepArtifact(target: string): string {
+  const [platform, arch] = target.split('-')
+  const artifact = KINGUD_RIPGREP_ARTIFACTS.find((candidate) =>
+    candidate.startsWith(`ripgrep/${platform}-${arch}/`)
+  )
+  if (!artifact) {
+    throw new Error(`kingud ships no ripgrep for ${target}`)
+  }
+  return artifact
+}
 
 export const KINGUD_RIPGREP_LICENSE_ARTIFACTS = [
   'ripgrep/licenses/JEMALLOC-COPYING',
@@ -54,6 +151,12 @@ export const KINGUD_RIPGREP_LICENSE_ARTIFACTS = [
   'ripgrep/licenses/UNLICENSE'
 ] as const
 
+/** The skill plugin native-chat agents load by path; mirrors resources/native-chat-visuals. */
+export const KINGUD_NATIVE_CHAT_VISUALS_ARTIFACTS = [
+  'native-chat-visuals/.claude-plugin/plugin.json',
+  'native-chat-visuals/skills/kingu-chat-visuals/SKILL.md'
+] as const
+
 export type KingudArtifact = {
   filename: string
   /**
@@ -65,23 +168,34 @@ export type KingudArtifact = {
 }
 
 export const KINGUD_ARTIFACTS: readonly KingudArtifact[] = [
-  { filename: 'kingud.js' },
+  { filename: KINGUD_CLI_ENTRY_FILENAME },
+  { filename: KINGUD_CLI_PACKAGE_FILENAME },
+  { filename: KINGUD_LAUNCHER_FILENAME },
+  { filename: KINGUD_SERVER_ENTRY_FILENAME },
   // Forked so a native @parcel/watcher fault kills the child, not the server.
   { filename: 'parcel-watcher-process-entry.js' },
   // Forked so PTYs outlive the runtime process; its absence makes every restart destructive.
   { filename: 'daemon-entry.js' },
-  { filename: 'windows-bun-pty-gate-entry.js' },
   { filename: 'profile-state-writer-worker-entry.js' },
   { filename: 'profile-state-backup-worker-entry.js' },
+  // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
+  { filename: KINGUD_FOREIGN_SQLITE_READER_ENTRY },
+  { filename: KINGUD_PORT_SCAN_COMMAND_WORKER_ENTRY },
+  // Forked so transcript parsing stays off the server's event loop; session search stays in-process.
+  { filename: KINGUD_SESSION_SCANNER_SERVICE_ENTRY },
+  // Worker threads the account services start: CLI probes off the event loop, Claude account setup.
+  { filename: 'worker-thread-child-process-entry.js' },
+  { filename: 'claude-profile-setup-worker-entry.js' },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
-  { filename: KINGUD_BUILD_TARGET_FILENAME },
+  { filename: KINGUD_SERVER_TARGET_FILENAME },
   // kingud never depends on a host runtime or host-installed native module.
-  { filename: KINGUD_BUN_RUNTIME_FILENAME },
+  { filename: KINGUD_NODE_RUNTIME_MARKER_FILENAME },
   { filename: KINGUD_PARCEL_WATCHER_ENTRY },
   { filename: KINGUD_PARCEL_WATCHER_NATIVE },
   { filename: KINGUD_EMOJI_SHORTCODE_DATASET },
-  ...KINGUD_RIPGREP_ARTIFACTS.map((filename) => ({ filename })),
-  ...KINGUD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename }))
+  ...KINGUD_NODE_PTY_JS_ARTIFACTS.map((filename) => ({ filename })),
+  ...KINGUD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename })),
+  ...KINGUD_NATIVE_CHAT_VISUALS_ARTIFACTS.map((filename) => ({ filename }))
 ]
 
 /** Written after the artifacts, so it is never an input to its own hash. */
@@ -92,23 +206,35 @@ export const KINGUD_TEMPLATE_TARGETS_DIR = 'targets'
 /** Written last by the installer; its absence means a torn install. */
 export const KINGUD_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
-export function kingudArtifactFilenames(target = ''): string[] {
-  const filenames = KINGUD_ARTIFACTS.filter((artifact) => !artifact.optional).map((artifact) =>
-    artifact.filename === KINGUD_BUN_RUNTIME_FILENAME
-      ? kingudBunRuntimeFilename(target)
-      : artifact.filename
+/** Every file a `target` slot ships, in hash order; `target` is `<os>-<arch>[-<libc>]`. */
+export function kingudArtifactFilenames(target: string): string[] {
+  const filenames = KINGUD_ARTIFACTS.filter((artifact) => !artifact.optional).map(
+    (artifact) => artifact.filename
   )
-  if (target === 'win32' || target.startsWith('win32-')) {
-    filenames.push(KINGUD_WINDOWS_PROCESS_TREE_FILENAME)
+  filenames.push(...kingudNodePtyNativeArtifacts(target), kingudRipgrepArtifact(target))
+  if (isWindowsTarget(target)) {
+    filenames.push(
+      KINGUD_WINDOWS_PROCESS_TREE_FILENAME,
+      KINGUD_WINDOWS_SECURITY_FILENAME,
+      KINGUD_WINDOWS_CLI_LAUNCHER_FILENAME
+    )
   }
   return filenames
 }
 
+/** Files shared by every template target; the rest live under `targets/<target>/`. */
 export function kingudTemplateCommonFilenames(): string[] {
-  return kingudArtifactFilenames().filter(
-    (filename) =>
-      filename !== KINGUD_BUN_RUNTIME_FILENAME &&
-      filename !== KINGUD_BUILD_TARGET_FILENAME &&
-      filename !== KINGUD_PARCEL_WATCHER_NATIVE
-  )
+  return KINGUD_ARTIFACTS.filter(
+    (artifact) =>
+      !artifact.optional &&
+      artifact.filename !== KINGUD_SERVER_TARGET_FILENAME &&
+      artifact.filename !== KINGUD_NODE_RUNTIME_MARKER_FILENAME &&
+      artifact.filename !== KINGUD_PARCEL_WATCHER_NATIVE
+  ).map((artifact) => artifact.filename)
+}
+
+/** Files stored under the template's `targets/<target>/`, at their slot-relative paths. */
+export function kingudTemplateTargetFilenames(target: string): string[] {
+  const common = new Set(kingudTemplateCommonFilenames())
+  return kingudArtifactFilenames(target).filter((filename) => !common.has(filename))
 }

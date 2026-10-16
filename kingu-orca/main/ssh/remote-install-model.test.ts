@@ -3,8 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { KINGUD_RIPGREP_ARTIFACTS } from '../../shared/kingud-artifacts'
-import { probeRemoteInstallCompleteCommand } from './ssh-remote-commands'
+import { kingudRipgrepArtifact } from '../../shared/kingud-artifacts'
+import {
+  listRemoteInstallBaseDirsCommand,
+  probeRemoteInstallCompleteCommand
+} from './ssh-remote-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 import {
@@ -21,12 +24,17 @@ import {
 const RELAY_DIRS = ['relay-0.1.0+abcdef123456', 'relay-v0.1.0', 'relay-1.2.3']
 const KINGUD_DIRS = ['kingud-0.1.0+abcdef123456', 'kingud-v0.1.0', 'kingud-1.2.3']
 
-it.each([false, true])(
-  'requires the executable and both profile workers on Windows=%s',
-  (isWindows) => {
-    const artifacts = KINGUD_INSTALL_MODEL.requiredArtifacts(isWindows)
-    expect(artifacts).toContain(isWindows ? 'bun-runtime.exe' : 'bun-runtime')
-    expect(artifacts).not.toContain(isWindows ? 'bun-runtime' : 'bun-runtime.exe')
+it.each(['linux-x64', 'darwin-arm64', 'win32-x64'] as const)(
+  'requires the runtime reference, node-pty and both profile workers on %s',
+  (platform) => {
+    const isWindows = platform.startsWith('win32')
+    const artifacts = KINGUD_INSTALL_MODEL.requiredArtifacts(getRemoteHostPlatform(platform))
+    expect(artifacts).toContain('.runtime-node')
+    expect(artifacts).not.toContain('bun-runtime')
+    expect(artifacts).not.toContain('bun-runtime.exe')
+    expect(artifacts).toContain(
+      `node_modules/node-pty/build/Release/${isWindows ? 'conpty.node' : 'pty.node'}`
+    )
     expect(artifacts).toContain('profile-state-writer-worker-entry.js')
     expect(artifacts).toContain('profile-state-backup-worker-entry.js')
     expect(artifacts.includes('windows-process-tree.node')).toBe(isWindows)
@@ -39,30 +47,29 @@ describe('remote install namespace', () => {
     expect(remoteInstallDirName(KINGUD_INSTALL_MODEL, '0.1.0+aa')).toBe('kingud-0.1.0+aa')
   })
 
-  it('requires every shipped search binary in a completed standalone runtime install', () => {
-    const required = KINGUD_INSTALL_MODEL.requiredArtifacts(false)
-    expect(required).toEqual(expect.arrayContaining([...KINGUD_RIPGREP_ARTIFACTS]))
-    expect(KINGUD_INSTALL_MODEL.requiredArtifacts(true)).toEqual(
-      expect.arrayContaining([...KINGUD_RIPGREP_ARTIFACTS])
-    )
+  it("requires the host's own search binary in a completed standalone runtime install", () => {
+    for (const platform of ['linux-arm64', 'darwin-x64', 'win32-arm64'] as const) {
+      expect(
+        KINGUD_INSTALL_MODEL.requiredArtifacts(getRemoteHostPlatform(platform)).filter(
+          (file) => file.startsWith('ripgrep/') && !file.startsWith('ripgrep/licenses/')
+        )
+      ).toEqual([kingudRipgrepArtifact(platform)])
+    }
   })
 
   it.skipIf(process.platform === 'win32')('rejects an install missing its search binary', () => {
     const dir = mkdtempSync(join(tmpdir(), 'kingud-remote-probe-'))
     try {
-      const required = [...KINGUD_INSTALL_MODEL.requiredArtifacts(false), '.install-complete']
+      const host = getRemoteHostPlatform('linux-x64')
+      const required = [...KINGUD_INSTALL_MODEL.requiredArtifacts(host), '.install-complete']
       for (const filename of required) {
         const path = join(dir, filename)
         mkdirSync(dirname(path), { recursive: true })
         writeFileSync(path, '')
       }
-      const command = probeRemoteInstallCompleteCommand(
-        getRemoteHostPlatform('linux-x64'),
-        dir,
-        required
-      )
+      const command = probeRemoteInstallCompleteCommand(host, dir, required)
       expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe('OK')
-      rmSync(join(dir, KINGUD_RIPGREP_ARTIFACTS[0]))
+      rmSync(join(dir, kingudRipgrepArtifact('linux-x64')))
       expect(execFileSync('sh', ['-c', command], { encoding: 'utf8' }).trim()).toBe('MISSING')
     } finally {
       rmSync(dir, { recursive: true, force: true })
@@ -122,4 +129,35 @@ describe('GC ownership — each model collects only its own namespace', () => {
     expect(inventory.kingud).toEqual(KINGUD_DIRS)
     expect(inventory.unknown).toEqual(['something-else'])
   })
+
+  it('gives the shared runtime store its own owner that no version-dir GC may take', () => {
+    expect(remoteInstallDirOwner('runtimes')).toBe('runtimes')
+    expect(remoteInstallGcPermits(RELAY_INSTALL_MODEL, 'runtimes')).toBe(false)
+    expect(remoteInstallGcPermits(KINGUD_INSTALL_MODEL, 'runtimes')).toBe(false)
+    expect(inventoryRemoteInstallDirs(['runtimes', ...RELAY_DIRS]).runtimes).toEqual(['runtimes'])
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps runtimes/ out of every model listing, including older clients’ prefix scans',
+    () => {
+      const base = mkdtempSync(join(tmpdir(), 'install-listing-'))
+      try {
+        for (const name of ['runtimes', 'relay-0.1.0+aa', 'kingud-0.1.0+aa']) {
+          mkdirSync(join(base, name))
+        }
+        mkdirSync(join(base, 'runtimes', `node-${'a'.repeat(64)}`))
+        const host = getRemoteHostPlatform('linux-x64')
+        for (const model of [RELAY_INSTALL_MODEL, KINGUD_INSTALL_MODEL]) {
+          const listed = execFileSync(
+            '/bin/sh',
+            ['-c', listRemoteInstallBaseDirsCommand(host, base, model)],
+            { encoding: 'utf8' }
+          )
+          expect(listed.trim().split('\n')).toEqual([`${model.dirPrefix}-0.1.0+aa`])
+        }
+      } finally {
+        rmSync(base, { recursive: true, force: true })
+      }
+    }
+  )
 })

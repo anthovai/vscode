@@ -13,36 +13,54 @@ describe('classifyDaemonSpawnerPath', () => {
 
   it('classifies the installed app, the ShipIt staging area, and everything else', () => {
     expect(
-      classifyDaemonSpawnerPath('/Applications/Kingu.app/Contents/MacOS/Kingu', alwaysExists)
+      classifyDaemonSpawnerPath('/Applications/Kingu.app/Contents/MacOS/Kingu', alwaysExists, null)
     ).toBe('applications')
     expect(
       classifyDaemonSpawnerPath(
         '/private/Applications/Kingu.app/Contents/MacOS/Kingu',
-        alwaysExists
+        alwaysExists,
+        null
       )
     ).toBe('applications')
     expect(
       classifyDaemonSpawnerPath(
         '/Users/a/Library/Caches/com.anthovai.kingu.ShipIt/update.abc/Kingu.app/Contents/MacOS/Kingu',
-        alwaysExists
+        alwaysExists,
+        null
       )
     ).toBe('updater-cache')
     expect(
       classifyDaemonSpawnerPath(
         '/Users/a/Applications/Kingu.app/Contents/MacOS/Kingu',
-        alwaysExists
+        alwaysExists,
+        null
       )
     ).toBe('other')
-    expect(classifyDaemonSpawnerPath('/tmp/KinguA.app/Contents/MacOS/Kingu', alwaysExists)).toBe(
-      'other'
-    )
+    expect(
+      classifyDaemonSpawnerPath('/tmp/KinguA.app/Contents/MacOS/Kingu', alwaysExists, null)
+    ).toBe('other')
   })
 
   it('reports a deleted spawner as missing and an unrecorded one as unknown', () => {
     expect(
-      classifyDaemonSpawnerPath('/Applications/Kingu.app/Contents/MacOS/Kingu', () => false)
+      classifyDaemonSpawnerPath('/Applications/Kingu.app/Contents/MacOS/Kingu', () => false, null)
     ).toBe('missing')
-    expect(classifyDaemonSpawnerPath(null, alwaysExists)).toBe('unknown')
+    expect(classifyDaemonSpawnerPath(null, alwaysExists, null)).toBe('unknown')
+  })
+
+  it("classifies Kingu's private stable copy from the recorded spawner path", () => {
+    const prefix = '/Users/alice/Library/Application Support/Kingu/daemon-host/macos/terminal-host-'
+    const copy = `${prefix}0f3c/app.noindex/Kingu Terminal Host.app/Contents/MacOS/kingu-terminal-host`
+    expect(classifyDaemonSpawnerPath(copy, alwaysExists, prefix)).toBe('stable-copy')
+    expect(classifyDaemonSpawnerPath(copy, () => false, prefix)).toBe('missing')
+    expect(classifyDaemonSpawnerPath(copy, alwaysExists, null)).toBe('other')
+    expect(
+      classifyDaemonSpawnerPath(
+        '/Applications/Kingu.app/Contents/MacOS/Kingu',
+        alwaysExists,
+        prefix
+      )
+    ).toBe('applications')
   })
 })
 
@@ -112,6 +130,16 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
     expect(
       eventSchemas.daemon_adopted.safeParse({ ...adopted, code_identity: 'severed' }).success
     ).toBe(false)
+    expect(
+      eventSchemas.daemon_pty_cwd_readable.safeParse({ ...denied, launch_method: 'stable-copy' })
+        .success
+    ).toBe(false)
+    expect(
+      eventSchemas.daemon_pty_cwd_readable.safeParse({
+        ...denied,
+        spawner_path_class: 'stable-copy'
+      }).success
+    ).toBe(true)
   })
 })
 

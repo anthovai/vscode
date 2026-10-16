@@ -6,6 +6,7 @@ vi.mock('electron', () => ({ app: { dock: { hide: vi.fn() }, setActivationPolicy
 const {
   applyBackgroundActivationPolicy,
   isBackgroundLaunch,
+  isKingudSidecarLaunch,
   isWindowlessLaunch,
   showWindowWithoutStealingFocus
 } = await import('./foreground-activation-policy')
@@ -36,6 +37,13 @@ describe('isBackgroundLaunch', () => {
     expect(isBackgroundLaunch({ KINGU_BACKGROUND_LAUNCH: '1', KINGU_E2E_FOREGROUND: '1' })).toBe(
       true
     )
+  })
+
+  it('treats the kingud browser sidecar as an explicit background launch', () => {
+    expect(isKingudSidecarLaunch({ KINGU_KINGUD_SIDECAR: '1' })).toBe(true)
+    expect(isKingudSidecarLaunch({})).toBe(false)
+    expect(isBackgroundLaunch({ KINGU_KINGUD_SIDECAR: '1', KINGU_E2E_FOREGROUND: '1' })).toBe(true)
+    expect(isWindowlessLaunch({ KINGU_KINGUD_SIDECAR: '1', KINGU_E2E_HEADFUL: '1' })).toBe(true)
   })
 
   it('lets native-focus specs opt back into the foreground', () => {
@@ -103,7 +111,7 @@ describe('applyBackgroundActivationPolicy', () => {
     }
   }
 
-  it.each(['KINGU_E2E_HEADLESS', 'KINGU_BACKGROUND_LAUNCH'])(
+  it.each(['KINGU_E2E_HEADLESS', 'KINGU_BACKGROUND_LAUNCH', 'KINGU_KINGUD_SIDECAR'])(
     'drops the macOS Dock tile and menu bar for %s',
     (flag) => {
       const app = makeApp()

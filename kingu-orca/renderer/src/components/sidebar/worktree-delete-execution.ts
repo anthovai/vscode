@@ -5,6 +5,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -57,10 +58,10 @@ export async function runWorktreeDeletesInParallel(
   useAppStore
     .getState()
     .markWorktreesDeleting(uniqueTargets.map((target) => (target.hostId ? target : target.id)))
-  // Git worktree removal shares repo locks only within one execution host.
+  // Directory dependencies cross repositories, but never execution hosts.
   const groups = new Map<string, (typeof uniqueTargets)[number][]>()
   for (const target of uniqueTargets) {
-    const groupIdentity = composeWorktreeHostIdentity(target.hostId, target.repoId)
+    const groupIdentity = target.hostId ?? LOCAL_EXECUTION_HOST_ID
     const group = groups.get(groupIdentity)
     if (group) {
       group.push(target)
@@ -108,8 +109,22 @@ export async function runWorktreeDeletesInParallel(
       Array.from(groups.values()).map(async (group) => {
         const deletedInGroup: WorktreeRemovalTarget[] = []
         const failedInGroup: (typeof group)[number][] = []
+        const started: [(typeof group)[number], Promise<void>][] = []
+        // Local hosts own per-repo cleanup locks and delete limits; SSH and older paired hosts
+        // still need same-repo serialization here to avoid racing ref locks (#2259).
+        const serialized = (group[0]?.hostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID
         for (const target of group) {
-          await runInWorktreeDeleteTurn(target.id, async () => {
+          const repoTail = serialized
+            ? started.findLast(([earlier]) => earlier.repoId === target.repoId)
+            : undefined
+          const dependencies = started.filter(
+            (entry) => entry === repoTail || isStrictDescendantPath(target.path, entry[0].path)
+          )
+          const settled = runInWorktreeDeleteTurn(target.id, async () => {
+            // Wait inside the operation so unrelated repositories can still start.
+            if (dependencies.length > 0) {
+              await Promise.all(dependencies.map(([, earlier]) => earlier))
+            }
             // A queued target may be recreated while an earlier repo sibling is deleting.
             // Why by host (STA-4343): the id-keyed map keeps ONE row per `repoId::path`,
             // so on a two-host collision it can hand back the other host's row — whose
@@ -149,7 +164,9 @@ export async function runWorktreeDeletesInParallel(
               failedInGroup.push(target)
             }
           })
+          started.push([target, settled])
         }
+        await Promise.all(started.map(([, settled]) => settled))
         return deletedInGroup
       })
     )

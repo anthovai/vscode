@@ -1,7 +1,7 @@
 import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
-import type { ProcessResult } from '../../shared/child-process/process-spec'
+import { runProcess } from '@kingu/process-host'
+import type { ProcessResult } from '@kingu/process-host/process-spec'
 import type {
   CreateVenvResult,
   PythonEnvironment,
