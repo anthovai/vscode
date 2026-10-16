@@ -58,18 +58,18 @@ suite('codexElicitationMapper', () => {
 		});
 	});
 
-	test('buildElicitationRequest (openai/userVerification) shows the title and description', () => {
-		const verification: McpServerElicitationRequestParams = {
-			threadId: 't1', turnId: null, serverName: 'srv', mode: 'openai/userVerification', _meta: null,
-			title: 'Verify it is you', description: 'Confirm on your device.', challenge: 'c1',
+	test('user verification cannot be fulfilled by accepting an ordinary input request', () => {
+		const params: McpServerElicitationRequestParams = {
+			threadId: 't1', turnId: 'turn-1', serverName: 'srv', mode: 'openai/userVerification', _meta: null,
+			title: 'Verify', description: 'Verify your identity', challenge: 'verification-challenge',
 		};
-		assert.deepStrictEqual([
-			buildElicitationRequest('req-3', verification),
-			buildElicitationRequest('req-4', { ...verification, description: '' }),
-		], [
-			{ id: 'req-3', _meta: { purpose: ChatInputRequestPurpose.Elicitation }, message: 'Verify it is you\n\nConfirm on your device.' },
-			{ id: 'req-4', _meta: { purpose: ChatInputRequestPurpose.Elicitation }, message: 'Verify it is you' },
-		]);
+		assert.deepStrictEqual({
+			request: buildElicitationRequest('req-3', params),
+			response: elicitationResponseFromAnswers(params, ChatInputResponseKind.Accept, undefined),
+		}, {
+			request: undefined,
+			response: { action: 'decline', content: null, _meta: null },
+		});
 	});
 
 	test('elicitationResponseFromAnswers maps decline/cancel/accept', () => {

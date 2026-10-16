@@ -9,6 +9,7 @@ import type { IServerToolDisplay, IServerToolDisplayResult, IServerToolGroup } f
 import { createAgentMergeServerToolGroup, type IAgentMergeToolAccessor } from './agentMergeServerTools.js';
 import { createArtifactServerToolGroup, type IArtifactServerToolAccessor } from './artifactServerTools.js';
 import { createKinguComputerServerToolGroup, type IKinguComputerToolAccessor } from './kingu/computerServerTools.js';
+import { createSessionIsolationToolGroup, type ISessionIsolationToolAccessor } from './sessionIsolationTools.js';
 
 /**
  * Builds the server-tool groups contributed to every agent host session, in
@@ -26,12 +27,13 @@ import { createKinguComputerServerToolGroup, type IKinguComputerToolAccessor } f
  * When omitted (the pure display path) the session group's `execute` is inert,
  * but its definitions and display remain available.
  */
-export function buildServerToolGroups(sessionAccessor?: ISessionServerToolAccessor, agentMergeAccessor?: IAgentMergeToolAccessor, artifactAccessor?: IArtifactServerToolAccessor, areAgentOrchestrationLimitsEnabled?: () => boolean, computerAccessor?: IKinguComputerToolAccessor): readonly IServerToolGroup[] {
+export function buildServerToolGroups(sessionAccessor?: ISessionServerToolAccessor, agentMergeAccessor?: IAgentMergeToolAccessor, artifactAccessor?: IArtifactServerToolAccessor, areAgentOrchestrationLimitsEnabled?: () => boolean, isolationAccessor?: ISessionIsolationToolAccessor, computerAccessor?: IKinguComputerToolAccessor): readonly IServerToolGroup[] {
 	return [
 		feedbackServerToolGroup,
 		createSessionServerToolGroup(sessionAccessor, areAgentOrchestrationLimitsEnabled),
 		createAgentMergeServerToolGroup(agentMergeAccessor),
 		createArtifactServerToolGroup(artifactAccessor),
+		createSessionIsolationToolGroup(isolationAccessor),
 		// Without an accessor this contributes its definitions and display and
 		// nothing else, which is what the pure display path below needs.
 		createKinguComputerServerToolGroup(computerAccessor),

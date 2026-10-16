@@ -18,6 +18,7 @@ import { TestInstantiationService } from '../../../../../../platform/instantiati
 import { AGENT_SDK_SETUP_DOWNLOAD_COMMAND_ID, AGENT_SDK_SETUP_OPEN_DOCS_COMMAND_ID, AGENT_SDK_SETUP_RELOAD_COMMAND_ID, AGENT_SDK_SETUP_SIGN_IN_COMMAND_ID, AgentHostSdkSetupNotificationContribution, agentSdkSetupNotificationId, createAgentSdkSetupNotification, getAgentDisplayNames, getAgentSdkSetupState, getAgentSdkSetupStateToReport, hasAgentSdkSetupForSessionType, type IAgentSdkSetupStateInputs } from '../../../browser/agentSessions/agentHost/agentHostSdkSetupNotification.js';
 import { KINGU_AI_SIGN_IN_COMMAND_ID } from '../../../../kingu/common/kinguAiAccounts.js';
 import { IAgentSdkSetupService, type AgentSdkSetupState } from '../../../../../services/agentHost/browser/agentSdkSetupService.js';
+import { ICodexAccountService } from '../../../../../services/agentHost/browser/codexAccountService.js';
 import { ChatEntitlement, IChatEntitlementService } from '../../../../../services/chat/common/chatEntitlementService.js';
 import { ChatInputNotificationActionKind, IChatInputNotificationService, type IChatInputNotification, type IChatInputNotificationAction } from '../../../browser/widget/input/chatInputNotificationService.js';
 import { SessionType } from '../../../common/chatSessionsService.js';
@@ -54,6 +55,9 @@ suite('Agent SDK setup banner', () => {
 			{ name: 'nothing shows until entitlement settles, since "signed out" is not yet a fact', inputs: { ...BLOCKED_USER, download: 'ready', entitlementResolved: false }, expected: undefined },
 			{ name: 'the missing-account explanation stays behind its flag', inputs: { ...BLOCKED_USER, download: 'ready', allowSignedOutWhenUsable: false }, expected: undefined },
 			{ name: 'a signed-in user is never told they have no account', inputs: { ...BLOCKED_USER, download: 'ready', signedIn: true }, expected: undefined },
+			{ name: 'a signed-in user can be offered an unresolved agent-owned account', inputs: { ...BLOCKED_USER, download: 'ready', signedIn: true, agentAccountState: 'needsSignIn' }, expected: 'noAccount' },
+			{ name: 'an agent-owned account is not guessed while discovery is unresolved', inputs: { ...BLOCKED_USER, download: 'ready', agentAccountState: 'unresolved' }, expected: undefined },
+			{ name: 'an agent-owned account with no models is not called signed out', inputs: { ...BLOCKED_USER, download: 'ready', signedIn: true, agentAccountState: 'available' }, expected: undefined },
 			{ name: 'a signed-in user mid-download is still shown nothing', inputs: { ...BLOCKED_USER, signedIn: true, download: 'downloading' }, expected: undefined },
 
 			// The download is offered to everyone: each of these users can work
@@ -242,6 +246,11 @@ suite('Agent SDK setup banner', () => {
 			instantiationService.stub(IChatEntitlementService, {
 				entitlement: ChatEntitlement.Pro,
 				onDidChangeEntitlement: Event.None,
+			});
+			instantiationService.stub(ICodexAccountService, {
+				agent: 'codex',
+				account: { status: 'unknown' },
+				onDidChangeAccount: Event.None,
 			});
 			instantiationService.stub(IAgentHostService, {
 				onAgentHostStart: Event.None,

@@ -525,14 +525,14 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 		const isCompactMode = true;
 		pill.classList.toggle('compact-mode', isCompactMode);
 
-		// Left icon container (sparkle by default, report+count when attention needed, search on hover)
+		// Left icon container (sparkle by default, attention icon+count when attention needed, search on hover)
 		const leftIcon = $('span.agent-status-left-icon');
 		if (hasAttentionNeeded) {
-			// Show report icon + count when sessions need attention
-			const reportIcon = renderIcon(Codicon.report);
+			// Show attention icon + count when sessions need attention
+			const attentionIcon = renderIcon(Codicon.reportQuestion);
 			const countSpan = $('span.agent-status-attention-count');
 			countSpan.textContent = String(attentionNeededSessions.length);
-			reset(leftIcon, reportIcon, countSpan);
+			reset(leftIcon, attentionIcon, countSpan);
 			leftIcon.classList.add('has-attention');
 		} else {
 			reset(leftIcon, renderIcon(Codicon.searchSparkle));
@@ -875,8 +875,11 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 		const sparkleContainer = $('span.agent-status-badge-section.sparkle');
 		sparkleContainer.tabIndex = 0;
 
-		// Get menu actions for dropdown with proper group separators
-		const menuActions: IAction[] = Separator.join(...this._chatTitleBarMenu.getActions({ shouldForwardArgs: true }).map(([, actions]) => actions));
+		// Resolve menu actions lazily when the dropdown opens so that enablement (preconditions)
+		// and visibility reflect the current context rather than the state at render time
+		const menuActionsProvider = {
+			getActions: (): IAction[] => Separator.join(...this._chatTitleBarMenu.getActions({ shouldForwardArgs: true }).map(([, actions]) => actions))
+		};
 
 		const primaryActionId = TOGGLE_CHAT_ACTION_ID;
 
@@ -889,7 +892,7 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 			this.hoverService.hideHover(true);
 			this.contextMenuService.showContextMenu({
 				getAnchor: () => anchor,
-				getActions: () => menuActions,
+				getActions: () => menuActionsProvider.getActions(),
 				domForShadowRoot: sparkleContainer,
 			});
 		};
@@ -1002,7 +1005,7 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 			needsInputSection.setAttribute('role', 'button');
 			needsInputSection.tabIndex = 0;
 			const needsInputIcon = $('span.agent-status-icon');
-			reset(needsInputIcon, renderIcon(Codicon.report));
+			reset(needsInputIcon, renderIcon(Codicon.reportQuestion));
 			needsInputSection.appendChild(needsInputIcon);
 			const needsInputCount = $('span.agent-status-text');
 			// Kingu: in words, "Claude waiting for you" (kinguTitleBar.ts).
@@ -1023,8 +1026,8 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 			}));
 
 			const needsInputTooltip = attentionNeededSessions.length === 1
-				? localize('needsInputSessionsTooltip1', "{0} session needs input", attentionNeededSessions.length)
-				: localize('needsInputSessionsTooltip', "{0} sessions need input", attentionNeededSessions.length);
+				? localize('needsInputSessionsTooltip1', "{0} session needs attention", attentionNeededSessions.length)
+				: localize('needsInputSessionsTooltip', "{0} sessions need attention", attentionNeededSessions.length);
 			disposables.add(this.hoverService.setupManagedHover(hoverDelegate, needsInputSection, needsInputTooltip));
 		}
 

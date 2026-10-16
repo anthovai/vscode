@@ -22,6 +22,9 @@ import { ActionViewItem, IActionViewItemOptions } from '../../../../../../base/b
 import { IAction } from '../../../../../../base/common/actions.js';
 import { AgentSessionsPicker } from '../../agentSessions/agentSessionsPicker.js';
 import { KinguChatTabs } from '../../../../kingu/browser/kinguChatTabs.js';
+import { IChatSessionsService } from '../../../common/chatSessionsService.js';
+import { getChatSessionType } from '../../../common/model/chatUri.js';
+import { getAgentSessionProvider, getAgentSessionProviderName } from '../../agentSessions/agentSessions.js';
 
 export interface IChatViewTitleDelegate {
 	focusChat(): void;
@@ -39,6 +42,7 @@ export class ChatViewTitleControl extends Disposable {
 	readonly onDidChangeHeight = this._onDidChangeHeight.event;
 
 	private title: string | undefined = undefined;
+	private harnessLabel: string | undefined;
 
 	private titleContainer: HTMLElement | undefined;
 	private titleLabel = this._register(new MutableDisposable<ChatViewTitleLabel>());
@@ -56,6 +60,7 @@ export class ChatViewTitleControl extends Disposable {
 		private readonly delegate: IChatViewTitleDelegate,
 		resizeObserverCtor: typeof ResizeObserver | undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IChatSessionsService private readonly chatSessionsService: IChatSessionsService,
 	) {
 		super();
 
@@ -117,7 +122,7 @@ export class ChatViewTitleControl extends Disposable {
 			elements.navigationToolbar.before(kinguTabs.element);
 			this._register(kinguTabs.onDidChange(() => {
 				elements.root.classList.toggle('kingu-chat-tabs-enabled', kinguTabs.enabled);
-				this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE);
+				this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE, this.harnessLabel);
 			}));
 			elements.root.classList.toggle('kingu-chat-tabs-enabled', kinguTabs.enabled);
 		}
@@ -127,7 +132,7 @@ export class ChatViewTitleControl extends Disposable {
 			actionViewItemProvider: (action: IAction) => {
 				if (action.id === ChatViewTitleControl.PICK_AGENT_SESSION_ACTION_ID) {
 					this.titleLabel.value = new ChatViewTitleLabel(action);
-					this.titleLabel.value.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE);
+					this.titleLabel.value.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE, this.harnessLabel);
 
 					return this.titleLabel.value;
 				}
@@ -171,8 +176,9 @@ export class ChatViewTitleControl extends Disposable {
 	private doUpdate(): void {
 		const markdownTitle = new MarkdownString(this.model?.title ?? '');
 		this.title = renderAsPlaintext(markdownTitle);
+		this.harnessLabel = this.getHarnessLabel();
 
-		this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE);
+		this.updateTitle(this.title ?? ChatViewTitleControl.DEFAULT_TITLE, this.harnessLabel);
 		this.delegate.kinguTabs?.setActive(this.model && { sessionResource: this.model.sessionResource, title: this.title || undefined });
 
 		const context = this.model && {
@@ -190,13 +196,28 @@ export class ChatViewTitleControl extends Disposable {
 		}
 	}
 
-	private updateTitle(title: string): void {
+	private getHarnessLabel(): string | undefined {
+		if (!this.model) {
+			return undefined;
+		}
+
+		const sessionType = getChatSessionType(this.model.sessionResource);
+		const contribution = this.chatSessionsService.getChatSessionContribution(sessionType);
+		if (contribution) {
+			return contribution.displayName;
+		}
+
+		const builtInProvider = getAgentSessionProvider(sessionType);
+		return builtInProvider ? getAgentSessionProviderName(builtInProvider) : undefined;
+	}
+
+	private updateTitle(title: string, harnessLabel: string | undefined): void {
 		if (!this.titleContainer) {
 			return;
 		}
 
 		this.titleContainer.classList.toggle('visible', this.shouldRender());
-		this.titleLabel.value?.updateTitle(title);
+		this.titleLabel.value?.updateTitle(title, harnessLabel);
 	}
 
 	private shouldRender(): boolean {
@@ -214,8 +235,11 @@ export class ChatViewTitleControl extends Disposable {
 class ChatViewTitleLabel extends ActionViewItem {
 
 	private title: string | undefined;
+	private harnessLabel: string | undefined;
 
 	private titleLabel: HTMLSpanElement | undefined = undefined;
+	private harnessLabelElement: HTMLSpanElement | undefined;
+	private separatorElement: HTMLSpanElement | undefined;
 
 	constructor(action: IAction, options?: IActionViewItemOptions) {
 		super(null, action, { ...options, icon: false, label: true });
@@ -227,21 +251,31 @@ class ChatViewTitleLabel extends ActionViewItem {
 		container.classList.add('chat-view-title-action-item');
 		this.label?.classList.add('chat-view-title-label-container');
 
+		this.harnessLabelElement = this.label?.appendChild(h('span.chat-view-title-harness').root);
+		this.separatorElement = this.label?.appendChild(h('span.chat-view-title-separator', { 'aria-hidden': 'true' }).root);
+		if (this.separatorElement) {
+			this.separatorElement.textContent = '·';
+		}
 		this.titleLabel = this.label?.appendChild(h('span.chat-view-title-label').root);
 
 		this.updateLabel();
 	}
 
-	updateTitle(title: string): void {
+	updateTitle(title: string, harnessLabel: string | undefined): void {
 		this.title = title;
+		this.harnessLabel = harnessLabel;
 
 		this.updateLabel();
 	}
 
 	protected override updateLabel(): void {
-		if (!this.titleLabel) {
+		if (!this.titleLabel || !this.harnessLabelElement || !this.separatorElement) {
 			return;
 		}
+
+		this.harnessLabelElement.textContent = this.harnessLabel ?? '';
+		this.harnessLabelElement.hidden = !this.harnessLabel;
+		this.separatorElement.hidden = !this.harnessLabel || !this.title;
 
 		if (this.title) {
 			this.titleLabel.textContent = this.title;

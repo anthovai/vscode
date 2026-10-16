@@ -178,7 +178,7 @@ export function getAgentCanContinueIn(provider: AgentSessionTarget): boolean {
 export function getAgentSessionProviderDescription(provider: AgentSessionTarget): string {
 	switch (provider) {
 		case AgentSessionProviders.Local:
-			return localize('chat.session.providerDescription.local', "Run tasks within Kingu chat. The agent iterates via chat and works interactively to implement changes on your main workspace.");
+			return localize('chat.session.providerDescription.local', "Run tasks within Kingu's long-standing proprietary agent harness. The agent works in Kingu's extension host, iterates via chat, and works interactively to implement changes on your main workspace.");
 		case AgentSessionProviders.Background:
 			return localize('chat.session.providerDescription.background', "Delegate tasks to a background agent running locally on your machine. The agent iterates via chat and works asynchronously in a Git worktree to implement changes isolated from your main workspace using the Arkai CLI.");
 		case AgentSessionProviders.Cloud:
@@ -192,7 +192,7 @@ export function getAgentSessionProviderDescription(provider: AgentSessionTarget)
 		case AgentSessionProviders.Growth:
 			return localize('chat.session.providerDescription.growth', "Learn about Arkai features.");
 		case AgentSessionProviders.AgentHostCopilot:
-			return localize('chat.session.providerDescription.agentHostCopilot', "Run an Arkai SDK agent in the local agent host process.");
+			return localize('chat.session.providerDescription.agentHostCopilot', "Run tasks using the Arkai SDK, which is the agent experience shared consistently across Arkai products. The agent works in the Agent Host, which lets sessions continue in the background, independently of an editor window.");
 		default:
 			return '';
 	}

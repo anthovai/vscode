@@ -464,7 +464,7 @@ export class AcpAgent extends Disposable implements IAgent {
 			const resolved = context ? resolveAgentChatContext(context, chat) : undefined;
 			record = {
 				chat,
-				session: resolved?.configurationResource ?? chat,
+				session: resolved?.owner.get() ?? chat,
 				workingDirectory: undefined,
 				model: undefined,
 				client: undefined,

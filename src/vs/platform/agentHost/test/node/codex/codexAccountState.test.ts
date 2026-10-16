@@ -48,7 +48,8 @@ suite('CodexAccountState', () => {
 		assert.deepStrictEqual(codexAccountRateLimitsFromResponse({
 			rateLimits: {
 				limitId: null,
-				limitName: null, normalModelSlug: null,
+				limitName: null,
+				normalModelSlug: null,
 				primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: 100 },
 				secondary: null,
 				credits: null,
@@ -57,10 +58,12 @@ suite('CodexAccountState', () => {
 				planType: null,
 				rateLimitReachedType: null,
 			},
+			ordinaryUsageAllowed: null,
 			rateLimitsByLimitId: {
 				codex: {
 					limitId: 'codex',
-					limitName: 'Codex', normalModelSlug: null,
+					limitName: 'Codex',
+					normalModelSlug: null,
 					primary: { usedPercent: 21, windowDurationMins: 300, resetsAt: 200 },
 					secondary: { usedPercent: 42.4, windowDurationMins: 7 * 24 * 60, resetsAt: 300 },
 					credits: null,
@@ -72,7 +75,7 @@ suite('CodexAccountState', () => {
 			},
 			rateLimitResetCredits: null,
 			accountId: null,
-			rateLimitUpsell: null, ordinaryUsageAllowed: null,
+			rateLimitUpsell: null,
 		}), [{
 			usedPercent: 42.4,
 			windowDurationMins: 7 * 24 * 60,
@@ -88,7 +91,8 @@ suite('CodexAccountState', () => {
 		assert.deepStrictEqual(codexAccountRateLimitsFromResponse({
 			rateLimits: {
 				limitId: null,
-				limitName: null, normalModelSlug: null,
+				limitName: null,
+				normalModelSlug: null,
 				primary: { usedPercent: 42.4, windowDurationMins: null, resetsAt: null },
 				secondary: null,
 				credits: null,
@@ -97,10 +101,11 @@ suite('CodexAccountState', () => {
 				planType: null,
 				rateLimitReachedType: null,
 			},
+			ordinaryUsageAllowed: null,
 			rateLimitsByLimitId: null,
 			rateLimitResetCredits: null,
 			accountId: null,
-			rateLimitUpsell: null, ordinaryUsageAllowed: null,
+			rateLimitUpsell: null,
 		}), [{ usedPercent: 42.4, windowDurationMins: undefined, resetsAt: undefined }]);
 	});
 
@@ -116,7 +121,8 @@ suite('CodexAccountState', () => {
 				limitId: null, limitName: null, normalModelSlug: null, primary, secondary: null, credits: null,
 				individualLimit: null, spendControlReached: null, planType: null, rateLimitReachedType: null,
 			},
-			rateLimitsByLimitId: null, rateLimitResetCredits: null, accountId: null, rateLimitUpsell: null, ordinaryUsageAllowed: null,
+			ordinaryUsageAllowed: null,
+			rateLimitsByLimitId: null, rateLimitResetCredits: null, accountId: null, rateLimitUpsell: null,
 		})), invalidWindows.map(() => []));
 	});
 
@@ -124,7 +130,8 @@ suite('CodexAccountState', () => {
 		assert.deepStrictEqual(codexAccountRateLimitsFromResponse({
 			rateLimits: {
 				limitId: null,
-				limitName: null, normalModelSlug: null,
+				limitName: null,
+				normalModelSlug: null,
 				primary: { usedPercent: 30, windowDurationMins: 10080, resetsAt: 400 },
 				secondary: null,
 				credits: null,
@@ -133,10 +140,12 @@ suite('CodexAccountState', () => {
 				planType: null,
 				rateLimitReachedType: null,
 			},
+			ordinaryUsageAllowed: null,
 			rateLimitsByLimitId: {
 				codex: {
 					limitId: 'codex',
-					limitName: 'Codex', normalModelSlug: null,
+					limitName: 'Codex',
+					normalModelSlug: null,
 					primary: null,
 					secondary: null,
 					credits: null,
@@ -148,7 +157,7 @@ suite('CodexAccountState', () => {
 			},
 			rateLimitResetCredits: null,
 			accountId: null,
-			rateLimitUpsell: null, ordinaryUsageAllowed: null,
+			rateLimitUpsell: null,
 		}), [{ usedPercent: 30, windowDurationMins: 10080, resetsAt: 400 }]);
 	});
 
@@ -166,10 +175,11 @@ suite('CodexAccountState', () => {
 				planType: null,
 				rateLimitReachedType: null,
 			},
+			ordinaryUsageAllowed: null,
 			rateLimitsByLimitId: null,
 			rateLimitResetCredits: null,
 			accountId: null,
-			rateLimitUpsell: null, ordinaryUsageAllowed: null,
+			rateLimitUpsell: null,
 		})), [[], [{ usedPercent: 0, windowDurationMins: 300, resetsAt: undefined }]]);
 	});
 });

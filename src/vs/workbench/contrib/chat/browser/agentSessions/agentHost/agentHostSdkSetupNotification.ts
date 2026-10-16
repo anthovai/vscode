@@ -18,6 +18,7 @@ import { IDefaultAccountService } from '../../../../../../platform/defaultAccoun
 import { ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IWorkbenchContribution } from '../../../../../common/contributions.js';
 import { IAgentSdkSetupService, type AgentSdkSetupState } from '../../../../../services/agentHost/browser/agentSdkSetupService.js';
+import { ICodexAccountService } from '../../../../../services/agentHost/browser/codexAccountService.js';
 import { ChatEntitlement, IChatEntitlementService } from '../../../../../services/chat/common/chatEntitlementService.js';
 import { hasAnyModelTargetingSessionType } from '../sessionTypeAvailability.js';
 import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotification, IChatInputNotificationAction, IChatInputNotificationService } from '../../widget/input/chatInputNotificationService.js';
@@ -30,7 +31,7 @@ import { isKinguAiProvider, KINGU_AI_SIGN_IN_COMMAND_ID, KinguAiSignedInContext,
 export interface IAgentSdkSetupStateInputs {
 	/** The experimentation flag the missing-account routes stay behind. Not the download offer. */
 	readonly allowSignedOutWhenUsable: boolean;
-	/** Whether the user is signed in to GitHub (Copilot models already work). */
+	/** Whether the user is signed in to GitHub (the shared Copilot route is already configured). */
 	readonly signedIn: boolean;
 	/** Whether entitlement has settled; before that "signed out" is not yet a fact. */
 	readonly entitlementResolved: boolean;
@@ -39,6 +40,8 @@ export interface IAgentSdkSetupStateInputs {
 	readonly downloadRequested: boolean;
 	/** Whether this agent has published any model — its own report of "I found an account". */
 	readonly hasModels: boolean;
+	/** State of an agent-owned sign-in route; absent when the agent has no such route. */
+	readonly agentAccountState?: 'unresolved' | 'needsSignIn' | 'available';
 }
 
 /**
@@ -58,13 +61,19 @@ export function getAgentSdkSetupState(inputs: IAgentSdkSetupStateInputs): AgentS
 	if (inputs.download === 'downloadOnUse' || inputs.download === 'downloading') {
 		return undefined;
 	}
-	// Everything below explains a missing account, which is the signed-out
-	// experiment and stays behind its flag.
-	if (!inputs.allowSignedOutWhenUsable || !inputs.entitlementResolved || inputs.signedIn) {
+	// Missing-account guidance requires an existing Copilot account or the signed-out opt-in.
+	if (!inputs.entitlementResolved || (!inputs.signedIn && !inputs.allowSignedOutWhenUsable)) {
 		return undefined;
 	}
 	if (inputs.hasModels) {
 		return 'resolved';
+	}
+	if (inputs.agentAccountState !== undefined) {
+		return inputs.agentAccountState === 'needsSignIn' ? 'noAccount' : undefined;
+	}
+	// Agents without their own sign-in route need guidance only when Copilot is absent.
+	if (inputs.signedIn) {
+		return undefined;
 	}
 	return 'noAccount';
 }
@@ -224,6 +233,7 @@ export function createAgentSdkSetupNotification(setup: IAgentSdkSetupInfo, displ
 	} else if (setup.signInProviderName) {
 		actions.push(action(localize('agentHost.sdkSetup.signInAction', "Sign in to {0}", setup.signInProviderName), AGENT_SDK_SETUP_SIGN_IN_COMMAND_ID));
 	}
+	// Kingu: upstream's GitHub sign-in route (its `includeGitHubSignIn` parameter) is never offered.
 	return {
 		...base,
 		message: localize('agentHost.sdkSetup.noAccount', "Choose how you want to use {0}.", displayName),
@@ -291,6 +301,7 @@ export class AgentHostSdkSetupNotificationContribution extends Disposable implem
 		@IChatEntitlementService private readonly _chatEntitlementService: IChatEntitlementService,
 		@IAgentHostService private readonly _agentHostService: IAgentHostService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
+		@ICodexAccountService private readonly _codexAccountService: ICodexAccountService,
 	) {
 		super();
 		this._register(Event.any(
@@ -298,6 +309,7 @@ export class AgentHostSdkSetupNotificationContribution extends Disposable implem
 			this._chatEntitlementService.onDidChangeEntitlement,
 			this._defaultAccountService.onDidChangeDefaultAccount,
 			this._languageModelsService.onDidChangeLanguageModels,
+			this._codexAccountService.onDidChangeAccount,
 			Event.filter(this._configurationService.onDidChangeConfiguration, event => event.affectsConfiguration(AgentHostAllowSignedOutWhenUsableSettingId)),
 			Event.filter(this._contextKeyService.onDidChangeContext, event => event.affectsSome(KINGU_SIGNED_IN_KEYS)),
 		)(() => this._update()));
@@ -334,6 +346,14 @@ export class AgentHostSdkSetupNotificationContribution extends Disposable implem
 			// in again then is wrong, so it counts as having them.
 			const hasModels = hasAnyModelTargetingSessionType(this._languageModelsService, agentSdkSetupSessionType(setup.agent))
 				|| (isKinguAiProvider(setup.agent) && this._contextKeyService.getContextKeyValue<boolean>(KinguAiSignedInContext[setup.agent].key) === true);
+			const codexAccount = this._codexAccountService.account;
+			const agentAccountState = setup.agent !== this._codexAccountService.agent
+				? undefined
+				: codexAccount.status === 'signedOut' || codexAccount.status === 'error'
+					? 'needsSignIn'
+					: codexAccount.status === 'signedIn'
+						? 'available'
+						: 'unresolved';
 			const state = getAgentSdkSetupState({
 				allowSignedOutWhenUsable,
 				signedIn,
@@ -341,6 +361,7 @@ export class AgentHostSdkSetupNotificationContribution extends Disposable implem
 				download: setup.download,
 				downloadRequested: this._agentSdkSetupService.isDownloadPending(setup.agent),
 				hasModels,
+				agentAccountState,
 			});
 			// Before the render decision below, because `resolved` — the step the
 			// funnel exists to count — is exactly the state that renders nothing.
